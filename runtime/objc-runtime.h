@@ -78,6 +78,25 @@ OBJC_EXPORT id objc_msgSend(id self, SEL op, ...);
 OBJC_EXPORT id objc_msgSendSuper(struct objc_super *super, SEL op, ...);
 
 
+/* Floating-point-returning Messaging Primitives (prototypes)
+ * 
+ * On some platforms, the ABI for functions returning a floating-point 
+ * value is incompatible with that for functions returning an integral type. 
+ * objc_msgSend_fpret must be used for these. 
+ * 
+ * ppc: objc_msgSend_fpret not used
+ * ppc64: objc_msgSend_fpret not used
+ * i386: objc_msgSend_fpret REQUIRED
+ *
+ * For `float` or `long double` return types, cast the function 
+ * to an appropriate function pointer type first.
+ */
+
+#ifdef __i386__
+OBJC_EXPORT double objc_msgSend_fpret(id self, SEL op, ...);
+#endif
+
+
 /* Struct-returning Messaging Primitives (prototypes)
  *
  * For historical reasons, the prototypes for the struct-returning 
@@ -106,8 +125,17 @@ OBJC_EXPORT id objc_msgSendSuper(struct objc_super *super, SEL op, ...);
 
 /* Forwarding */
 
+/* Note that objc_msgSendv_stret() does not return a structure type, 
+ * and should not be cast to do so. This is unlike objc_msgSend_stret() 
+ * and objc_msgSendSuper_stret().
+ */
+
 OBJC_EXPORT id objc_msgSendv(id self, SEL op, unsigned arg_size, marg_list arg_frame);
 OBJC_EXPORT void objc_msgSendv_stret(void * stretAddr, id self, SEL op, unsigned arg_size, marg_list arg_frame);
+#ifdef __i386__
+OBJC_EXPORT double objc_msgSendv_fpret(id self, SEL op, unsigned arg_size, marg_list arg_frame);
+#endif
+
 
 /* 
     getting all the classes in the application...

@@ -64,11 +64,13 @@ _objc_getMetaClass
 _objc_msgSend
 # non-nil entry points disabled for now
 # _objc_msgSendNonNil
+_objc_msgSend_fpret
 _objc_msgSend_stret
 # _objc_msgSendNonNil_stret
 _objc_msgSendSuper
 _objc_msgSendSuper_stret
 _objc_msgSendv
+_objc_msgSendv_fpret
 _objc_msgSendv_stret
 _objc_getClassList
 _objc_getClasses
