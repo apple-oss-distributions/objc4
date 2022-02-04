@@ -94,7 +94,13 @@
 #if __has_feature(ptrauth_returns)
 // ROP
 #   define SignLR pacibsp
-#   define AuthenticateLR autibsp
+
+.macro AuthenticateLR
+	autibsp
+	tbz	x30, #62, . + 8
+	brk	#0xc471
+.endmacro
+
 #else
 // not ROP
 #   define SignLR
@@ -109,11 +115,14 @@
 	braaz	$0
 .endmacro
 
-.macro TailCallCachedImp
+.macro TailCallCachedImp IMP, IMPAddress, SEL, ISA
 	// $0 = cached imp, $1 = address of cached imp, $2 = SEL, $3 = isa
-	eor	$1, $1, $2	// mix SEL into ptrauth modifier
-	eor	$1, $1, $3  // mix isa into ptrauth modifier
-	brab	$0, $1
+	eor	\IMPAddress, \IMPAddress, \SEL	// mix SEL into ptrauth modifier
+	eor	\IMPAddress, \IMPAddress, \ISA  // mix isa into ptrauth modifier
+.ifndef LTailCallCachedImpIndirectBranch
+LTailCallCachedImpIndirectBranch:
+.endif
+	brab	\IMP, \IMPAddress
 .endmacro
 
 .macro TailCallMethodListImp
@@ -172,6 +181,9 @@
 .macro TailCallCachedImp
 	// $0 = cached imp, $1 = address of cached imp, $2 = SEL, $3 = isa
 	eor	$0, $0, $3
+.ifndef LTailCallCachedImpIndirectBranch
+LTailCallCachedImpIndirectBranch:
+.endif
 	br	$0
 .endmacro
 

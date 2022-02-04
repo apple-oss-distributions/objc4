@@ -218,8 +218,9 @@
 
 // Constants used for signing/authing isas. This doesn't quite belong
 // here, but the asm files can't import other headers.
-#define ISA_SIGNING_DISCRIMINATOR 0x6AE1
-#define ISA_SIGNING_DISCRIMINATOR_CLASS_SUPERCLASS 0xB5AB
+#define ISA_SIGNING_DISCRIMINATOR 0x6AE1 // ptrauth_string_discriminator("isa")
+#define ISA_SIGNING_DISCRIMINATOR_CLASS_SUPERCLASS 0xB5AB // ptrauth_string_discriminator("objc_class:superclass")
+#define METHOD_SIGNING_DISCRIMINATOR 0xC1AB // ptrauth_string_discriminator("method_t")
 
 #define ISA_SIGNING_KEY ptrauth_key_process_independent_data
 
@@ -227,7 +228,6 @@
 // of these to choose how ISAs are authenticated.
 #define ISA_SIGNING_STRIP 1 // Strip the signature whenever reading an ISA.
 #define ISA_SIGNING_AUTH  2 // Authenticate the signature on all ISAs.
-
 
 // ISA signing modes. Set ISA_SIGNING_SIGN_MODE to one of these to
 // choose how ISAs are signed.
@@ -260,6 +260,11 @@
 // will treat the class as if its superclass was weakly linked and
 // not loaded, and cause uses of the class to resolve to Nil.
 #define SUPERCLASS_SIGNING_TREAT_UNSIGNED_AS_NIL 0
+
+// Discriminator for signing classes is the tagged pointer class tables. As
+// above, this doesn't quite belong, but needs to be here so the asm files can
+// access it.
+#define TAGGED_POINTER_TABLE_ENTRY_DISCRIMINATOR 0x8F9D // hash of "objc_taggedpointer_table"
 
 #if defined(__arm64__) && TARGET_OS_IOS && !TARGET_OS_SIMULATOR && !TARGET_OS_MACCATALYST
 #define CONFIG_USE_PREOPT_CACHES 1

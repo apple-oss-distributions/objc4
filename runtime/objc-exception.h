@@ -89,11 +89,11 @@ typedef void (*objc_exception_handler)(id _Nullable unused,
  * 
  * @param exception The exception to be thrown.
  */
-OBJC_EXPORT void
+OBJC_COLD OBJC_EXPORT OBJC_NORETURN void
 objc_exception_throw(id _Nonnull exception)
     OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
 
-OBJC_EXPORT void
+OBJC_COLD OBJC_EXPORT OBJC_NORETURN void
 objc_exception_rethrow(void)
     OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
 
@@ -105,7 +105,7 @@ OBJC_EXPORT void
 objc_end_catch(void)
     OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
 
-OBJC_EXPORT void
+OBJC_COLD OBJC_EXPORT OBJC_NORETURN void
 objc_terminate(void)
     OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
 

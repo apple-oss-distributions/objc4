@@ -76,6 +76,16 @@ int main()
     protocol_addProtocol(proto, proto2);  // succeeds
 
     char *types = strdup("@:");
+
+    // Force reverse order for these selectors (so we can check sorting works)
+    SEL instSelectors[] = {
+        @selector(ReqInst3),
+        @selector(ReqInst2),
+        @selector(ReqInst1),
+        @selector(ReqInst0)
+    };
+    (void)&instSelectors;
+
     protocol_addMethodDescription(proto, @selector(ReqInst0), types, YES, YES);
     protocol_addMethodDescription(proto, @selector(ReqInst1), types, YES, YES);
     protocol_addMethodDescription(proto, @selector(ReqInst2), types, YES, YES);
@@ -173,6 +183,12 @@ int main()
     strcpy(attrname, "X");             // description is copied
     strcpy(attrvalue, "X");            // description is copied
     memset(attrs, 'X', sizeof(attrs)); // description is copied
+
+    // Check instance methods (verifies that the list was sorted)
+    testassert(protocol_getMethodDescription(proto, @selector(ReqInst0), YES, YES).name == @selector(ReqInst0));
+    testassert(protocol_getMethodDescription(proto, @selector(ReqInst1), YES, YES).name == @selector(ReqInst1));
+    testassert(protocol_getMethodDescription(proto, @selector(ReqInst2), YES, YES).name == @selector(ReqInst2));
+    testassert(protocol_getMethodDescription(proto, @selector(ReqInst3), YES, YES).name == @selector(ReqInst3));
 
     // instance properties
     count = 100;

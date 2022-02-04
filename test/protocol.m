@@ -58,6 +58,9 @@ SEL fn(int x) { if (x) return @selector(m12:); else return @selector(m22:); }
 +(TestRoot*(^)(TestRoot*))n41:(TestRoot<Proto1>*(^)(TestRoot<Proto1>*))a;
 @end
 
+@protocol Proto7 <Proto5>
+@end
+
 @protocol ProtoEmpty
 @end
 
@@ -268,8 +271,45 @@ int main()
         testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto5), @selector(m42:), false, false), types42));
         testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto5), @selector(m43:), false, false), types43));
         
-        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(n41:), false, false), types41));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m11:), true, true),   types11));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m12:), true, true),   types12));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m13:), true, true),   types13));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m21:), true, false),  types21));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m22:), true, false),  types22));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m23:), true, false),  types23));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m31:), false, true),  types31));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m32:), false, true),  types32));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m33:), false, true),  types33));
         testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m41:), false, false), types41));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m42:), false, false), types42));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(m43:), false, false), types43));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto6), @selector(n41:), false, false), types41));
+
+        // <rdar://problem/68987191> _protocol_getMethodTypeEncoding always returns NULL for empty protocol which only inherits
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m11:), true, true));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m12:), true, true));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m13:), true, true));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m21:), true, false));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m22:), true, false));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m23:), true, false));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m31:), false, true));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m32:), false, true));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m33:), false, true));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m41:), false, false));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m42:), false, false));
+        testassert(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m43:), false, false));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m11:), true, true),   types11));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m12:), true, true),   types12));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m13:), true, true),   types13));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m21:), true, false),  types21));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m22:), true, false),  types22));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m23:), true, false),  types23));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m31:), false, true),  types31));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m32:), false, true),  types32));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m33:), false, true),  types33));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m41:), false, false), types41));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m42:), false, false), types42));
+        testassert(0 == strcmp(_protocol_getMethodTypeEncoding(@protocol(Proto7), @selector(m43:), false, false), types43));
     }
 
     testassert(@protocol(SwiftV1Protocol) == objc_getProtocol("Module.SwiftV1Protocol"));

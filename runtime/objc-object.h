@@ -43,8 +43,8 @@ bool prepareOptimizedReturn(ReturnDisposition disposition);
 #if SUPPORT_TAGGED_POINTERS
 
 extern "C" { 
-    extern Class objc_debug_taggedpointer_classes[_OBJC_TAG_SLOT_COUNT];
-    extern Class objc_debug_taggedpointer_ext_classes[_OBJC_TAG_EXT_SLOT_COUNT];
+    extern ptrauth_taggedpointer_table_entry Class objc_debug_taggedpointer_classes[_OBJC_TAG_SLOT_COUNT];
+    extern ptrauth_taggedpointer_table_entry Class objc_debug_taggedpointer_ext_classes[_OBJC_TAG_EXT_SLOT_COUNT];
 }
 #define objc_tag_classes objc_debug_taggedpointer_classes
 #define objc_tag_ext_classes objc_debug_taggedpointer_ext_classes
@@ -76,7 +76,7 @@ objc_object::isClass()
 inline Class
 objc_object::getIsa() 
 {
-    if (fastpath(!isTaggedPointer())) return ISA();
+    if (fastpath(!isTaggedPointer())) return ISA(/*authenticated*/true);
 
     extern objc_class OBJC_CLASS_$___NSUnrecognizedTaggedPointer;
     uintptr_t slot, ptr = (uintptr_t)this;
@@ -101,12 +101,6 @@ inline bool
 objc_object::isTaggedPointer() 
 {
     return _objc_isTaggedPointer(this);
-}
-
-inline bool
-objc_object::isTaggedPointerOrNil()
-{
-    return _objc_isTaggedPointerOrNil(this);
 }
 
 inline bool 
@@ -144,12 +138,6 @@ inline bool
 objc_object::isTaggedPointer() 
 {
     return false;
-}
-
-inline bool
-objc_object::isTaggedPointerOrNil()
-{
-    return !this;
 }
 
 inline bool 
@@ -922,7 +910,8 @@ objc_object::rootAutorelease()
 {
     if (isTaggedPointer()) return (id)this;
     if (prepareOptimizedReturn(ReturnAtPlus1)) return (id)this;
-
+    if (slowpath(isClass())) return (id)this;
+    
     return rootAutorelease2();
 }
 

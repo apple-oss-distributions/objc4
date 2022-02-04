@@ -28,7 +28,8 @@
 
 #include "objc-private.h"
 #include "objc-loadmethod.h"
-#include "objc-bp-assist.h"
+
+
 
 #if TARGET_OS_WIN32
 
@@ -950,11 +951,7 @@ void _objc_init(void)
 **********************************************************************/
 static const header_info *_headerForAddress(void *addr)
 {
-#if __OBJC2__
-    const char *segnames[] = { "__DATA", "__DATA_CONST", "__DATA_DIRTY" };
-#else
-    const char *segnames[] = { "__OBJC" };
-#endif
+    const char *segnames[] = { "__DATA", "__DATA_CONST", "__DATA_DIRTY", "__AUTH" };
     header_info *hi;
 
     for (hi = FirstHeader; hi != NULL; hi = hi->getNext()) {

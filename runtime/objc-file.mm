@@ -60,6 +60,7 @@ GETSECT(_getObjc2MessageRefs,         message_ref_t,   "__objc_msgrefs");
 GETSECT(_getObjc2ClassRefs,           Class,           "__objc_classrefs");
 GETSECT(_getObjc2SuperRefs,           Class,           "__objc_superrefs");
 GETSECT(_getObjc2ClassList,           classref_t const,      "__objc_classlist");
+GETSECT(_getObjc2StubList,            stub_class_t *const,   "__objc_stublist");
 GETSECT(_getObjc2NonlazyClassList,    classref_t const,      "__objc_nlclslist");
 GETSECT(_getObjc2CategoryList,        category_t * const,    "__objc_catlist");
 GETSECT(_getObjc2CategoryList2,       category_t * const,    "__objc_catlist2");

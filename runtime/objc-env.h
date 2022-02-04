@@ -37,7 +37,8 @@ OPTION( DebugPoolAllocation,      OBJC_DEBUG_POOL_ALLOCATION,      "halt when au
 OPTION( DebugDuplicateClasses,    OBJC_DEBUG_DUPLICATE_CLASSES,    "halt when multiple classes with the same name are present")
 OPTION( DebugDontCrash,           OBJC_DEBUG_DONT_CRASH,           "halt the process by exiting instead of crashing")
 OPTION( DebugPoolDepth,           OBJC_DEBUG_POOL_DEPTH,           "log fault when at least a set number of autorelease pages has been allocated")
-
+OPTION( DebugScribbleCaches,      OBJC_DEBUG_SCRIBBLE_CACHES,      "scribble the IMPs in freed method caches")
+OPTION( DebugScanWeakTables,      OBJC_DEBUG_SCAN_WEAK_TABLES,     "scan the weak references table continuously in the background - set OBJC_DEBUG_SCAN_WEAK_TABLES_INTERVAL_NANOSECONDS to set scanning interval (default 1000000)")
 OPTION( DisableVtables,           OBJC_DISABLE_VTABLES,            "disable vtable dispatch")
 OPTION( DisablePreopt,            OBJC_DISABLE_PREOPTIMIZATION,    "disable preoptimization courtesy of dyld shared cache")
 OPTION( DisableTaggedPointers,    OBJC_DISABLE_TAGGED_POINTERS,    "disable tagged pointer optimization of NSNumber et al.") 

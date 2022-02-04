@@ -340,7 +340,7 @@ _class_getIvarMemoryManagement(Class cls, Ivar ivar)
 static ALWAYS_INLINE 
 void _object_setIvar(id obj, Ivar ivar, id value, bool assumeStrong)
 {
-    if (!ivar || obj->isTaggedPointerOrNil()) return;
+    if (!ivar || _objc_isTaggedPointerOrNil(obj)) return;
 
     ptrdiff_t offset;
     objc_ivar_memory_management_t memoryManagement;
@@ -374,7 +374,7 @@ void object_setIvarWithStrongDefault(id obj, Ivar ivar, id value)
 
 id object_getIvar(id obj, Ivar ivar)
 {
-    if (!ivar || obj->isTaggedPointerOrNil()) return nil;
+    if (!ivar || _objc_isTaggedPointerOrNil(obj)) return nil;
 
     ptrdiff_t offset;
     objc_ivar_memory_management_t memoryManagement;
@@ -396,7 +396,7 @@ Ivar _object_setInstanceVariable(id obj, const char *name, void *value,
 {
     Ivar ivar = nil;
 
-    if (name && !obj->isTaggedPointerOrNil()) {
+    if (name && !_objc_isTaggedPointerOrNil(obj)) {
         if ((ivar = _class_getVariable(obj->ISA(), name))) {
             _object_setIvar(obj, ivar, (id)value, assumeStrong);
         }
@@ -418,7 +418,7 @@ Ivar object_setInstanceVariableWithStrongDefault(id obj, const char *name,
 
 Ivar object_getInstanceVariable(id obj, const char *name, void **value)
 {
-    if (name && !obj->isTaggedPointerOrNil()) {
+    if (name && !_objc_isTaggedPointerOrNil(obj)) {
         Ivar ivar;
         if ((ivar = class_getInstanceVariable(obj->ISA(), name))) {
             if (value) *value = (void *)object_getIvar(obj, ivar);
@@ -465,7 +465,7 @@ static void object_cxxDestructFromClass(id obj, Class cls)
 **********************************************************************/
 void object_cxxDestruct(id obj)
 {
-    if (obj->isTaggedPointerOrNil()) return;
+    if (_objc_isTaggedPointerOrNil(obj)) return;
     object_cxxDestructFromClass(obj, obj->ISA());
 }
 

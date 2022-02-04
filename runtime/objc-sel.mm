@@ -140,6 +140,19 @@ SEL sel_getUid(const char *name) {
     return __sel_registerName(name, 2, 1);  // YES lock, YES copy
 }
 
+SEL sel_lookUpByName(const char *name) {
+    if (!name) return (SEL)0;
+
+    SEL result = search_builtins(name);
+    if (result) return result;
+
+    mutex_locker_t lock(selLock);
+    auto it = namedSelectors.get().find(name);
+    if (it == namedSelectors.get().end()) {
+        return (SEL)0;
+    }
+    return (SEL)*it;
+}
 
 BOOL sel_isEqual(SEL lhs, SEL rhs)
 {

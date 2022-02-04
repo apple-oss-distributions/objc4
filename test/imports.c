@@ -12,6 +12,7 @@ weak external          (any weak externals, including operators new and delete)
 
 Whitelisted imports:
 weak external ____chkstk_darwin (from libSystem)
+weak external _objc_bp_assist_cfg_np (from libSystem)
 
 Disallowed exports (nm -U):
 __Z*                   (any C++-mangled export)
@@ -23,7 +24,7 @@ fixme rdar://13354718 should disallow anything from libc++ (i.e. not libc++abi)
 /*
 TEST_BUILD
 echo $C{XCRUN} nm -m -arch $C{ARCH} $C{TESTLIB}
-$C{XCRUN} nm -u -m -arch $C{ARCH} $C{TESTLIB} | grep -v 'weak external ____chkstk_darwin \(from libSystem\)' | egrep '(weak external| external (___cxa_atexit|___cxa_guard_acquire|___cxa_guard_release))' || true
+$C{XCRUN} nm -u -m -arch $C{ARCH} $C{TESTLIB} | grep -v 'weak external ____chkstk_darwin \(from libSystem\)' | grep -v 'weak external _objc_bp_assist_cfg_np \(from libSystem\)' | egrep '(weak external| external (___cxa_atexit|___cxa_guard_acquire|___cxa_guard_release))' || true
 $C{XCRUN} nm -U -m -arch $C{ARCH} $C{TESTLIB} | egrep '(weak external| external __Z)' || true
 $C{COMPILE_C} $DIR/imports.c -o imports.exe
 END

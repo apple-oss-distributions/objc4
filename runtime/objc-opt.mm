@@ -79,9 +79,8 @@ Class getPreoptimizedClass(const char *name)
     return nil;
 }
 
-Class* copyPreoptimizedClasses(const char *name, int *outCount)
+Class getPreoptimizedClassesWithMetaClass(Class metacls)
 {
-    *outCount = 0;
     return nil;
 }
 
@@ -112,9 +111,6 @@ void preopt_init(void)
 
 #include <objc-shared-cache.h>
 
-using objc_opt::objc_stringhash_offset_t;
-using objc_opt::objc_protocolopt2_t;
-using objc_opt::objc_clsopt_t;
 using objc_opt::objc_headeropt_ro_t;
 using objc_opt::objc_headeropt_rw_t;
 using objc_opt::objc_opt_t;
@@ -336,25 +332,34 @@ category_t * const *header_info::catlist2(size_t *outCount) const
 
 Protocol *getSharedCachePreoptimizedProtocol(const char *name)
 {
-    objc_protocolopt2_t *protocols = opt ? opt->protocolopt2() : nil;
-    if (!protocols) return nil;
+    // Even if this is a root of libobjc, we'll ask dyld for protocols.
+    // Unless explicitly told to disable the optimization
+    if (DisablePreopt) return nil;
 
+    Protocol *result = nil;
     // Note, we have to pass the lambda directly here as otherwise we would try
     // message copy and autorelease.
-    return (Protocol *)protocols->getProtocol(name, [](const void* hi) -> bool {
-      return ((header_info *)hi)->isLoaded();
+    _dyld_for_each_objc_protocol(name, [&result](void* protocolPtr, bool isLoaded, bool* stop) {
+        if (!isLoaded)
+            return;
+
+        if (!objc::inSharedCache((uintptr_t)protocolPtr))
+            return;
+
+        // Found a loaded image with this class name, so stop the search
+        result = (Protocol *)protocolPtr;
+        *stop = true;
     });
+    return result;
 }
 
 
 Protocol *getPreoptimizedProtocol(const char *name)
 {
-    objc_protocolopt2_t *protocols = opt ? opt->protocolopt2() : nil;
-    if (!protocols) return nil;
+    // Even if this is a root of libobjc, we'll ask dyld for protocols.
+    // Unless explicitly told to disable the optimization
+    if (DisablePreopt) return nil;
 
-    // Try table from dyld closure first.  It was built to ignore the dupes it
-    // knows will come from the cache, so anything left in here was there when
-    // we launched
     Protocol *result = nil;
     // Note, we have to pass the lambda directly here as otherwise we would try
     // message copy and autorelease.
@@ -369,31 +374,26 @@ Protocol *getPreoptimizedProtocol(const char *name)
         result = (Protocol *)protocolPtr;
         *stop = true;
     });
-    if (result) return result;
-
-    return getSharedCachePreoptimizedProtocol(name);
+    return result;
 }
 
 
 unsigned int getPreoptimizedClassUnreasonableCount()
 {
-    objc_clsopt_t *classes = opt ? opt->clsopt() : nil;
-    if (!classes) return 0;
-    
-    // This is an overestimate: each set of duplicates 
-    // gets double-counted in `capacity` as well.
-    return classes->capacity + classes->duplicateCount();
+    // Even if this is a root of libobjc, we'll ask dyld for classes.
+    // Unless explicitly told to disable the optimization
+    if (DisablePreopt) return 0;
+
+    return _dyld_objc_class_count();
 }
 
 
 Class getPreoptimizedClass(const char *name)
 {
-    objc_clsopt_t *classes = opt ? opt->clsopt() : nil;
-    if (!classes) return nil;
+    // Even if this is a root of libobjc, we'll ask dyld for classes.
+    // Unless explicitly told to disable the optimization
+    if (DisablePreopt) return 0;
 
-    // Try table from dyld closure first.  It was built to ignore the dupes it
-    // knows will come from the cache, so anything left in here was there when
-    // we launched
     Class result = nil;
     // Note, we have to pass the lambda directly here as otherwise we would try
     // message copy and autorelease.
@@ -408,71 +408,36 @@ Class getPreoptimizedClass(const char *name)
         result = (Class)classPtr;
         *stop = true;
     });
-    if (result) return result;
-
-    void *cls;
-    void *hi;
-    uint32_t count = classes->getClassAndHeader(name, cls, hi);
-    if (count == 1  &&  ((header_info *)hi)->isLoaded()) {
-        // exactly one matching class, and its image is loaded
-        return (Class)cls;
-    } 
-    else if (count > 1) {
-        // more than one matching class - find one that is loaded
-        void *clslist[count];
-        void *hilist[count];
-        classes->getClassesAndHeaders(name, clslist, hilist);
-        for (uint32_t i = 0; i < count; i++) {
-            if (((header_info *)hilist[i])->isLoaded()) {
-                return (Class)clslist[i];
-            }
-        }
-    }
-
-    // no match that is loaded
-    return nil;
+    return result;
 }
 
-
-Class* copyPreoptimizedClasses(const char *name, int *outCount)
+Class getPreoptimizedClassesWithMetaClass(Class metacls)
 {
-    *outCount = 0;
+    // Even if this is a root of libobjc, we'll ask dyld for classes.
+    // Unless explicitly told to disable the optimization
+    if (DisablePreopt)
+        return nil;
 
-    objc_clsopt_t *classes = opt ? opt->clsopt() : nil;
-    if (!classes) return nil;
+    Class cls = nil;
+    // Note, we have to pass the lambda directly here as otherwise we would try
+    // message copy and autorelease.
+    _dyld_for_each_objc_class(metacls->mangledName(),
+                              [&cls, metacls](void* classPtr, bool isLoaded, bool* stop) {
+        // Skip images which aren't loaded.  This supports the case where dyld
+        // might soft link an image from the main binary so its possibly not
+        // loaded yet.
+        if (!isLoaded)
+            return;
 
-    void *cls;
-    void *hi;
-    uint32_t count = classes->getClassAndHeader(name, cls, hi);
-    if (count == 0) return nil;
-
-    Class *result = (Class *)calloc(count, sizeof(Class));
-    if (count == 1  &&  ((header_info *)hi)->isLoaded()) {
-        // exactly one matching class, and its image is loaded
-        result[(*outCount)++] = (Class)cls;
-        return result;
-    } 
-    else if (count > 1) {
-        // more than one matching class - find those that are loaded
-        void *clslist[count];
-        void *hilist[count];
-        classes->getClassesAndHeaders(name, clslist, hilist);
-        for (uint32_t i = 0; i < count; i++) {
-            if (((header_info *)hilist[i])->isLoaded()) {
-                result[(*outCount)++] = (Class)clslist[i];
-            }
+        // Found a loaded image with this class name, so check if its the right one
+        Class result = (Class)classPtr;
+        if (result->ISA() == metacls) {
+            cls = result;
+            *stop = true;
         }
+    });
 
-        if (*outCount == 0) {
-            // found multiple classes with that name, but none are loaded
-            free(result);
-            result = nil;
-        }
-        return result;
-    }
-
-    // no match that is loaded
-    return nil;
+    return cls;
 }
 
 
@@ -527,14 +492,14 @@ void preopt_init(void)
         // If opt->version != VERSION then you continue at your own risk.
         failure = "(by OBJC_DISABLE_PREOPTIMIZATION)";
     } 
-    else if (opt->version != objc_opt::VERSION) {
+    else if (opt->version != 16) {
         // This shouldn't happen. You probably forgot to edit objc-sel-table.s.
         // If dyld really did write the wrong optimization version, 
         // then we must halt because we don't know what bits dyld twiddled.
         _objc_fatal("bad objc preopt version (want %d, got %d)", 
                     objc_opt::VERSION, opt->version);
     }
-    else if (!opt->selopt()  ||  !opt->headeropt_ro()) {
+    else if (!opt->headeropt_ro()) {
         // One of the tables is missing. 
         failure = "(dyld shared cache is absent or out of date)";
     }

@@ -394,7 +394,7 @@ weak_register_no_lock(weak_table_t *weak_table, id referent_id,
     objc_object *referent = (objc_object *)referent_id;
     objc_object **referrer = (objc_object **)referrer_id;
 
-    if (referent->isTaggedPointerOrNil()) return referent_id;
+    if (_objc_isTaggedPointerOrNil(referent)) return referent_id;
 
     // ensure that the referenced object is viable
     if (deallocatingOptions == ReturnNilIfDeallocating ||

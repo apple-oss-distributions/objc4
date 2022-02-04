@@ -103,6 +103,7 @@ END
 
 #include "test.h"
 #include "testroot.i"
+#include <ptrauth.h>
 #include <spawn.h>
 
 @protocol P
@@ -132,7 +133,7 @@ struct TestCase {
     #__VA_ARGS__, \
     if(class_isMetaClass(cls)) return;          \
     id obj = [TestRoot alloc]; \
-    *(Class *)obj = cls; \
+    *(Class __ptrauth_objc_isa_pointer *)obj = cls; \
     __VA_ARGS__; \
 )
 
@@ -244,6 +245,7 @@ void child(char *argv1)
                                                  0);
     void *fakeClass = malloc(malloc_size(templateClass));
     memcpy(fakeClass, templateClass, malloc_size(templateClass));
+    *(Class __ptrauth_objc_isa_pointer *)fakeClass = object_getClass(templateClass);
     block((Class)fakeClass);
     fail("Should have died on the fake class");
 }

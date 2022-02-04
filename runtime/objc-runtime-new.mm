@@ -251,6 +251,7 @@ IMP method_t::remappedImp(bool needsLock) const {
         mutex_locker_t guard(runtimeLock);
         return method_t_remappedImp_nolock(this);
     } else {
+        runtimeLock.assertLocked();
         return method_t_remappedImp_nolock(this);
     }
 }
@@ -308,6 +309,9 @@ disableSharedCacheOptimizations(void)
 }
 
 bool method_list_t::isUniqued() const {
+    // Small lists always use selrefs which are already uniqued before we use them.
+    if ( isSmallList() )
+        return true;
     return (flags() & uniqued_method_list) != 0;
 }
 
@@ -348,7 +352,7 @@ const method_list_t_authed_ptr<method_list_t> *method_array_t::endCategoryMethod
     auto mlists = beginLists();
     auto mlistsEnd = endLists();
 
-    if (mlists == mlistsEnd  ||  !cls->data()->ro()->baseMethods())
+    if (mlists == mlistsEnd  ||  !cls->data()->ro()->baseMethods)
     {
         // No methods, or no base methods. 
         // Everything here is a category method.
@@ -438,7 +442,7 @@ void *object_getIndexedIvars(id obj)
 {
     uint8_t *base = (uint8_t *)obj;
 
-    if (obj->isTaggedPointerOrNil()) return nil;
+    if (_objc_isTaggedPointerOrNil(obj)) return nil;
 
     if (!obj->isClass()) return base + obj->ISA()->alignedInstanceSize();
 
@@ -607,7 +611,7 @@ printReplacements(Class cls, const locstamped_category_t *cats_list, uint32_t ca
                     if (s == s2) {
                         logReplacedMethod(cls->nameForLogging(), s, 
                                           cls->isMetaClass(), cat->name, 
-                                          meth2.imp(false), meth.imp(false));
+                                          meth2.impRaw(), meth.impRaw());
                         goto complained;
                     }
                 }
@@ -619,7 +623,7 @@ printReplacements(Class cls, const locstamped_category_t *cats_list, uint32_t ca
                 if (s == s2) {
                     logReplacedMethod(cls->nameForLogging(), s, 
                                       cls->isMetaClass(), cat->name, 
-                                      meth2.imp(false), meth.imp(false));
+                                      meth2.impRaw(), meth.impRaw());
                     goto complained;
                 }
             }
@@ -1349,7 +1353,7 @@ class_rw_t::extAlloc(const class_ro_t *ro, bool deepCopy)
 
     rwe->version = (ro->flags & RO_META) ? 7 : 0;
 
-    method_list_t *list = ro->baseMethods();
+    method_list_t *list = ro->baseMethods;
     if (list) {
         if (deepCopy) list = list->duplicate();
         rwe->methods.attachLists(&list, 1);
@@ -1487,7 +1491,7 @@ static void methodizeClass(Class cls, Class previously)
     }
 
     // Install methods and properties that the class implements itself.
-    method_list_t *list = ro->baseMethods();
+    method_list_t *list = ro->baseMethods;
     if (list) {
         prepareMethodLists(cls, &list, 1, YES, isBundleClass(cls), nullptr);
         if (rwe) rwe->methods.attachLists(&list, 1);
@@ -2107,69 +2111,22 @@ static Class getMaybeUnrealizedNonMetaClass(Class metacls, id inst)
         }
     }
 
-    // try the dyld closure table
-    if (isPreoptimized())
-    {
-        // Try table from dyld closure first.  It was built to ignore the dupes it
-        // knows will come from the cache, so anything left in here was there when
-        // we launched
-        Class cls = nil;
-        // Note, we have to pass the lambda directly here as otherwise we would try
-        // message copy and autorelease.
-        _dyld_for_each_objc_class(metacls->mangledName(),
-                                  [&cls, metacls](void* classPtr, bool isLoaded, bool* stop) {
-          // Skip images which aren't loaded.  This supports the case where dyld
-          // might soft link an image from the main binary so its possibly not
-          // loaded yet.
-          if (!isLoaded)
-            return;
-
-          // Found a loaded image with this class name, so check if its the right one
-          Class result = (Class)classPtr;
-          if (result->ISA() == metacls) {
-              cls = result;
-              *stop = true;
-          }
-        });
-
-        if (cls) {
-            dyld3++;
-            if (PrintInitializing) {
+    if (Class cls = getPreoptimizedClassesWithMetaClass(metacls)) {
+        if (PrintInitializing) {
+            if (objc::inSharedCache((uintptr_t)cls)) {
+                sharedcache++;
+                _objc_inform("INITIALIZE: %d/%d (%g%%) "
+                             "successful shared cache metaclass lookups",
+                             sharedcache, total, sharedcache*100.0/total);
+            } else {
+                dyld3++;
                 _objc_inform("INITIALIZE: %d/%d (%g%%) "
                              "successful dyld closure metaclass lookups",
                              dyld3, total, dyld3*100.0/total);
             }
-
-            return cls;
-        }
-    }
-
-    // try any duplicates in the dyld shared cache
-    {
-        Class cls = nil;
-
-        int count;
-        Class *classes = copyPreoptimizedClasses(metacls->mangledName(),&count);
-        if (classes) {
-            for (int i = 0; i < count; i++) {
-                if (classes[i]->ISA() == metacls) {
-                    cls = classes[i];
-                    break;
-                }
-            }
-            free(classes);
         }
 
-        if (cls) {
-            sharedcache++;
-            if (PrintInitializing) {
-                _objc_inform("INITIALIZE: %d/%d (%g%%) "
-                             "successful shared cache metaclass lookups",
-                             sharedcache, total, sharedcache*100.0/total);
-            }
-
-            return cls;
-        }
+        return cls;
     }
 
     _objc_fatal("no class for metaclass %p", (void*)metacls);
@@ -2588,10 +2545,8 @@ static void validateAlreadyRealizedClass(Class cls) {
     class_rw_t *rw = cls->data();
     size_t rwSize = malloc_size(rw);
 
-    // Note: this check will need some adjustment if class_rw_t's
-    // size changes to not match the malloc bucket.
-    if (rwSize != sizeof(class_rw_t))
-        _objc_fatal("realized class %p has corrupt data pointer %p", cls, rw);
+    if (rwSize < sizeof(class_rw_t))
+        _objc_fatal("realized class %p has corrupt data pointer: malloc_size(%p) = %zu", cls, rw, rwSize);
 #endif
 }
 
@@ -2955,6 +2910,20 @@ static void realizeAllClassesInImage(header_info *hi)
         Class cls = remapClass(classlist[i]);
         if (cls) {
             realizeClassMaybeSwiftAndLeaveLocked(cls, runtimeLock);
+        }
+    }
+
+    stub_class_t * const *stublist = _getObjc2StubList(hi, &count);
+    for (i = 0; i < count; i++) {
+        // Only call the initiaizer if the class hasn't already been
+        // initialized. Initialized stubs are always remapped, so
+        // only call the initializer if there's no remapping.
+        if (remapClass((Class)stublist[i]) == (Class)stublist[i]) {
+            // Drop the lock while calling the initializer, it will
+            // probably call back into libobjc.
+            runtimeLock.unlock();
+            stublist[i]->initializer((Class)stublist[i], nil);
+            runtimeLock.lock();
         }
     }
 
@@ -3544,7 +3513,9 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
 # if TARGET_OS_OSX
         // Disable non-pointer isa if the app is too old
         // (linked before OS X 10.11)
-        if (!dyld_program_sdk_at_least(dyld_platform_version_macOS_10_11)) {
+        // Note: we must check for macOS, because Catalyst and Almond apps
+        // return false for a Mac SDK check! rdar://78225780
+        if (dyld_get_active_platform() == PLATFORM_MACOS && !dyld_program_sdk_at_least(dyld_platform_version_macOS_10_11)) {
             DisableNonpointerIsa = true;
             if (PrintRawIsa) {
                 _objc_inform("RAW ISA: disabling non-pointer isa because "
@@ -3592,6 +3563,8 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
     }
 
     // Fix up @selector references
+    // Note this has to be before anyone uses a method list, as relative method
+    // lists point to selRefs, and assume they are already fixed up (uniqued).
     static size_t UnfixedSelectors;
     {
         mutex_locker_t lock(selLock);
@@ -3826,13 +3799,13 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
                 }
                 
                 const method_list_t *mlist;
-                if ((mlist = cls->bits.safe_ro()->baseMethods())) {
+                if ((mlist = cls->bits.safe_ro()->baseMethods)) {
                     PreoptTotalMethodLists++;
                     if (mlist->isFixedUp()) {
                         PreoptOptimizedMethodLists++;
                     }
                 }
-                if ((mlist = cls->ISA()->bits.safe_ro()->baseMethods())) {
+                if ((mlist = cls->ISA()->bits.safe_ro()->baseMethods)) {
                     PreoptTotalMethodLists++;
                     if (mlist->isFixedUp()) {
                         PreoptOptimizedMethodLists++;
@@ -3990,28 +3963,30 @@ void _unload_image(header_info *hi)
     // fixme DebugUnload
 }
 
-
 /***********************************************************************
 * method_getDescription
 * Returns a pointer to this method's objc_method_description.
 * Locking: none
 **********************************************************************/
 struct objc_method_description *
-method_getDescription(Method m)
+method_getDescription(Method mSigned)
 {
-    if (!m) return nil;
+    if (!mSigned) return nil;
+    method_t *m = _method_auth(mSigned);
     return m->getDescription();
 }
 
 
 IMP 
-method_getImplementation(Method m)
+method_getImplementation(Method mSigned)
 {
+    method_t *m = _method_auth(mSigned);
     return m ? m->imp(true) : nil;
 }
 
-IMPAndSEL _method_getImplementationAndName(Method m)
+IMPAndSEL _method_getImplementationAndName(Method mSigned)
 {
+    method_t *m = _method_auth(mSigned);
     return { m->imp(true), m->name() };
 }
 
@@ -4024,10 +3999,11 @@ IMPAndSEL _method_getImplementationAndName(Method m)
 * Locking: none
 **********************************************************************/
 SEL 
-method_getName(Method m)
+method_getName(Method mSigned)
 {
-    if (!m) return nil;
+    if (!mSigned) return nil;
 
+    method_t *m = _method_auth(mSigned);
     ASSERT(m->name() == sel_registerName(sel_getName(m->name())));
     return m->name();
 }
@@ -4040,9 +4016,10 @@ method_getName(Method m)
 * Locking: none
 **********************************************************************/
 const char *
-method_getTypeEncoding(Method m)
+method_getTypeEncoding(Method mSigned)
 {
-    if (!m) return nil;
+    if (!mSigned) return nil;
+    method_t *m = _method_auth(mSigned);
     return m->types();
 }
 
@@ -4079,24 +4056,31 @@ _method_setImplementation(Class cls, method_t *m, IMP imp)
 }
 
 IMP 
-method_setImplementation(Method m, IMP imp)
+method_setImplementation(Method mSigned, IMP imp)
 {
+    method_t *m = _method_auth(mSigned);
+
     // Don't know the class - will be slow if RR/AWZ are affected
     // fixme build list of classes whose Methods are known externally?
     mutex_locker_t lock(runtimeLock);
     return _method_setImplementation(Nil, m, imp);
 }
 
-extern void _method_setImplementationRawUnsafe(Method m, IMP imp)
+extern void _method_setImplementationRawUnsafe(Method mSigned, IMP imp)
 {
+    method_t *m = _method_auth(mSigned);
+
     mutex_locker_t lock(runtimeLock);
     m->setImp(imp);
 }
 
 
-void method_exchangeImplementations(Method m1, Method m2)
+void method_exchangeImplementations(Method m1Signed, Method m2Signed)
 {
-    if (!m1  ||  !m2) return;
+    if (!m1Signed  ||  !m2Signed) return;
+
+    method_t *m1 = _method_auth(m1Signed);
+    method_t *m2 = _method_auth(m2Signed);
 
     mutex_locker_t lock(runtimeLock);
 
@@ -4407,8 +4391,8 @@ protocol_getMethod(protocol_t *proto, SEL sel, bool isRequiredMethod, bool isIns
     fixupProtocolIfNeeded(proto);
 
     mutex_locker_t lock(runtimeLock);
-    return protocol_getMethod_nolock(proto, sel, isRequiredMethod, 
-                                     isInstanceMethod, recursive);
+    return _method_sign(protocol_getMethod_nolock(proto, sel, isRequiredMethod,
+                                                  isInstanceMethod, recursive));
 }
 
 
@@ -4426,21 +4410,23 @@ protocol_getMethodTypeEncoding_nolock(protocol_t *proto, SEL sel,
     runtimeLock.assertLocked();
 
     if (!proto) return nil;
-    if (!proto->extendedMethodTypes()) return nil;
-
     ASSERT(proto->isFixedUp());
 
-    method_t *m = 
-        protocol_getMethod_nolock(proto, sel, 
-                                  isRequiredMethod, isInstanceMethod, false);
-    if (m) {
-        uint32_t i = getExtendedTypesIndexForMethod(proto, m, 
-                                                    isRequiredMethod, 
-                                                    isInstanceMethod);
-        return proto->extendedMethodTypes()[i];
+    if (proto->extendedMethodTypes()) {
+        method_t *m = protocol_getMethod_nolock(proto, sel,
+                                                isRequiredMethod,
+                                                isInstanceMethod,
+                                                false);
+        if (m) {
+            uint32_t i = getExtendedTypesIndexForMethod(proto, m,
+                                                        isRequiredMethod,
+                                                        isInstanceMethod);
+            return proto->extendedMethodTypes()[i];
+        }
     }
 
-    // No method with that name. Search incorporated protocols.
+    // No method with that name, or no extended method types. Search
+    // incorporated protocols.
     if (proto->protocols) {
         for (uintptr_t i = 0; i < proto->protocols->count; i++) {
             const char *enc = 
@@ -4518,9 +4504,10 @@ struct objc_method_description
 protocol_getMethodDescription(Protocol *p, SEL aSel, 
                               BOOL isRequiredMethod, BOOL isInstanceMethod)
 {
-    Method m = 
+    Method mSigned =
         protocol_getMethod(newprotocol(p), aSel, 
                            isRequiredMethod, isInstanceMethod, true);
+    method_t *m = _method_auth(mSigned);
     // method_getDescription is inefficient for small methods. Don't bother
     // trying to use it, just make our own.
     if (m) return (struct objc_method_description){m->name(), (char *)m->types()};
@@ -4916,7 +4903,6 @@ protocol_addMethod_nolock(method_list_t*& list, SEL name, const char *types)
     if (!list) {
         list = (method_list_t *)calloc(method_list_t::byteSize(sizeof(struct method_t::big), 1), 1);
         list->entsizeAndFlags = sizeof(struct method_t::big);
-        list->setFixedUp();
     } else {
         size_t size = list->byteSize() + list->entsize();
         list = (method_list_t *)realloc(list, size);
@@ -5264,11 +5250,14 @@ class_copyMethodList(Class cls, unsigned int *outCount)
     count = methods.count();
 
     if (count > 0) {
+        auto iterator = methods.signedBegin();
+        auto end = methods.signedEnd();
+
         result = (Method *)malloc((count + 1) * sizeof(Method));
         
         count = 0;
-        for (auto& meth : methods) {
-            result[count++] = &meth;
+        for (; iterator != end; ++iterator) {
+            result[count++] = _method_sign(&*iterator);
         }
         result[count] = nil;
     }
@@ -5372,7 +5361,7 @@ objc_class::getLoadMethod()
     ASSERT(!isMetaClass());
     ASSERT(ISA()->isMetaClass());
 
-    mlist = ISA()->data()->ro()->baseMethods();
+    mlist = ISA()->data()->ro()->baseMethods;
     if (mlist) {
         for (const auto& meth : *mlist) {
             const char *name = sel_cname(meth.name());
@@ -5446,9 +5435,14 @@ _category_getLoadMethod(Category cat)
     if (mlist) {
         for (const auto& meth : *mlist) {
             const char *name = sel_cname(meth.name());
-            if (0 == strcmp(name, "load")) {
+            // Manually check for "load\0" to avoid a function call that might
+            // spill unauthenticated method pointers.
+            if (name[0] == 'l' &&
+                name[1] == 'o' &&
+                name[2] == 'a' &&
+                name[3] == 'd' &&
+                name[4] == 0)
                 return meth.imp(false);
-            }
         }
     }
 
@@ -5518,34 +5512,24 @@ class_copyProtocolList(Class cls, unsigned int *outCount)
 **********************************************************************/
 const char **objc_copyImageNames(unsigned int *outCount)
 {
-    mutex_locker_t lock(runtimeLock);
+    std::vector<const headerType *> headers;
 
-    int HeaderCount = 0;
-    for (header_info *hi = FirstHeader; hi != nil; hi = hi->getNext()) {
-        HeaderCount++;
+    {
+        mutex_locker_t lock(runtimeLock);
+
+        for (header_info *hi = FirstHeader; hi != nil; hi = hi->getNext()) {
+            headers.push_back(hi->mhdr());
+        }
     }
 
-#if TARGET_OS_WIN32
-    const TCHAR **names = (const TCHAR **)
-        malloc((HeaderCount+1) * sizeof(TCHAR *));
-#else
     const char **names = (const char **)
-        malloc((HeaderCount+1) * sizeof(char *));
-#endif
+        malloc((headers.size()+1) * sizeof(char *));
 
     unsigned int count = 0;
-    for (header_info *hi = FirstHeader; hi != nil; hi = hi->getNext()) {
-#if TARGET_OS_WIN32
-        if (hi->moduleName) {
-            names[count++] = hi->moduleName;
-        }
-#else
-        const char *fname = hi->fname();
-        if (fname) {
+    for (auto *header : headers)
+        if (const char *fname = dyld_image_path_containing_address(header))
             names[count++] = fname;
-        }
-#endif
-    }
+
     names[count] = nil;
     
     if (count == 0) {
@@ -5622,6 +5606,79 @@ copyClassesForImage_nolock(header_info *hi, unsigned int *outCount)
 }
 
 
+// Find the header_info* matching the given path and call the passed in function
+// with it, with the runtime lock held. If there is no match, the function is not
+// called. Carefully arranges things to avoid acquiring the dyld lock with the
+// runtime lock held by always calling dyld_image_path_containing_address with
+// the runtime lock unlocked.
+template <typename Fn>
+static void withHeaderInfoForPath(const char *path, const Fn &f) {
+    // We cannot attempt to acquire the dyld lock while holding the ObjC lock,
+    // or we may deadlock (rdar://73246373). To find the appropriate header_info
+    // we'll perform a three-stage search with a retry loop.
+    //
+    // 1. With the runtime lock held, gather all mach headers and UUIDs.
+    // 2. WITHOUT the runtime lock held, use dyld_image_path_containing_address
+    //    to find the mach header and UUID matching the path.
+    // 3. With the runtime lock held again, find the header_info with that mach
+    //    header. Check the UUID against what we found. If they don't match,
+    //    restart and try again. This avoids an ABA problem with concurrent
+    //    unloads.
+
+    // Loop until we succeed.
+    while (true) {
+        // Stage 1: gather mach headers and UUIDs.
+        struct uuidWrapper { uuid_t uuid; };
+        std::vector<std::pair<const headerType *, uuidWrapper>> headersAndUUIDs;
+        {
+            mutex_locker_t lock(runtimeLock);
+
+            for (header_info *hi = FirstHeader; hi != nil; hi = hi->getNext()) {
+                uuidWrapper wrapper;
+                if (_dyld_get_image_uuid((const mach_header *)hi->mhdr(), wrapper.uuid))
+                    headersAndUUIDs.push_back({hi->mhdr(), wrapper});
+            }
+        }
+
+        // Stage 2: locate the match, if any.
+        auto match = headersAndUUIDs.begin();
+        for (; match != headersAndUUIDs.end(); match++) {
+            const char *thisPath = dyld_image_path_containing_address(std::get<const headerType *>(*match));
+            if (thisPath && strcmp(thisPath, path) == 0) {
+                break;
+            }
+        }
+
+        // If nothing matches, then we're done, just return.
+        if (match == headersAndUUIDs.end())
+            return;
+
+        // Stage 3: Find the matching header_info and call.
+        auto matchingHeader = std::get<const headerType *>(*match);
+        auto matchingUUID = std::get<uuidWrapper>(*match).uuid;
+        {
+            mutex_locker_t lock(runtimeLock);
+
+            for (header_info *hi = FirstHeader; hi != nil; hi = hi->getNext()) {
+                if (hi->mhdr() == matchingHeader) {
+                    uuid_t currentUUID;
+                    if (_dyld_get_image_uuid((const mach_header *)matchingHeader, currentUUID)) {
+                        if (memcmp(currentUUID, matchingUUID, sizeof(currentUUID)) == 0) {
+                            // The match is still valid. Call and return.
+                            f(hi);
+                            return;
+                        }
+                    }
+                    // If we get here, the UUIDs don't match or we couldn't
+                    // retrieve the new one. Retry.
+                    break;
+                }
+            }
+        }
+    }
+}
+
+
 /***********************************************************************
 * objc_copyClassNamesForImage
 * Copies class names from the named image.
@@ -5639,24 +5696,15 @@ objc_copyClassNamesForImage(const char *image, unsigned int *outCount)
         return nil;
     }
 
-    mutex_locker_t lock(runtimeLock);
+    const char **result = NULL;
+    withHeaderInfoForPath(image, [&](header_info *hi) {
+        result = copyClassNamesForImage_nolock(hi, outCount);
+    });
 
-    // Find the image.
-    header_info *hi;
-    for (hi = FirstHeader; hi != nil; hi = hi->getNext()) {
-#if TARGET_OS_WIN32
-        if (0 == wcscmp((TCHAR *)image, hi->moduleName)) break;
-#else
-        if (0 == strcmp(image, hi->fname())) break;
-#endif
-    }
-
-    if (!hi) {
+    if (!result)
         if (outCount) *outCount = 0;
-        return nil;
-    }
 
-    return copyClassNamesForImage_nolock(hi, outCount);
+    return result;
 }
 
 Class *
@@ -5667,20 +5715,15 @@ objc_copyClassesForImage(const char *image, unsigned int *outCount)
         return nil;
     }
 
-    mutex_locker_t lock(runtimeLock);
+    Class *result = NULL;
+    withHeaderInfoForPath(image, [&](header_info *hi) {
+        result = copyClassesForImage_nolock(hi, outCount);
+    });
 
-    // Find the image.
-    header_info *hi;
-    for (hi = FirstHeader; hi != nil; hi = hi->getNext()) {
-        if (0 == strcmp(image, hi->fname())) break;
-    }
-
-    if (!hi) {
+    if (!result)
         if (outCount) *outCount = 0;
-        return nil;
-    }
 
-    return copyClassesForImage_nolock(hi, outCount);
+    return result;
 }
 
 /***********************************************************************
@@ -6126,7 +6169,7 @@ getMethod_nolock(Class cls, SEL sel)
 static Method _class_getMethod(Class cls, SEL sel)
 {
     mutex_locker_t lock(runtimeLock);
-    return getMethod_nolock(cls, sel);
+    return _method_sign(getMethod_nolock(cls, sel));
 }
 
 
@@ -6455,7 +6498,7 @@ IMP lookUpImpOrForward(id inst, SEL sel, Class cls, int behavior)
 #endif
         } else {
             // curClass method list.
-            Method meth = getMethodNoSuper_nolock(curClass, sel);
+            method_t *meth = getMethodNoSuper_nolock(curClass, sel);
             if (meth) {
                 imp = meth->imp(false);
                 goto done;
@@ -7505,7 +7548,7 @@ objc_duplicateClass(Class original, const char *name,
         // fixme dies when categories are added to the base
         rwe->properties = orig_rwe->properties;
         rwe->protocols = orig_rwe->protocols;
-    } else if (ro->baseMethods()) {
+    } else if (ro->baseMethods) {
         // if we have base methods, we need to make a deep copy
         // which requires a class_rw_ext_t to be allocated
         rw->deepCopy(ro);
@@ -8046,7 +8089,7 @@ class_createInstances(Class cls, size_t extraBytes,
 static id 
 _object_copyFromZone(id oldObj, size_t extraBytes, void *zone)
 {
-    if (oldObj->isTaggedPointerOrNil()) return oldObj;
+    if (_objc_isTaggedPointerOrNil(oldObj)) return oldObj;
 
     // fixme this doesn't handle C++ ivars correctly (#4619414)
 
@@ -8265,7 +8308,7 @@ disableTaggedPointers()
 
 // Returns a pointer to the class's storage in the tagged class arrays.
 // Assumes the tag is a valid basic tag.
-static Class *
+static ptrauth_taggedpointer_table_entry Class *
 classSlotForBasicTagIndex(objc_tag_index_t tag)
 {
 #if OBJC_SPLIT_TAGGED_POINTERS
@@ -8289,7 +8332,7 @@ classSlotForBasicTagIndex(objc_tag_index_t tag)
 
 // Returns a pointer to the class's storage in the tagged class arrays, 
 // or nil if the tag is out of range.
-static Class *  
+static ptrauth_taggedpointer_table_entry Class *
 classSlotForTagIndex(objc_tag_index_t tag)
 {
     if (tag >= OBJC_TAG_First60BitPayload && tag <= OBJC_TAG_Last60BitPayload) {
@@ -8364,7 +8407,8 @@ _objc_registerTaggedPointerClass(objc_tag_index_t tag, Class cls)
         _objc_fatal("tagged pointers are disabled");
     }
 
-    Class *slot = classSlotForTagIndex(tag);
+    auto *slot = classSlotForTagIndex(tag);
+
     if (!slot) {
         _objc_fatal("tag index %u is invalid", (unsigned int)tag);
     }
@@ -8385,7 +8429,7 @@ _objc_registerTaggedPointerClass(objc_tag_index_t tag, Class cls)
     // Do this lazily when the first extended tag is registered so 
     // that old debuggers characterize bogus pointers correctly more often.
     if (tag < OBJC_TAG_First60BitPayload || tag > OBJC_TAG_Last60BitPayload) {
-        Class *extSlot = classSlotForBasicTagIndex(OBJC_TAG_RESERVED_7);
+        auto *extSlot = classSlotForBasicTagIndex(OBJC_TAG_RESERVED_7);
         if (*extSlot == nil) {
             extern objc_class OBJC_CLASS_$___NSUnrecognizedTaggedPointer;
             *extSlot = (Class)&OBJC_CLASS_$___NSUnrecognizedTaggedPointer;
@@ -8402,7 +8446,7 @@ _objc_registerTaggedPointerClass(objc_tag_index_t tag, Class cls)
 Class
 _objc_getClassForTag(objc_tag_index_t tag)
 {
-    Class *slot = classSlotForTagIndex(tag);
+    auto *slot = classSlotForTagIndex(tag);
     if (slot) return *slot;
     else return nil;
 }

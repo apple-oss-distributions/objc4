@@ -141,7 +141,7 @@ int main (int argc  __unused, const char * argv[] __unused) {
     testassert(am.delegate == ma);
 
     
-    ma.number = M_E;
+    ma.number = 2;
 
     object_setIvar(ma, [MRCARC instanceVariable:"object"], maValue);
     testassert(CFGetRetainCount((__bridge CFTypeRef)maValue) == 2);

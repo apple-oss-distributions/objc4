@@ -198,9 +198,9 @@ bool check_class(Class cls, unsigned & cacheCount) {
 #pragma clang diagnostic pop
         for (unsigned i = 0 ; i < capacity ; i++) {
             uint32_t selOffset = buckets[i].sel_offs;
-            if (selOffset != 0xFFFFFFFF) {
+            if (selOffset != 0x3FFFFFF) {
                 SEL sel = (SEL)(selOffsetsBase + selOffset);
-                IMP imp = (IMP)((uint8_t*)cls - buckets[i].imp_offs);
+                IMP imp = (IMP)((uint8_t*)cls - buckets[i].imp_offset());
                 if (methods.find(sel) == methods.end()) {
                     fail("ERROR: %s: %s not found in dynamic method list\n", class_getName(cls), sel_getName(sel));
                     return false;
@@ -220,7 +220,7 @@ bool check_class(Class cls, unsigned & cacheCount) {
 
             for (unsigned i = 0 ; i < capacity ; i++) {
                 uint32_t selOffset = buckets[i].sel_offs;
-                if (selOffset != 0xFFFFFFFF) {
+                if (selOffset != 0x3FFFFFF) {
                     SEL sel = (SEL)(selOffsetsBase + selOffset);
                     testwarn("%s\n", sel_getName(sel));
                 }
@@ -248,6 +248,7 @@ bool check_library(const char *path) {
     std::set<std::string> blacklistedClasses {
         "PNPWizardScratchpadInkView", // Can only be +initialized on Pencil-capable devices
         "CACDisplayManager", // rdar://64929282 (CACDisplayManager does layout in +initialize!)
+        "HMDLegacyV4Model", // +resolveInstanceMethod that requires that somebody went through setup first to allocate a bunch of class pairs
     };
 
     testprintf("Checking %s… ", path);
@@ -344,6 +345,12 @@ size_t size_of_shared_cache_with_uuid(uuid_t uuid) {
 
 int main (int argc, const char * argv[])
 {
+    std::set<std::string> blacklistedLibraries {
+        "/System/Library/Health/FeedItemPlugins/Summaries.healthplugin/Summaries",
+        // Crashes the Swift runtime on realization: rdar://76149282 (Crash realising classes after dlopening /System/Library/Health/FeedItemPlugins/Summaries.healthplugin/Summaries)
+        "/System/Library/PrivateFrameworks/Memories.framework/Memories" // rdar://76150151 (dlopen /System/Library/PrivateFrameworks/Memories.framework/Memories hangs)
+    };
+
     if (argc == 1) {
         int err = 0;
         dyld_process_info process_info = _dyld_process_info_create(mach_task_self(), 0, &err);
@@ -360,7 +367,9 @@ int main (int argc, const char * argv[])
         dyld_shared_cache_iterate((void*)cache_info.cacheBaseAddress, (uint32_t)size, ^(const dyld_shared_cache_dylib_info* dylibInfo, __unused const dyld_shared_cache_segment_info* segInfo) {
             if (dylibInfo->isAlias) return;
             std::string path(dylibInfo->path);
-            dylibsSet.insert(path);
+            if (blacklistedLibraries.find(path) == blacklistedLibraries.end()) {
+                dylibsSet.insert(path);
+            }
         });
         std::vector<std::string> dylibs(dylibsSet.begin(), dylibsSet.end());
 

@@ -3,7 +3,7 @@ Make sure we detect classes with the RW_REALIZED bit set in the binary. rdar://p
 TEST_CONFIG OS=macosx
 TEST_CRASHES
 TEST_RUN_OUTPUT
-objc\[\d+\]: realized class 0x[0-9a-fA-F]+ has corrupt data pointer 0x[0-9a-fA-F]+
+objc\[\d+\]: realized class 0x[0-9a-fA-F]+ has corrupt data pointer: malloc_size\(0x[0-9a-fA-F]+\) = 0
 objc\[\d+\]: HALTED
 END
 */

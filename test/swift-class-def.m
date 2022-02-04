@@ -182,9 +182,11 @@ asm(                                               \
 extern char OBJC_CLASS_$_ ## name;                 \
 Class Raw ## name = (Class)&OBJC_CLASS_$_ ## name
 
-#define SWIFT_STUB_CLASSREF(name)  \
-extern char OBJC_CLASS_$_ ## name; \
-static Class name ## Classref = (Class)(&OBJC_CLASS_$_ ## name + 1)
+#define SWIFT_STUB_CLASSREF(name)                                        \
+extern char OBJC_CLASS_$_ ## name;                                       \
+static Class name ## Classref = (Class)(&OBJC_CLASS_$_ ## name + 1);     \
+__attribute__((section("__DATA,__objc_stublist,regular,no_dead_strip"))) \
+void *name ## StubListPtr = &OBJC_CLASS_$_ ## name;
 
 #define SWIFT_STUB_CLASS(name, initializer)        \
 asm(                                               \

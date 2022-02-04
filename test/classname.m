@@ -4,6 +4,7 @@
 #include "testroot.i"
 #include <string.h>
 #include <objc/runtime.h>
+#include <ptrauth.h>
 
 @interface Fake : TestRoot @end
 @implementation Fake @end
@@ -11,8 +12,8 @@
 int main()
 {
     TestRoot *obj = [TestRoot new];
-    Class __unsafe_unretained * buf = (Class *)(__bridge void *)(obj);
-    *buf = [Fake class];
+    void *buf = (__bridge void *)(obj);
+    *(Class __ptrauth_objc_isa_pointer *)buf = [Fake class];
 
     testassert(object_getClass(obj) == [Fake class]);
     testassert(object_setClass(obj, [TestRoot class]) == [Fake class]);

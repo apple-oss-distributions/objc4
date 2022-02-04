@@ -144,7 +144,6 @@ public:
 
     bool hasNonpointerIsa();
     bool isTaggedPointer();
-    bool isTaggedPointerOrNil();
     bool isBasicTaggedPointer();
     bool isExtTaggedPointer();
     bool isClass();
@@ -240,17 +239,14 @@ private:
 };
 
 
-#if __OBJC2__
-typedef struct method_t *Method;
+// signed_method_t is a dummy type that exists to distinguish between
+// externally-visible Method values and internal method_t* values.
+// Externally-visible Method values are signed on ptrauth archs.
+// Use _method_auth and _method_sign to convert between them.
+typedef struct signed_method_t *Method;
 typedef struct ivar_t *Ivar;
 typedef struct category_t *Category;
 typedef struct property_t *objc_property_t;
-#else
-typedef struct old_method *Method;
-typedef struct old_ivar *Ivar;
-typedef struct old_category *Category;
-typedef struct old_property *objc_property_t;
-#endif
 
 // Public headers
 
@@ -594,7 +590,7 @@ extern Protocol *getSharedCachePreoptimizedProtocol(const char *name);
 
 extern unsigned getPreoptimizedClassUnreasonableCount();
 extern Class getPreoptimizedClass(const char *name);
-extern Class* copyPreoptimizedClasses(const char *name, int *outCount);
+extern Class getPreoptimizedClassesWithMetaClass(Class metacls);
 
 extern Class _calloc_class(size_t size);
 
@@ -701,7 +697,7 @@ extern void gdb_objc_class_changed(Class cls, unsigned long changes, const char 
 extern void environ_init(void);
 extern void runtime_init(void);
 
-extern void logReplacedMethod(const char *className, SEL s, bool isMeta, const char *catName, IMP oldImp, IMP newImp);
+extern void logReplacedMethod(const char *className, SEL s, bool isMeta, const char *catName, void *oldImp, void *newImp);
 
 
 // objc per-thread storage
@@ -883,6 +879,13 @@ inline void operator delete[](void* p, const std::nothrow_t&) noexcept(true) { f
 #pragma clang diagnostic pop
 #endif
 
+// Overflow-detecting wrapper around malloc(n * m)
+static inline void *alloc_overflow(size_t n, size_t m) {
+    size_t total;
+    if (__builtin_mul_overflow(n, m, &total))
+        _objc_fatal("attempt to allocate %zu * %zu bytes would overflow", n, m);
+    return malloc(total);
+}
 
 class TimeLogger {
     uint64_t mStart;
@@ -973,6 +976,13 @@ class StripedMap {
     const void *getLock(int i) {
         if (i < StripeCount) return &array[i].value;
         else return nil;
+    }
+
+    template<typename F>
+    void forEach(F f) {
+        for (int i = 0; i < StripeCount; i++) {
+            f(array[i].value);
+        }
     }
     
 #if DEBUG

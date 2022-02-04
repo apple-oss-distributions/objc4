@@ -202,20 +202,6 @@
 #   endif
 #endif
 
-
-/* OBJC2_UNAVAILABLE: unavailable in objc 2.0, deprecated in Leopard */
-#if !defined(OBJC2_UNAVAILABLE)
-#   if __OBJC2__
-#       define OBJC2_UNAVAILABLE UNAVAILABLE_ATTRIBUTE
-#   else
-        /* plain C code also falls here, but this is close enough */
-#       define OBJC2_UNAVAILABLE                                       \
-            __OSX_DEPRECATED(10.5, 10.5, "not available in __OBJC2__") \
-            __IOS_DEPRECATED(2.0, 2.0, "not available in __OBJC2__")   \
-            __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE
-#   endif
-#endif
-
 /* OBJC_UNAVAILABLE: unavailable, with a message where supported */
 #if !defined(OBJC_UNAVAILABLE)
 #   if __has_extension(attribute_unavailable_with_message)
@@ -328,6 +314,24 @@
 #       define OBJC_RETURNS_RETAINED __attribute__((ns_returns_retained))
 #   else
 #       define OBJC_RETURNS_RETAINED
+#   endif
+#endif
+
+/* OBJC_COLD: very rarely called, e.g. on error path */
+#if !defined(OBJC_COLD)
+#   if __OBJC__ && __has_attribute(cold)
+#       define OBJC_COLD __attribute__((cold))
+#   else
+#       define OBJC_COLD
+#   endif
+#endif
+
+/* OBJC_NORETURN: does not return normally, but may throw */
+#if !defined(OBJC_NORETURN)
+#   if __OBJC__ && __has_attribute(noreturn)
+#       define OBJC_NORETURN __attribute__((noreturn))
+#   else
+#       define OBJC_NORETURN
 #   endif
 #endif
 

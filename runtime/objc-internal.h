@@ -217,11 +217,6 @@ objc_appRequiresGC(int fd)
 #endif
 ;
 
-// Install missing-class callback. Used by the late unlamented ZeroLink.
-OBJC_EXPORT void
-_objc_setClassLoader(BOOL (* _Nonnull newClassLoader)(const char * _Nonnull))
-    OBJC2_UNAVAILABLE;
-
 #if !(TARGET_OS_OSX && !TARGET_OS_MACCATALYST && __i386__)
 // Add a class copy fixup handler. The name is a misnomer, as
 // multiple calls will install multiple handlers. Older versions
@@ -248,6 +243,20 @@ _objc_error(id _Nullable rcv, const char * _Nonnull fmt, va_list args)
     OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(10.0, 10.5, "use other logging facilities instead");
 
 #endif
+
+
+/**
+ * Queries the Objective-C runtime for a selector matching the provided name.
+ *
+ * @param str A pointer to a C string. Pass the name of the method you wish to
+ *  look up.
+ *
+ * @return A nullable pointer of type SEL specifying the selector matching the
+ *  named method if any.
+ */
+OBJC_EXPORT SEL _Nullable
+sel_lookUpByName(const char * _Nonnull name)
+    OBJC_AVAILABLE(11.3, 14.5, 14.5, 7.3, 5.3);
 
 
 /**
@@ -623,9 +632,17 @@ _objc_getTaggedPointerRawPointerValue(const void * _Nullable ptr) {
 }
 #   endif
 
+#else
+
+// Just check for nil when we don't support tagged pointers.
+static inline bool
+_objc_isTaggedPointerOrNil(const void * _Nullable ptr)
+{
+    return !ptr;
+}
+
 // OBJC_HAVE_TAGGED_POINTERS
 #endif
-
 
 /**
  * Returns the method implementation of an object.
@@ -1175,6 +1192,19 @@ OBJC_EXPORT bool objc_cache_isConstantOptimizedCache(const struct cache_t * _Non
 OBJC_EXPORT unsigned objc_cache_preoptCapacity(const struct cache_t * _Nonnull cache);
 OBJC_EXPORT Class _Nonnull objc_cache_preoptFallbackClass(const struct cache_t * _Nonnull cache);
 OBJC_EXPORT const struct preopt_cache_t * _Nonnull objc_cache_preoptCache(const struct cache_t * _Nonnull cache);
+
+/* dyld_shared_cache_builder and obj-C agree on these definitions. Do not use if you are not the dyld shared cache builder */
+enum {
+    OBJC_OPT_METHODNAME_START      = 0,
+    OBJC_OPT_METHODNAME_END        = 1,
+    OBJC_OPT_INLINED_METHODS_START = 2,
+    OBJC_OPT_INLINED_METHODS_END   = 3,
+
+    __OBJC_OPT_OFFSETS_COUNT /* no trailing comma to make C++98 happy */
+};
+
+OBJC_EXPORT const int objc_opt_preopt_caches_version ;
+OBJC_EXPORT const uintptr_t objc_opt_offsets[__OBJC_OPT_OFFSETS_COUNT] ;
 
 #endif
 

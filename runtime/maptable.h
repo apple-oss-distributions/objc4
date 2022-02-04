@@ -54,7 +54,7 @@ typedef struct _NXMapTable {
     void	* _Nullable buckets;
 } NXMapTable OBJC_MAP_AVAILABILITY;
 
-typedef struct _NXMapTablePrototype {
+typedef struct OBJC_MAP_AVAILABILITY _NXMapTablePrototype {
     unsigned	(* _Nonnull hash)(NXMapTable * _Nonnull,
                                   const void * _Nullable key);
     int		(* _Nonnull isEqual)(NXMapTable * _Nonnull,
@@ -165,9 +165,6 @@ OBJC_EXPORT const NXMapTablePrototype NXStrValueMapPrototype
     /* hashing is string hashing;
       isEqual is strcmp;
       free is no-op. */
-OBJC_EXPORT const NXMapTablePrototype NXObjectMapPrototype
-    OBJC2_UNAVAILABLE;
-    /* for objects; uses methods: hash, isEqual:, free, all for key. */
 
 __END_DECLS
 

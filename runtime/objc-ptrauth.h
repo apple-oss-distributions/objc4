@@ -26,61 +26,53 @@
 
 #include <objc/objc.h>
 
-// On some architectures, method lists and method caches store signed IMPs.
-
-// fixme simply include ptrauth.h once all build trains have it
-#if __has_include (<ptrauth.h>)
 #include <ptrauth.h>
-#else
-#define ptrauth_strip(__value, __key) __value
-#define ptrauth_blend_discriminator(__pointer, __integer) ((uintptr_t)0)
-#define ptrauth_sign_constant(__value, __key, __data) __value
-#define ptrauth_sign_unauthenticated(__value, __key, __data) __value
-#define ptrauth_auth_and_resign(__value, __old_key, __old_data, __new_key, __new_data) __value
-#define ptrauth_auth_function(__value, __old_key, __old_data) __value
-#define ptrauth_auth_data(__value, __old_key, __old_data) __value
-#define ptrauth_string_discriminator(__string) ((int)0)
-#define ptrauth_sign_generic_data(__value, __data) ((ptrauth_generic_signature_t)0)
-
-#define __ptrauth_function_pointer
-#define __ptrauth_return_address
-#define __ptrauth_block_invocation_pointer
-#define __ptrauth_block_copy_helper
-#define __ptrauth_block_destroy_helper
-#define __ptrauth_block_byref_copy_helper
-#define __ptrauth_block_byref_destroy_helper
-#define __ptrauth_objc_method_list_imp
-#define __ptrauth_cxx_vtable_pointer
-#define __ptrauth_cxx_vtt_vtable_pointer
-#define __ptrauth_swift_heap_object_destructor
-#define __ptrauth_cxx_virtual_function_pointer(__declkey)
-#define __ptrauth_swift_function_pointer(__typekey)
-#define __ptrauth_swift_class_method_pointer(__declkey)
-#define __ptrauth_swift_protocol_witness_function_pointer(__declkey)
-#define __ptrauth_swift_value_witness_function_pointer(__key)
-#endif
 
 // Workaround <rdar://problem/64531063> Definitions of ptrauth_sign_unauthenticated and friends generate unused variables warnings
 #if __has_feature(ptrauth_calls)
 #define UNUSED_WITHOUT_PTRAUTH
 #else
 #define UNUSED_WITHOUT_PTRAUTH __unused
+#define __ptrauth(keey, address, discriminator)
 #endif
 
 #if __has_feature(ptrauth_calls)
+#else
+#endif
 
-#if !__arm64__
-#error ptrauth other than arm64e is unimplemented
+
+#if __has_feature(ptrauth_calls)
+
+#define ptrauth_trampoline_block_page_group \
+    __ptrauth(ptrauth_key_process_dependent_data, 1, \
+    ptrauth_string_discriminator("TrampolineBlockPageGroup"))
+
+// ptrauth modifier for tagged pointer class tables.
+#define ptrauth_taggedpointer_table_entry \
+    __ptrauth(ptrauth_key_process_dependent_data, 1, TAGGED_POINTER_TABLE_ENTRY_DISCRIMINATOR)
+
+#else
+
+#define ptrauth_trampoline_block_page_group
+#define ptrauth_taggedpointer_table_entry
+
 #endif
 
 // Method lists use process-independent signature for compatibility.
 using MethodListIMP = IMP __ptrauth_objc_method_list_imp;
 
-#else
+//
+static inline struct method_t *_method_auth(Method mSigned) {
+    if (!mSigned)
+        return NULL;
+    return (struct method_t *)ptrauth_auth_data(mSigned, ptrauth_key_process_dependent_data, METHOD_SIGNING_DISCRIMINATOR);
+}
 
-using MethodListIMP = IMP;
-
-#endif
+static inline Method _method_sign(struct method_t *m) {
+    if (!m)
+        return NULL;
+    return (Method)ptrauth_sign_unauthenticated(m, ptrauth_key_process_dependent_data, METHOD_SIGNING_DISCRIMINATOR);
+}
 
 // A struct that wraps a pointer using the provided template.
 // The provided Auth parameter is used to sign and authenticate
@@ -89,6 +81,24 @@ template<typename T, typename Auth>
 struct WrappedPtr {
 private:
     T *ptr;
+
+#if __BUILDING_OBJCDT__
+    static T *sign(T *p, const void *addr __unused) {
+        return p;
+    }
+
+    static T *auth(T *p, const void *addr __unused) {
+        return ptrauth_strip(p, ptrauth_key_process_dependent_data);
+    }
+#else
+    static T *sign(T *p, const void *addr) {
+        return Auth::sign(p, addr);
+    }
+
+    static T *auth(T *p, const void *addr) {
+        return Auth::auth(p, addr);
+    }
+#endif
 
 public:
     WrappedPtr(T *p) {
@@ -100,7 +110,7 @@ public:
     }
 
     WrappedPtr<T, Auth> &operator =(T *p) {
-        ptr = Auth::sign(p, &ptr);
+        ptr = sign(p, &ptr);
         return *this;
     }
 
@@ -112,7 +122,7 @@ public:
     operator T*() const { return get(); }
     T *operator->() const { return get(); }
 
-    T *get() const { return Auth::auth(ptr, &ptr); }
+    T *get() const { return auth(ptr, &ptr); }
 
     // When asserts are enabled, ensure that we can read a byte from
     // the underlying pointer. This can be used to catch ptrauth

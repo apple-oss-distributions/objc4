@@ -19,14 +19,17 @@
 .align 3
 .private_extern __objc_opt_data
 __objc_opt_data:
-.long 15 /* table.version */
+.long 16 /* table.version */
 .long 0 /* table.flags */
 .long 0 /* table.selopt_offset */
 .long 0 /* table.headeropt_ro_offset */
 .long 0 /* table.clsopt_offset */	
 .long 0 /* table.protocolopt_offset */
 .long 0 /* table.headeropt_rw_offset */
-.space PAGE_MAX_SIZE-28
+.long 0 /* table.unused_protocolopt2_offset */
+.long 0 /* table.largeSharedCachesClassOffset */
+.long 0 /* table.largeSharedCachesProtocolOffset */
+.space PAGE_MAX_SIZE-40
 
 
 /* section of pointers that the shared cache optimizer wants to know about */

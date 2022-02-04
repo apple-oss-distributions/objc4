@@ -3,7 +3,7 @@ Variant on fakeRealizedClass which tests a fake class with no superclass rdar://
 TEST_CONFIG OS=macosx
 TEST_CRASHES
 TEST_RUN_OUTPUT
-objc\[\d+\]: realized class 0x[0-9a-fA-F]+ has corrupt data pointer 0x[0-9a-fA-F]+
+objc\[\d+\]: realized class 0x[0-9a-fA-F]+ has corrupt data pointer: malloc_size\(0x[0-9a-fA-F]+\) = 0
 objc\[\d+\]: HALTED
 END
 */

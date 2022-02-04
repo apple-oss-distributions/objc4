@@ -23,6 +23,7 @@
 
 #include "objc-private.h"
 #include "objc-ptrauth.h"
+#include "NSObject-private.h"
 #include <stdio.h>
 #include <sysexits.h>
 #include <getopt.h>

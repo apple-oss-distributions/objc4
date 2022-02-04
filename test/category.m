@@ -119,8 +119,10 @@ static int state = 0;
 // Manually build a category that goes in __objc_catlist2.
 #if __has_feature(ptrauth_calls)
 #define SIGNED_CATEGORY_IMP "@AUTH(ia,0,addr)"
+#define SIGNED_METHOD_LIST "@AUTH(da,0xC310,addr) "
 #else
 #define SIGNED_CATEGORY_IMP
+#define SIGNED_METHOD_LIST
 #endif
 asm(
 "    .section __DATA,__objc_const                                       \n"
@@ -143,7 +145,7 @@ asm(
 "l_OBJC_$_CATEGORY_Super_$_Category_catlist2:                           \n"
 "    " PTR " L_catlist2CategoryName                                     \n"
 "    " PTR " _OBJC_CLASS_$_Super                                        \n"
-"    " PTR " l_OBJC_$_CATEGORY_INSTANCE_METHODS_Super_$_Category_catlist2 \n"
+"    " PTR " l_OBJC_$_CATEGORY_INSTANCE_METHODS_Super_$_Category_catlist2" SIGNED_METHOD_LIST "\n"
 "    " PTR " 0                                                          \n"
 "    " PTR " 0                                                          \n"
 "    " PTR " 0                                                          \n"

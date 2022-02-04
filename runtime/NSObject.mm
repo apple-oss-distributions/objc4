@@ -39,6 +39,7 @@
 #include <map>
 #include <execinfo.h>
 #include "NSObject-internal.h"
+#include "NSObject-private.h"
 #include <os/feature_private.h>
 
 extern "C" {
@@ -136,46 +137,6 @@ uint32_t numFaults = 0;
 #define SIDE_TABLE_RC_SHIFT 2
 #define SIDE_TABLE_FLAG_MASK (SIDE_TABLE_RC_ONE-1)
 
-struct RefcountMapValuePurgeable {
-    static inline bool isPurgeable(size_t x) {
-        return x == 0;
-    }
-};
-
-// RefcountMap disguises its pointers because we 
-// don't want the table to act as a root for `leaks`.
-typedef objc::DenseMap<DisguisedPtr<objc_object>,size_t,RefcountMapValuePurgeable> RefcountMap;
-
-// Template parameters.
-enum HaveOld { DontHaveOld = false, DoHaveOld = true };
-enum HaveNew { DontHaveNew = false, DoHaveNew = true };
-
-struct SideTable {
-    spinlock_t slock;
-    RefcountMap refcnts;
-    weak_table_t weak_table;
-
-    SideTable() {
-        memset(&weak_table, 0, sizeof(weak_table));
-    }
-
-    ~SideTable() {
-        _objc_fatal("Do not delete SideTable.");
-    }
-
-    void lock() { slock.lock(); }
-    void unlock() { slock.unlock(); }
-    void forceReset() { slock.forceReset(); }
-
-    // Address-ordered lock discipline for a pair of side tables.
-
-    template<HaveOld, HaveNew>
-    static void lockTwo(SideTable *lock1, SideTable *lock2);
-    template<HaveOld, HaveNew>
-    static void unlockTwo(SideTable *lock1, SideTable *lock2);
-};
-
-
 template<>
 void SideTable::lockTwo<DoHaveOld, DoHaveNew>
     (SideTable *lock1, SideTable *lock2)
@@ -219,6 +180,7 @@ void SideTable::unlockTwo<DontHaveOld, DoHaveNew>
 }
 
 static objc::ExplicitInit<StripedMap<SideTable>> SideTablesMap;
+OBJC_EXTERN void *const objc_debug_side_tables_map = &SideTablesMap;
 
 static StripedMap<SideTable>& SideTables() {
     return SideTablesMap.get();
@@ -403,7 +365,7 @@ storeWeak(id *location, objc_object *newObj)
         // weak_register_no_lock returns nil if weak store should be rejected
 
         // Set is-weakly-referenced bit in refcount table.
-        if (!newObj->isTaggedPointerOrNil()) {
+        if (!_objc_isTaggedPointerOrNil(newObj)) {
             newObj->setWeaklyReferenced_nolock();
         }
 
@@ -543,7 +505,7 @@ objc_loadWeakRetained(id *location)
  retry:
     // fixme std::atomic this load
     obj = *location;
-    if (obj->isTaggedPointerOrNil()) return obj;
+    if (_objc_isTaggedPointerOrNil(obj)) return obj;
     
     table = &SideTables()[obj];
     
@@ -1152,7 +1114,7 @@ private:
 public:
     static inline id autorelease(id obj)
     {
-        ASSERT(!obj->isTaggedPointerOrNil());
+        ASSERT(!_objc_isTaggedPointerOrNil(obj));
         id *dest __unused = autoreleaseFast(obj);
 #if SUPPORT_AUTORELEASEPOOL_DEDUP_PTRS
         ASSERT(!dest  ||  dest == EMPTY_POOL_PLACEHOLDER  ||  (id)((AutoreleasePoolEntry *)dest)->ptr == obj);
@@ -1810,7 +1772,7 @@ __attribute__((aligned(16), flatten, noinline))
 id 
 objc_retain(id obj)
 {
-    if (obj->isTaggedPointerOrNil()) return obj;
+    if (_objc_isTaggedPointerOrNil(obj)) return obj;
     return obj->retain();
 }
 
@@ -1819,7 +1781,7 @@ __attribute__((aligned(16), flatten, noinline))
 void 
 objc_release(id obj)
 {
-    if (obj->isTaggedPointerOrNil()) return;
+    if (_objc_isTaggedPointerOrNil(obj)) return;
     return obj->release();
 }
 
@@ -1828,7 +1790,7 @@ __attribute__((aligned(16), flatten, noinline))
 id
 objc_autorelease(id obj)
 {
-    if (obj->isTaggedPointerOrNil()) return obj;
+    if (_objc_isTaggedPointerOrNil(obj)) return obj;
     return obj->autorelease();
 }
 
@@ -1984,7 +1946,7 @@ id
 objc_opt_self(id obj)
 {
 #if __OBJC2__
-    if (fastpath(obj->isTaggedPointerOrNil() || !obj->ISA()->hasCustomCore())) {
+    if (fastpath(_objc_isTaggedPointerOrNil(obj) || !obj->ISA()->hasCustomCore())) {
         return obj;
     }
 #endif
@@ -2193,12 +2155,64 @@ id objc_unretainedObject(objc_objectptr_t pointer) { return (id)pointer; }
 // convert id to objc_objectptr_t, no ownership transfer.
 objc_objectptr_t objc_unretainedPointer(id object) { return object; }
 
+static void *weakTableScan(void *) {
+    pthread_setname_np("ObjC weak reference scanner");
+
+    struct timespec sleepInterval = { 0, 1000000 };
+    char *intervalStr = getenv("OBJC_DEBUG_SCAN_WEAK_TABLES_INTERVAL_NANOSECONDS");
+    if (intervalStr) {
+        unsigned long long nanos = strtoull(intervalStr, NULL, 10);
+        sleepInterval.tv_nsec = nanos % 1000000000;
+        sleepInterval.tv_sec = nanos / 1000000000;
+    }
+
+    auto &tables = SideTables();
+    while (true) {
+        tables.forEach([&](SideTable &table) {
+            nanosleep(&sleepInterval, NULL);
+
+            table.lock();
+
+            auto mask = table.weak_table.mask;
+            if (mask) {
+                for (uintptr_t i = 0; i <= mask; i++) {
+                    auto &entry = table.weak_table.weak_entries[i];
+                    auto *referrers = entry.out_of_line() ? entry.referrers : entry.inline_referrers;
+                    uintptr_t count = entry.out_of_line() ? entry.mask + 1 : WEAK_INLINE_COUNT;
+                    objc_object *referent = entry.referent;
+                    if (!referent) continue;
+
+                    for (uintptr_t j = 0; j < count; j++) {
+                        objc_object **referrer = referrers[j];
+                        if (!referrer) continue;
+
+                        objc_object *currentValue = *referrer;
+                        if (referent != currentValue)
+                            _objc_fatal("Weak reference at %p contains %p, should contain %p", referrer, currentValue, referent);
+                    }
+                }
+            }
+            table.unlock();
+        });
+    }
+}
+
+static void startWeakTableScan() {
+    _objc_inform("Starting background scan of weak references.");
+    pthread_t thread;
+    int ret = pthread_create(&thread, nullptr, weakTableScan, nullptr);
+    if (ret != 0)
+        _objc_fatal("pthread_create failed with error %d (%s)", ret, strerror(ret));
+    pthread_detach(thread);
+}
 
 void arr_init(void) 
 {
     AutoreleasePoolPage::init();
     SideTablesMap.init();
     _objc_associations_init();
+    if (DebugScanWeakTables)
+        startWeakTableScan();
 }
 
 

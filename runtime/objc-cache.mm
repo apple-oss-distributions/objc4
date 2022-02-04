@@ -234,7 +234,9 @@ asm("\n .section __TEXT,__const"
 
 #if CONFIG_USE_PREOPT_CACHES
 __attribute__((used, section("__DATA_CONST,__objc_scoffs")))
-uintptr_t objc_opt_offsets[__OBJC_OPT_OFFSETS_COUNT];
+const int objc_opt_preopt_caches_version = 2;
+__attribute__((used, section("__DATA_CONST,__objc_scoffs")))
+const uintptr_t objc_opt_offsets[__OBJC_OPT_OFFSETS_COUNT] = {0};
 #endif
 
 #if CACHE_END_MARKER
@@ -471,18 +473,18 @@ void cache_t::initializeToEmptyOrPreoptimizedInDisguise()
     return initializeToEmpty();
 }
 
-const preopt_cache_t *cache_t::preopt_cache() const
+const preopt_cache_t *cache_t::preopt_cache(MAYBE_UNUSED_AUTHENTICATED_PARAM bool authenticated) const
 {
     auto addr = _bucketsAndMaybeMask.load(memory_order_relaxed);
     addr &= preoptBucketsMask;
 #if __has_feature(ptrauth_calls)
-#if __BUILDING_OBJCDT__
-    addr = (uintptr_t)ptrauth_strip((preopt_cache_entry_t *)addr,
-            ptrauth_key_process_dependent_data);
-#else
-    addr = (uintptr_t)ptrauth_auth_data((preopt_cache_entry_t *)addr,
-            ptrauth_key_process_dependent_data, (uintptr_t)cls());
-#endif
+    if (authenticated)
+        addr = (uintptr_t)ptrauth_auth_data((preopt_cache_entry_t *)addr,
+                                            ptrauth_key_process_dependent_data,
+                                            (uintptr_t)cls());
+    else
+        addr = (uintptr_t)ptrauth_strip((preopt_cache_entry_t *)addr,
+                                        ptrauth_key_process_dependent_data);
 #endif
     return (preopt_cache_t *)(addr - sizeof(preopt_cache_t));
 }
@@ -525,7 +527,7 @@ bool cache_t::shouldFlush(SEL sel, IMP imp) const
             auto &entry = cache->entries[slot];
 
             return entry.sel_offs == offs &&
-                (uintptr_t)cls() - entry.imp_offs ==
+                ((uintptr_t)cls() - entry.imp_offset()) ==
                 (uintptr_t)ptrauth_strip(imp, ptrauth_key_function_pointer);
         }
     }
@@ -588,7 +590,7 @@ void cache_t::setBucketsAndMask(struct bucket_t *newBuckets, mask_t newMask)
     ASSERT(buckets <= bucketsMask);
     ASSERT(mask <= maxMask);
 
-    _bucketsAndMaybeMask.store(((uintptr_t)newMask << maskShift) | (uintptr_t)newBuckets, memory_order_relaxed);
+    _bucketsAndMaybeMask.store(((uintptr_t)newMask << maskShift) | (uintptr_t)newBuckets, memory_order_release);
     _occupied = 0;
 }
 
@@ -914,7 +916,7 @@ void cache_t::copyCacheNolock(objc_imp_cache_entry *buffer, int len)
             auto &ent = cache->entries[index];
             if (~ent.sel_offs) {
                 buffer[wpos].sel = (SEL)(sel_base + ent.sel_offs);
-                buffer[wpos].imp = (IMP)(imp_base - ent.imp_offs);
+                buffer[wpos].imp = (IMP)(imp_base - ent.imp_offset());
                 wpos++;
             }
         }
@@ -1280,6 +1282,19 @@ void cache_t::collectNolock(bool collectALot)
         _objc_inform ("CACHES: COLLECTING %zu bytes (%zu allocations, %zu collections)", garbage_byte_size, cache_allocations, cache_collections);
     }
     
+    if (DebugScribbleCaches) {
+        // The most recently added garbage is at the end. Scribble
+        // those first to maximize the chances of hitting a race.
+        size_t count = garbage_count;
+        while (count--) {
+            bucket_t *ptr = garbage_refs[count];
+            size_t bucketCount = malloc_size(ptr) / sizeof(bucket_t);
+            for (size_t i = 0; i < bucketCount; i++)
+                ptr[i].scribbleIMP((uintptr_t)ptr);
+
+        }
+    }
+
     // Dispose all refs now in the garbage
     // Erase each entry so debugging tools don't see stale pointers.
     while (garbage_count--) {
@@ -1545,7 +1560,7 @@ OBJC_EXPORT bucket_t * objc_cache_buckets(const cache_t * cache) {
 #if CONFIG_USE_PREOPT_CACHES
 
 OBJC_EXPORT const preopt_cache_t * _Nonnull objc_cache_preoptCache(const cache_t * _Nonnull cache) {
-    return cache->preopt_cache();
+    return cache->preopt_cache(/*authenticated*/false);
 }
 
 OBJC_EXPORT bool objc_cache_isConstantOptimizedCache(const cache_t * _Nonnull cache, bool strict, uintptr_t empty_addr) {

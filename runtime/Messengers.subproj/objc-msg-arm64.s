@@ -73,7 +73,6 @@ _objc_restartableRanges:
 	RestartableEntry _objc_msgLookupSuper2
 	.fill	16, 1, 0
 
-
 /* objc_super parameter to sendSuper */
 #define RECEIVER         0
 #define CLASS            __SIZEOF_POINTER__
@@ -108,6 +107,11 @@ _objc_restartableRanges:
 _objc_indexed_classes:
 	.fill ISA_INDEX_COUNT, PTRSIZE, 0
 #endif
+
+.text
+.private_extern _objc_msgSend_indirect_branch
+_objc_msgSend_indirect_branch:
+    .long LTailCallCachedImpIndirectBranch - .
 
 .macro GetClassFromIsa_p16 src, needs_auth, auth_address /* note: auth_address is not required if !needs_auth */
 
@@ -471,17 +475,24 @@ LLookupPreopt\Function:
 	and	x9, x9, x11, LSR #53		// &=  mask
 #endif
 
-	ldr	x17, [x10, x9, LSL #3]		// x17 == sel_offs | (imp_offs << 32)
-	cmp	x12, w17, uxtw
+	// sel_offs is 26 bits because it needs to address a 64 MB buffer (~ 20 MB as of writing)
+	// keep the remaining 38 bits for the IMP offset, which may need to reach
+	// across the shared cache. This offset needs to be shifted << 2. We did this
+	// to give it even more reach, given the alignment of source (the class data)
+	// and destination (the IMP)
+	ldr	x17, [x10, x9, LSL #3]		// x17 == (sel_offs << 38) | imp_offs
+	cmp	x12, x17, LSR #38
 
 .if \Mode == GETIMP
 	b.ne	\MissLabelConstant		// cache miss
-	sub	x0, x16, x17, LSR #32		// imp = isa - imp_offs
+	sbfiz x17, x17, #2, #38         // imp_offs = combined_imp_and_sel[0..37] << 2
+	sub	x0, x16, x17        		// imp = isa - imp_offs
 	SignAsImp x0
 	ret
 .else
-	b.ne	5f				// cache miss
-	sub	x17, x16, x17, LSR #32		// imp = isa - imp_offs
+	b.ne	5f				        // cache miss
+	sbfiz x17, x17, #2, #38         // imp_offs = combined_imp_and_sel[0..37] << 2
+	sub x17, x16, x17               // imp = isa - imp_offs
 .if \Mode == NORMAL
 	br	x17
 .elseif \Mode == LOOKUP
@@ -543,7 +554,14 @@ _objc_debug_taggedpointer_classes:
 	// x16 = _objc_debug_taggedpointer_classes[x12]
 	adrp	x10, _objc_debug_taggedpointer_classes@PAGE
 	add	x10, x10, _objc_debug_taggedpointer_classes@PAGEOFF
+#if !__has_feature(ptrauth_calls)
 	ldr	x16, [x10, x12, LSL #3]
+#else
+	add	x10, x10, x12, LSL #3
+	ldr	x16, [x10]
+	movk	x10, #TAGGED_POINTER_TABLE_ENTRY_DISCRIMINATOR, LSL #48
+	autdb	x16, x10
+#endif
 
 .endmacro
 #endif
@@ -778,6 +796,10 @@ LGetImpMissConstant:
 
 	// We can directly load the IMP from big methods.
 	// x1 is method triplet instead of SEL
+#if __has_feature(ptrauth_calls)
+	mov	w17, #METHOD_SIGNING_DISCRIMINATOR
+	autdb	p1, p17
+#endif
 	add	p16, p1, #METHOD_IMP
 	ldr	p17, [x16]
 	ldr	p1, [x1, #METHOD_NAME]

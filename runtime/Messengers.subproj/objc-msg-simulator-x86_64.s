@@ -731,7 +731,7 @@ LCacheMiss:
 	ENTRY _objc_msgSendSuper2
 	UNWIND _objc_msgSendSuper2, NoFrame
 	
-	// objc_super->class is superclass of class to search
+	// objc_super->class is subclass of class to search
 	
 // search the cache (objc_super in %a1)
 	movq	class(%a1), %r10	// cls = objc_super->class
@@ -749,7 +749,7 @@ LCacheMiss:
 
 	ENTRY _objc_msgLookupSuper2
 	
-	// objc_super->class is superclass of class to search
+	// objc_super->class is subclass of class to search
 	
 // search the cache (objc_super in %a1)
 	movq	class(%a1), %r10	// cls = objc_super->class

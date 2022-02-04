@@ -41,6 +41,15 @@
 #include <objc/hashtable.h>
 #include <objc/maptable.h>
 
+// Define our own tagged pointer table entry ptrauth macro, since we can't
+// import the objc-ptrauth.h to use the one there.
+#if __has_feature(ptrauth_calls)
+#define OBJC_PTRAUTH_TAGGEDPOINTER_TABLE_ENTRY \
+    __ptrauth(ptrauth_key_process_dependent_data, 1, 0x8F9D)
+#else
+#define OBJC_PTRAUTH_TAGGEDPOINTER_TABLE_ENTRY
+#endif
+
 __BEGIN_DECLS
 
 
@@ -82,7 +91,7 @@ OBJC_AVAILABLE(10.15, 13.0, 13.0, 6.0, 5.0);
 
 // Maps class name to Class, for in-use classes only. NXStrValueMapPrototype.
 OBJC_EXPORT NXMapTable * _Nullable gdb_objc_realized_classes
-    OBJC_AVAILABLE(10.6, 3.1, 9.0, 1.0, 2.0);
+    OBJC_MAP_AVAILABILITY;
 
 // A generation count of realized classes. Increments when new classes
 // are realized. This is NOT an exact count of the number of classes.
@@ -231,7 +240,7 @@ OBJC_EXPORT uintptr_t objc_debug_taggedpointer_slot_mask
     OBJC_AVAILABLE(10.9, 7.0, 9.0, 1.0, 2.0);
 
 // class = classes[tag_slot]
-OBJC_EXPORT Class _Nullable objc_debug_taggedpointer_classes[]
+OBJC_EXPORT OBJC_PTRAUTH_TAGGEDPOINTER_TABLE_ENTRY Class _Nullable objc_debug_taggedpointer_classes[]
     OBJC_AVAILABLE(10.9, 7.0, 9.0, 1.0, 2.0);
 
 // payload = (decoded_obj << payload_lshift) >> payload_rshift
@@ -260,7 +269,7 @@ OBJC_EXPORT uintptr_t objc_debug_taggedpointer_ext_slot_mask
     OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
 
 // class = ext_classes[ext_tag_slot]
-OBJC_EXPORT Class _Nullable objc_debug_taggedpointer_ext_classes[]
+OBJC_EXPORT OBJC_PTRAUTH_TAGGEDPOINTER_TABLE_ENTRY Class _Nullable objc_debug_taggedpointer_ext_classes[]
     OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
 
 // payload = (decoded_obj << ext_payload_lshift) >> ext_payload_rshift
@@ -299,6 +308,9 @@ OBJC_EXTERN const uint32_t objc_debug_autoreleasepoolpage_hiwat_offset  OBJC_AVA
 #if __OBJC2__
 OBJC_EXTERN const uintptr_t objc_debug_autoreleasepoolpage_ptr_mask     OBJC_AVAILABLE(10.16, 14.0, 14.0, 7.0, 6.0);
 #endif
+
+OBJC_EXPORT void *const _Nonnull objc_debug_side_tables_map
+    OBJC_AVAILABLE(12.0, 15.0, 15.0, 8.0, 7.0);
 
 __END_DECLS
 

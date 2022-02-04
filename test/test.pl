@@ -62,7 +62,6 @@ options:
     VERBOSE=0|1|2  (0=quieter  1=print commands executed  2=full test output)
     BATS=0|1       (build for and/or run in BATS?)
     BUILD_SHARED_CACHE=0|1  (build a dyld shared cache with the root and test against that)
-    DYLD=2|3       (test in dyld 2 or dyld 3 mode)
     PARALLELBUILDS=N  (number of parallel builds to run simultaneously)
     SHAREDCACHEDIR=/path/to/custom/shared/cache/directory
 
@@ -765,6 +764,7 @@ sub gather_simple {
     # TEST_BUILD_OUTPUT expected build stdout/stderr
     # TEST_RUN_OUTPUT expected run stdout/stderr
     # TEST_ENTITLEMENTS path to entitlements file
+    # TEST_NO_MALLOC_SCRIBBLE disable MallocScribble
     open(my $in, "< $file") || die;
     my $contents = join "", <$in>;
     
@@ -776,6 +776,7 @@ sub gather_simple {
     my ($cflags) = ($contents =~ /\bTEST_CFLAGS\b(.*)$/m);
     my ($entitlements) = ($contents =~ /\bTEST_ENTITLEMENTS\b(.*)$/m);
     $entitlements =~ s/^\s+|\s+$//g;
+    my $disableMallocScribble = ($contents =~ /\bTEST_NO_MALLOC_SCRIBBLE\b(.*)$/m);
     my ($buildcmd) = extract_multiline("TEST_BUILD", $contents, $name);
     my ($builderror) = extract_multiple_multiline("TEST_BUILD_OUTPUT", $contents, $name);
     my ($runerror) = extract_multiple_multiline("TEST_RUN_OUTPUT", $contents, $name);
@@ -846,6 +847,7 @@ sub gather_simple {
         TEST_CFLAGS => $cflags,
         TEST_ENV => $envstring,
         TEST_RUN => $run,
+        TEST_NO_MALLOC_SCRIBBLE => $disableMallocScribble,
         DSTDIR => "$C{DSTDIR}/$name.build",
         OBJDIR => "$C{OBJDIR}/$name.build",
         ENTITLEMENTS => $entitlements,
@@ -991,7 +993,11 @@ sub build_simple {
                 if (!$T{ENTITLEMENTS}) {
                     $T{ENTITLEMENTS} = "get_task_allow_entitlement.plist";
                 }
-                my $output = make("xcrun codesign -s - --entitlements $DIR/$T{ENTITLEMENTS} $file", $dstdir);
+                my $entitlements_args =
+                    $file =~ /\.exe\z/
+                    ? "--entitlements $DIR/$T{ENTITLEMENTS}"
+                    : "";
+                my $output = make("xcrun codesign -s - $entitlements_args $file", $dstdir);
                 if ($?) {
                     colorprint  $red, "FAIL: codesign $file";
                     colorprefix $red, $output;
@@ -1030,14 +1036,8 @@ sub run_simple {
         $env .= " OBJC_DEBUG_DONT_CRASH=YES";
     }
 
-    if ($C{DYLD} eq "2") {
-        $env .= " DYLD_USE_CLOSURES=0";
-    }
-    elsif ($C{DYLD} eq "3") {
-        $env .= " DYLD_USE_CLOSURES=1";
-    }
-    else {
-        die "unknown DYLD setting $C{DYLD}";
+    if (not $T{TEST_NO_MALLOC_SCRIBBLE}) {
+        $env .= " MallocScribble=1";
     }
 
     if ($SHAREDCACHEDIR) {
@@ -1147,6 +1147,41 @@ sub buildSharedCache {
     make("update_dyld_shared_cache -verbose -cache_dir $BUILDDIR -overlay $C{TESTLIBDIR}/../..");
 }
 
+my $platform_family_fallbacks;
+sub platform_family_fallbacks {
+    if ($platform_family_fallbacks)  {
+        return $platform_family_fallbacks;
+    }
+
+    foreach (getsdks()) {
+        my $sdk = $_;
+        if ( $sdk !~ /internal$/ ) {
+            next;
+        }
+
+        my $sdksettingspath = getsdkpath($_) . "/SDKSettings.plist";
+        if (! -e "$sdksettingspath") {
+            next;
+        }
+
+        my $output = `plutil -convert json -o - "$sdksettingspath"`;
+        if ($? != 0) {
+            next;
+        }
+
+        my $sdksettings = JSON::PP->new->utf8->decode($output);
+        foreach my $key (keys %{ $sdksettings->{SupportedTargets} }) {
+            my $target = $sdksettings->{SupportedTargets}{$key};
+            my $fallback = $target->{PlatformFamilyFallbackName};
+            if ($fallback) {
+                $platform_family_fallbacks->{$key} = $fallback;
+            }
+        }
+    }
+
+    return $platform_family_fallbacks;
+}
+
 sub make_one_config {
     my $configref = shift;
     my $root = shift;
@@ -1174,7 +1209,21 @@ sub make_one_config {
         "bridgeos" => "bridgeos",
         );
 
-    $C{OS} = $allowed_os_args{$os_arg} || die "unknown OS '$os_arg' (expected " . join(', ', sort keys %allowed_os_args) . ")\n";
+    # attempt to fallback to SDK target info if the platform is not recognized
+    my $didUseOSFallback = 0;
+    if (!($C{OS} = $allowed_os_args{$os_arg})) {
+        print "unknown OS $os_arg, looking for platform family fallbacks...\n";
+        my $fallbacks = platform_family_fallbacks();
+        if ($fallbacks->{$os_arg}) {
+            print "found valid fallback for OS $os_arg: $fallbacks->{$os_arg}\n";
+            $C{OS} = $os_arg;
+            $didUseOSFallback = 1;
+        }
+    }
+
+    if (!$C{OS}) {
+        die "unknown OS '$os_arg' (expected " . join(', ', sort keys %allowed_os_args) . ")\n";
+    }
 
     # set the config name now, after massaging the language and OS versions, 
     # but before adding other settings
@@ -1199,6 +1248,9 @@ sub make_one_config {
         $C{TOOLCHAIN} = "bridgeos";
     } elsif ($C{OS} eq "macosx") {
         $C{TOOLCHAIN} = "osx";
+    } elsif ($didUseOSFallback) {
+        #shaky, but works as long as things follow ${name}os / ${name}simulator
+        ($C{TOOLCHAIN} = $C{OS}) =~ s/simulator/os/;
     } else {
         colorprint $yellow, "WARN: don't know toolchain for OS $C{OS}";
         $C{TOOLCHAIN} = "default";
@@ -1386,7 +1438,10 @@ sub make_one_config {
         $cflags .= " -mbridgeos-version-min=$C{DEPLOYMENT_TARGET}";
         $target = "$C{ARCH}-apple-bridgeos$C{DEPLOYMENT_TARGET}";
     }
-    else {
+    elsif ($didUseOSFallback) {
+        $target = "$C{ARCH}-apple-$C{OS}$C{DEPLOYMENT_TARGET}";
+        $cflags .= " -target $target";
+    } else {
         $cflags .= " -mmacosx-version-min=$C{DEPLOYMENT_TARGET}";
         $target = "$C{ARCH}-apple-macosx$C{DEPLOYMENT_TARGET}";
     }
@@ -1423,7 +1478,7 @@ sub make_one_config {
     }
     
     # Populate ENV_PREFIX
-    $C{ENV} = "LANG=C MallocScribble=1";
+    $C{ENV} = "LANG=C";
     $C{ENV} .= " VERBOSE=$VERBOSE"  if $VERBOSE;
     if ($root ne "") {
         die "no spaces allowed in root" if $C{TESTLIBDIR} =~ /\s+/;
@@ -1528,7 +1583,7 @@ sub config_dir_name {
     my $name = "";
     for my $key (sort keys %config) {
         # Exclude settings that only influence the run, not the build.
-        next if $key eq "DYLD" || $key eq "GUARDMALLOC";
+        next if $key eq "GUARDMALLOC";
 
         $name .= '~'  if $name ne "";
         $name .= "$key=$config{$key}";
@@ -1780,8 +1835,6 @@ $args{MEM} = getargs("MEM", "mrc,arc");
 $args{LANGUAGE} = [ map { lc($_) } @{getargs("LANGUAGE", "c,objective-c,c++,objective-c++")} ];
 
 $args{BUILD_SHARED_CACHE} = getargs("BUILD_SHARED_CACHE", 0);
-
-$args{DYLD} = getargs("DYLD", "2,3");
 
 $args{CC} = getargs("CC", "clang");
 

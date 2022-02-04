@@ -77,9 +77,13 @@
 	#endif
 #endif
 
-// Make ASSERT work when objc-private.h hasn't been included.
-#ifndef ASSERT
-#define ASSERT(x) assert(x)
+// Make OBJC_ASSERT work when objc-private.h hasn't been included.
+// Note: we avoid defining our own ASSERT because this header gets included by
+// clients, and that macro name is too generic.
+#ifdef ASSERT
+#define OBJC_ASSERT(x) ASSERT(x)
+#else
+#define OBJC_ASSERT(x) assert(x)
 #endif
 
 struct magic_t {
@@ -89,8 +93,8 @@ struct magic_t {
 	uint32_t m[4];
 
 	magic_t() {
-		ASSERT(M1_len == strlen(M1));
-		ASSERT(M1_len == 3 * sizeof(m[1]));
+		OBJC_ASSERT(M1_len == strlen(M1));
+		OBJC_ASSERT(M1_len == 3 * sizeof(m[1]));
 
 		m[0] = M0;
 		strncpy((char *)&m[1], M1, M1_len);

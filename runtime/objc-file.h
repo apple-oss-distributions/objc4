@@ -38,6 +38,7 @@ extern message_ref_t *_getObjc2MessageRefs(const header_info *hi, size_t *count)
 extern Class*_getObjc2ClassRefs(const header_info *hi, size_t *count);
 extern Class*_getObjc2SuperRefs(const header_info *hi, size_t *count);
 extern classref_t const *_getObjc2ClassList(const header_info *hi, size_t *count);
+extern stub_class_t * const *_getObjc2StubList(const header_info *hi, size_t *count);
 // Use hi->nlclslist() instead
 // extern classref_t const *_getObjc2NonlazyClassList(const header_info *hi, size_t *count);
 // Use hi->catlist() instead

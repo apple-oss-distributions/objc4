@@ -285,28 +285,22 @@ public:
 #endif
     }
 
+    inline void scribbleIMP(uintptr_t value) {
+        _imp.store(value, memory_order_relaxed);
+    }
+
     template <Atomicity, IMPEncoding>
     void set(bucket_t *base, SEL newSel, IMP newImp, Class cls);
 };
 
 /* dyld_shared_cache_builder and obj-C agree on these definitions */
-enum {
-    OBJC_OPT_METHODNAME_START      = 0,
-    OBJC_OPT_METHODNAME_END        = 1,
-    OBJC_OPT_INLINED_METHODS_START = 2,
-    OBJC_OPT_INLINED_METHODS_END   = 3,
-
-    __OBJC_OPT_OFFSETS_COUNT,
-};
-
-#if CONFIG_USE_PREOPT_CACHES
-extern uintptr_t objc_opt_offsets[__OBJC_OPT_OFFSETS_COUNT];
-#endif
-
-/* dyld_shared_cache_builder and obj-C agree on these definitions */
 struct preopt_cache_entry_t {
-    uint32_t sel_offs;
-    uint32_t imp_offs;
+    int64_t raw_imp_offs : 38; // actual IMP offset from the isa >> 2
+    uint64_t sel_offs : 26;
+    
+    inline int64_t imp_offset() const {
+        return raw_imp_offs << 2;
+    }
 };
 
 /* dyld_shared_cache_builder and obj-C agree on these definitions */
@@ -455,7 +449,7 @@ public:
     Class cls() const;
 
 #if CONFIG_USE_PREOPT_CACHES
-    const preopt_cache_t *preopt_cache() const;
+    const preopt_cache_t *preopt_cache(bool authenticated = true) const;
 #endif
 
     mask_t occupied() const;
@@ -562,17 +556,28 @@ typedef struct classref * classref_t;
 * and adding the offset stored within it. This is a 32-bit signed
 * offset giving ±2GB of range.
 **********************************************************************/
-template <typename T>
+template <typename T, bool isNullable = true>
 struct RelativePointer: nocopy_t {
     int32_t offset;
 
-    T get() const {
-        if (offset == 0)
+    void *getRaw(uintptr_t base) const {
+        if (isNullable && offset == 0)
             return nullptr;
-        uintptr_t base = (uintptr_t)&offset;
         uintptr_t signExtendedOffset = (uintptr_t)(intptr_t)offset;
         uintptr_t pointer = base + signExtendedOffset;
-        return (T)pointer;
+        return (void *)pointer;
+    }
+
+    void *getRaw() const {
+        return getRaw((uintptr_t)&offset);
+    }
+
+    T get(uintptr_t base) const {
+        return (T)getRaw(base);
+    }
+
+    T get() const {
+        return (T)getRaw();
     }
 };
 
@@ -633,24 +638,38 @@ struct entsize_list_tt {
         return sizeof(entsize_list_tt) + count*entsize;
     }
 
-    struct iterator;
-    const iterator begin() const { 
-        return iterator(*static_cast<const List*>(this), 0); 
+    template <bool authenticated>
+    struct iteratorImpl;
+    using iterator = iteratorImpl<false>;
+    using signedIterator = iteratorImpl<true>;
+    const iterator begin() const {
+        return iterator(*static_cast<const List*>(this), 0);
     }
-    iterator begin() { 
-        return iterator(*static_cast<const List*>(this), 0); 
+    iterator begin() {
+        return iterator(*static_cast<const List*>(this), 0);
     }
-    const iterator end() const { 
-        return iterator(*static_cast<const List*>(this), count); 
+    const iterator end() const {
+        return iterator(*static_cast<const List*>(this), count);
     }
-    iterator end() { 
-        return iterator(*static_cast<const List*>(this), count); 
+    iterator end() {
+        return iterator(*static_cast<const List*>(this), count);
     }
 
-    struct iterator {
+    const signedIterator signedBegin() const {
+        return signedIterator(*static_cast<const List *>(this), 0);
+    }
+    const signedIterator signedEnd() const {
+        return signedIterator(*static_cast<const List*>(this), count);
+    }
+
+    template <bool authenticated>
+    struct iteratorImpl {
         uint32_t entsize;
         uint32_t index;  // keeping track of this saves a divide in operator-
-        Element* element;
+
+        using ElementPtr = std::conditional_t<authenticated, Element * __ptrauth(ptrauth_key_process_dependent_data, 1, 0xdead), Element *>;
+
+        ElementPtr element;
 
         typedef std::random_access_iterator_tag iterator_category;
         typedef Element value_type;
@@ -658,41 +677,41 @@ struct entsize_list_tt {
         typedef Element* pointer;
         typedef Element& reference;
 
-        iterator() { }
+        iteratorImpl() { }
 
-        iterator(const List& list, uint32_t start = 0)
+        iteratorImpl(const List& list, uint32_t start = 0)
             : entsize(list.entsize())
             , index(start)
             , element(&list.getOrEnd(start))
         { }
 
-        const iterator& operator += (ptrdiff_t delta) {
+        const iteratorImpl& operator += (ptrdiff_t delta) {
             element = (Element*)((uint8_t *)element + delta*entsize);
             index += (int32_t)delta;
             return *this;
         }
-        const iterator& operator -= (ptrdiff_t delta) {
+        const iteratorImpl& operator -= (ptrdiff_t delta) {
             element = (Element*)((uint8_t *)element - delta*entsize);
             index -= (int32_t)delta;
             return *this;
         }
-        const iterator operator + (ptrdiff_t delta) const {
-            return iterator(*this) += delta;
+        const iteratorImpl operator + (ptrdiff_t delta) const {
+            return iteratorImpl(*this) += delta;
         }
-        const iterator operator - (ptrdiff_t delta) const {
-            return iterator(*this) -= delta;
-        }
-
-        iterator& operator ++ () { *this += 1; return *this; }
-        iterator& operator -- () { *this -= 1; return *this; }
-        iterator operator ++ (int) {
-            iterator result(*this); *this += 1; return result;
-        }
-        iterator operator -- (int) {
-            iterator result(*this); *this -= 1; return result;
+        const iteratorImpl operator - (ptrdiff_t delta) const {
+            return iteratorImpl(*this) -= delta;
         }
 
-        ptrdiff_t operator - (const iterator& rhs) const {
+        iteratorImpl& operator ++ () { *this += 1; return *this; }
+        iteratorImpl& operator -- () { *this -= 1; return *this; }
+        iteratorImpl operator ++ (int) {
+            iteratorImpl result(*this); *this += 1; return result;
+        }
+        iteratorImpl operator -- (int) {
+            iteratorImpl result(*this); *this -= 1; return result;
+        }
+
+        ptrdiff_t operator - (const iteratorImpl& rhs) const {
             return (ptrdiff_t)this->index - (ptrdiff_t)rhs.index;
         }
 
@@ -701,17 +720,17 @@ struct entsize_list_tt {
 
         operator Element& () const { return *element; }
 
-        bool operator == (const iterator& rhs) const {
+        bool operator == (const iteratorImpl& rhs) const {
             return this->element == rhs.element;
         }
-        bool operator != (const iterator& rhs) const {
+        bool operator != (const iteratorImpl& rhs) const {
             return this->element != rhs.element;
         }
 
-        bool operator < (const iterator& rhs) const {
+        bool operator < (const iteratorImpl& rhs) const {
             return this->element < rhs.element;
         }
-        bool operator > (const iterator& rhs) const {
+        bool operator > (const iteratorImpl& rhs) const {
             return this->element > rhs.element;
         }
     };
@@ -749,7 +768,7 @@ private:
         // cache) or a selref (everywhere else).
         RelativePointer<const void *> name;
         RelativePointer<const char *> types;
-        RelativePointer<IMP> imp;
+        RelativePointer<IMP, /*isNullable*/false> imp;
 
         bool inSharedCache() const {
             return (CONFIG_SHARED_CACHE_RELATIVE_DIRECT_SELECTORS &&
@@ -770,6 +789,11 @@ public:
     static const auto bigSize = sizeof(struct big);
     static const auto smallSize = sizeof(struct small);
 
+    // All shared cache relative method lists names are offsets from this selector.
+    static uintptr_t sharedCacheRelativeMethodBase() {
+        return (uintptr_t)@selector(🤯);
+    }
+
     // The pointer modifier used with method lists. When the method
     // list contains small methods, set the bottom bit of the pointer.
     // We use that bottom bit elsewhere to distinguish between big
@@ -788,11 +812,14 @@ public:
         return *(struct big *)this;
     }
 
-    SEL name() const {
+    ALWAYS_INLINE SEL name() const {
         if (isSmall()) {
-            return (small().inSharedCache()
-                    ? (SEL)small().name.get()
-                    : *(SEL *)small().name.get());
+            if (small().inSharedCache()) {
+                return (SEL)small().name.get(sharedCacheRelativeMethodBase());
+            } else {
+                // Outside of the shared cache, relative methods point to a selRef
+                return *(SEL *)small().name.get();
+            }
         } else {
             return big().name;
         }
@@ -802,18 +829,43 @@ public:
     }
     IMP imp(bool needsLock) const {
         if (isSmall()) {
-            IMP imp = remappedImp(needsLock);
-            if (!imp)
-                imp = ptrauth_sign_unauthenticated(small().imp.get(),
-                                                   ptrauth_key_function_pointer, 0);
-            return imp;
+            IMP smallIMP = ptrauth_sign_unauthenticated(small().imp.get(),
+                                                        ptrauth_key_function_pointer, 0);
+            // We must sign the newly generated function pointer before calling
+            // out to remappedImp(). That call may spill `this` leaving it open
+            // to being overwritten while it's on the stack. By signing first,
+            // we'll spill the signed function pointer instead, which is
+            // resistant to being overwritten.
+            //
+            // The compiler REALLY wants to perform this signing operation after
+            // the call to remappedImp. This asm statement prevents it from
+            // doing that reordering.
+            asm ("": : "r" (smallIMP) :);
+
+            IMP remappedIMP = remappedImp(needsLock);
+            if (remappedIMP)
+                return remappedIMP;
+            return smallIMP;
         }
         return big().imp;
     }
 
+    // Fetch the IMP as a `void *`. Avoid signing relative IMPs. This
+    // avoids signing oracles in cases where we're just logging the
+    // value. Runtime lock must be held.
+    void *impRaw() const {
+        if (isSmall()) {
+            IMP remappedIMP = remappedImp(false);
+            if (remappedIMP)
+                return (void *)remappedIMP;
+            return small().imp.getRaw();
+        }
+        return (void *)big().imp;
+    }
+
     SEL getSmallNameAsSEL() const {
         ASSERT(small().inSharedCache());
-        return (SEL)small().name.get();
+        return (SEL)small().name.get(sharedCacheRelativeMethodBase());
     }
 
     SEL getSmallNameAsSELRef() const {
@@ -853,9 +905,9 @@ public:
 
     method_t &operator=(const method_t &other) {
         ASSERT(!isSmall());
+        big().imp = other.imp(false);
         big().name = other.name();
         big().types = other.types();
-        big().imp = other.imp(false);
         return *this;
     }
 };
@@ -920,6 +972,9 @@ struct method_list_t : entsize_list_tt<method_t, method_list_t, 0xffff0003, meth
     }
 
     method_list_t *duplicate() const {
+        auto begin = signedBegin();
+        auto end = signedEnd();
+
         method_list_t *dup;
         if (isSmallList()) {
             dup = (method_list_t *)calloc(byteSize(method_t::bigSize, count), 1);
@@ -929,9 +984,36 @@ struct method_list_t : entsize_list_tt<method_t, method_list_t, 0xffff0003, meth
             dup->entsizeAndFlags = this->entsizeAndFlags;
         }
         dup->count = this->count;
-        std::copy(begin(), end(), dup->begin());
+        std::copy(begin, end, dup->begin());
         return dup;
     }
+
+    struct Ptrauth {
+        static const uint16_t discriminator = 0xC310;
+        static_assert(std::is_same<
+                      void * __ptrauth_objc_method_list_pointer *,
+                      void * __ptrauth(ptrauth_key_method_list_pointer, 1, discriminator) *>::value,
+                      "Method list pointer signing discriminator must match ptrauth.h");
+
+        ALWAYS_INLINE static method_list_t *sign (method_list_t *ptr, const void *address) {
+            return ptrauth_sign_unauthenticated(ptr,
+                                                ptrauth_key_method_list_pointer,
+                                                ptrauth_blend_discriminator(address,
+                                                                            discriminator));
+        }
+
+        ALWAYS_INLINE static method_list_t *auth(method_list_t *ptr, const void *address) {
+            (void)address;
+#if __has_feature(ptrauth_calls)
+            if (ptr)
+                ptr = ptrauth_auth_data(ptr,
+                                        ptrauth_key_method_list_pointer,
+                                        ptrauth_blend_discriminator(address,
+                                                                    discriminator));
+#endif
+            return ptr;
+        }
+    };
 };
 
 struct ivar_list_t : entsize_list_tt<ivar_t, ivar_list_t, 0> {
@@ -1048,9 +1130,7 @@ struct class_ro_t {
     };
 
     explicit_atomic<const char *> name;
-    // With ptrauth, this is signed if it points to a small list, but
-    // may be unsigned if it points to a big list.
-    void *baseMethodList;
+    WrappedPtr<method_list_t, method_list_t::Ptrauth> baseMethods;
     protocol_list_t * baseProtocols;
     const ivar_list_t * ivars;
 
@@ -1072,45 +1152,6 @@ struct class_ro_t {
         return name.load(std::memory_order_acquire);
     }
 
-    static const uint16_t methodListPointerDiscriminator = 0xC310;
-#if 0 // FIXME: enable this when we get a non-empty definition of __ptrauth_objc_method_list_pointer from ptrauth.h.
-        static_assert(std::is_same<
-                      void * __ptrauth_objc_method_list_pointer *,
-                      void * __ptrauth(ptrauth_key_method_list_pointer, 1, methodListPointerDiscriminator) *>::value,
-                      "Method list pointer signing discriminator must match ptrauth.h");
-#endif
-
-    method_list_t *baseMethods() const {
-#if __has_feature(ptrauth_calls)
-        method_list_t *ptr = ptrauth_strip((method_list_t *)baseMethodList, ptrauth_key_method_list_pointer);
-        if (ptr == nullptr)
-            return nullptr;
-
-        // Don't auth if the class_ro and the method list are both in the shared cache.
-        // This is secure since they'll be read-only, and this allows the shared cache
-        // to cut down on the number of signed pointers it has.
-        bool roInSharedCache = objc::inSharedCache((uintptr_t)this);
-        bool listInSharedCache = objc::inSharedCache((uintptr_t)ptr);
-        if (roInSharedCache && listInSharedCache)
-            return ptr;
-
-        // Auth all other small lists.
-        if (ptr->isSmallList())
-            ptr = ptrauth_auth_data((method_list_t *)baseMethodList,
-                                    ptrauth_key_method_list_pointer,
-                                    ptrauth_blend_discriminator(&baseMethodList,
-                                                                methodListPointerDiscriminator));
-        return ptr;
-#else
-        return (method_list_t *)baseMethodList;
-#endif
-    }
-
-    uintptr_t baseMethodListPtrauthData() const {
-        return ptrauth_blend_discriminator(&baseMethodList,
-                                           methodListPointerDiscriminator);
-    }
-
     class_ro_t *duplicate() const {
         bool hasSwiftInitializer = flags & RO_HAS_SWIFT_INITIALIZER;
 
@@ -1124,35 +1165,8 @@ struct class_ro_t {
             ro->_swiftMetadataInitializer_NEVER_USE[0] = this->_swiftMetadataInitializer_NEVER_USE[0];
 
 #if __has_feature(ptrauth_calls)
-        // Re-sign the method list pointer if it was signed.
-        // NOTE: It is possible for a signed pointer to have a signature
-        // that is all zeroes. This is indistinguishable from a raw pointer.
-        // This code will treat such a pointer as signed and re-sign it. A
-        // false positive is safe: method list pointers are either authed or
-        // stripped, so if baseMethods() doesn't expect it to be signed, it
-        // will ignore the signature.
-        void *strippedBaseMethodList = ptrauth_strip(baseMethodList, ptrauth_key_method_list_pointer);
-        void *signedBaseMethodList = ptrauth_sign_unauthenticated(strippedBaseMethodList,
-                                                                  ptrauth_key_method_list_pointer,
-                                                                  baseMethodListPtrauthData());
-        if (baseMethodList == signedBaseMethodList) {
-            ro->baseMethodList = ptrauth_auth_and_resign(baseMethodList,
-                                                         ptrauth_key_method_list_pointer,
-                                                         baseMethodListPtrauthData(),
-                                                         ptrauth_key_method_list_pointer,
-                                                         ro->baseMethodListPtrauthData());
-        } else {
-            // Special case: a class_ro_t in the shared cache pointing to a
-            // method list in the shared cache will not have a signed pointer,
-            // but the duplicate will be expected to have a signed pointer since
-            // it's not in the shared cache. Detect that and sign it.
-            bool roInSharedCache = objc::inSharedCache((uintptr_t)this);
-            bool listInSharedCache = objc::inSharedCache((uintptr_t)strippedBaseMethodList);
-            if (roInSharedCache && listInSharedCache)
-                ro->baseMethodList = ptrauth_sign_unauthenticated(strippedBaseMethodList,
-                                                                  ptrauth_key_method_list_pointer,
-                                                                  ro->baseMethodListPtrauthData());
-        }
+        // Re-sign the method list pointer.
+        ro->baseMethods = baseMethods;
 #endif
 
         return ro;
@@ -1203,18 +1217,32 @@ class list_array_tt {
     };
 
  protected:
-    class iterator {
+    template <bool authenticated>
+    class iteratorImpl {
         const Ptr<List> *lists;
         const Ptr<List> *listsEnd;
-        typename List::iterator m, mEnd;
+
+        template<bool B>
+        struct ListIterator {
+            using Type = typename List::signedIterator;
+            static Type begin(Ptr<List> ptr) { return ptr->signedBegin(); }
+            static Type end(Ptr<List> ptr) { return ptr->signedEnd(); }
+        };
+        template<>
+        struct ListIterator<false> {
+            using Type = typename List::iterator;
+            static Type begin(Ptr<List> ptr) { return ptr->begin(); }
+            static Type end(Ptr<List> ptr) { return ptr->end(); }
+        };
+        typename ListIterator<authenticated>::Type m, mEnd;
 
      public:
-        iterator(const Ptr<List> *begin, const Ptr<List> *end)
+        iteratorImpl(const Ptr<List> *begin, const Ptr<List> *end)
             : lists(begin), listsEnd(end)
         {
             if (begin != end) {
-                m = (*begin)->begin();
-                mEnd = (*begin)->end();
+                m = ListIterator<authenticated>::begin(*begin);
+                mEnd = ListIterator<authenticated>::end(*begin);
             }
         }
 
@@ -1225,27 +1253,29 @@ class list_array_tt {
             return *m;
         }
 
-        bool operator != (const iterator& rhs) const {
+        bool operator != (const iteratorImpl& rhs) const {
             if (lists != rhs.lists) return true;
             if (lists == listsEnd) return false;  // m is undefined
             if (m != rhs.m) return true;
             return false;
         }
 
-        const iterator& operator ++ () {
+        const iteratorImpl& operator ++ () {
             ASSERT(m != mEnd);
             m++;
             if (m == mEnd) {
                 ASSERT(lists != listsEnd);
                 lists++;
                 if (lists != listsEnd) {
-                    m = (*lists)->begin();
-                    mEnd = (*lists)->end();
+                    m = ListIterator<authenticated>::begin(*lists);
+                    mEnd = ListIterator<authenticated>::end(*lists);
                 }
             }
             return *this;
         }
     };
+    using iterator = iteratorImpl<false>;
+    using signedIterator = iteratorImpl<true>;
 
  private:
     union {
@@ -1304,6 +1334,15 @@ class list_array_tt {
     iterator end() const {
         auto e = endLists();
         return iterator(e, e);
+    }
+
+    signedIterator signedBegin() const {
+        return signedIterator(beginLists(), endLists());
+    }
+
+    signedIterator signedEnd() const {
+        auto e = endLists();
+        return signedIterator(e, e);
     }
 
     inline uint32_t countLists(const std::function<const array_t * (const array_t *)> & peek) const {
@@ -1550,7 +1589,7 @@ public:
         if (v.is<class_rw_ext_t *>()) {
             return v.get<class_rw_ext_t *>(&ro_or_rw_ext)->methods;
         } else {
-            return method_array_t{v.get<const class_ro_t *>(&ro_or_rw_ext)->baseMethods()};
+            return method_array_t{v.get<const class_ro_t *>(&ro_or_rw_ext)->baseMethods};
         }
     }
 
@@ -2194,8 +2233,8 @@ struct swift_class_t : objc_class {
 struct category_t {
     const char *name;
     classref_t cls;
-    WrappedPtr<method_list_t, PtrauthStrip> instanceMethods;
-    WrappedPtr<method_list_t, PtrauthStrip> classMethods;
+    WrappedPtr<method_list_t, method_list_t::Ptrauth> instanceMethods;
+    WrappedPtr<method_list_t, method_list_t::Ptrauth> classMethods;
     struct protocol_list_t *protocols;
     struct property_list_t *instanceProperties;
     // Fields below this point are not always present on disk.

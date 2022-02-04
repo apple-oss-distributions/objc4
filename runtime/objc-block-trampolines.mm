@@ -34,6 +34,7 @@
 
 #include <Block.h>
 #include <Block_private.h>
+#include <inttypes.h>
 #include <mach/mach.h>
 #include <objc/objc-block-trampolines.h>
 
@@ -226,8 +227,8 @@ typedef enum {
 
 struct TrampolineBlockPageGroup
 {
-    TrampolineBlockPageGroup *nextPageGroup; // linked list of all pages
-    TrampolineBlockPageGroup *nextAvailablePage; // linked list of pages with available slots
+    TrampolineBlockPageGroup * ptrauth_trampoline_block_page_group nextPageGroup; // linked list of all pages
+    TrampolineBlockPageGroup * ptrauth_trampoline_block_page_group nextAvailablePage; // linked list of pages with available slots
 
     uintptr_t nextAvailable; // index of next available slot, endIndex() if no more available
 
@@ -295,12 +296,13 @@ struct TrampolineBlockPageGroup
     }
     
     IMP trampoline(int aMode, uintptr_t index) {
-        ASSERT(validIndex(index));
         char *base = (char *)trampolinesForMode(aMode);
         char *imp = base + index*slotSize();
 #if __arm__
         imp++;  // trampoline is Thumb instructions
 #endif
+        if (!validIndex(index))
+            _objc_fatal("Trampoline block %p, requested invalid index %" PRIuPTR, this, index);
 #if __has_feature(ptrauth_calls)
         imp = ptrauth_sign_unauthenticated(imp,
                                            ptrauth_key_function_pointer, 0);
@@ -327,7 +329,7 @@ struct TrampolineBlockPageGroup
 
 };
 
-static TrampolineBlockPageGroup *HeadPageGroup;
+static TrampolineBlockPageGroup * ptrauth_trampoline_block_page_group HeadPageGroup;
 
 #pragma mark Utility Functions
 
