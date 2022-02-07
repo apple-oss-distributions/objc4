@@ -231,7 +231,15 @@ bool didCallDyldNotifyRegister = false;
 * Locking: runtimeLock must be held when accessing this map.
 **********************************************************************/
 namespace objc {
-    static objc::LazyInitDenseMap<const method_t *, IMP> smallMethodIMPMap;
+    // The value type of smallMethodIMPMap is really IMP, but signed with a
+    // custom discriminator and blended with the method_t* that it's associated
+    // with. This securely ties the IMP in the table to the method that it
+    // belongs to, without requiring the table itself to be aware of address
+    // discrimination or hashing signed pointers.
+    static objc::LazyInitDenseMap<const method_t *, void *> smallMethodIMPMap;
+#define smallMethodIMPMapKey ptrauth_key_process_dependent_code
+#define smallMethodIMPMapDiscriminator(methodPtr) \
+    ptrauth_blend_discriminator(methodPtr, ptrauth_string_discriminator("smallMethodIMPMap"))
 }
 
 static IMP method_t_remappedImp_nolock(const method_t *m) {
@@ -242,7 +250,8 @@ static IMP method_t_remappedImp_nolock(const method_t *m) {
     auto iter = map->find(m);
     if (iter == map->end())
         return nullptr;
-    return iter->second;
+    return (IMP)ptrauth_auth_function(iter->second, smallMethodIMPMapKey,
+                                      smallMethodIMPMapDiscriminator(m));
 }
 
 IMP method_t::remappedImp(bool needsLock) const {
@@ -260,7 +269,8 @@ void method_t::remapImp(IMP imp) {
     ASSERT(isSmall());
     runtimeLock.assertLocked();
     auto *map = objc::smallMethodIMPMap.get(true);
-    (*map)[this] = imp;
+    (*map)[this] = (void *)ptrauth_auth_and_resign(imp, ptrauth_key_function_pointer, 0,
+                                                   smallMethodIMPMapKey, smallMethodIMPMapDiscriminator(this));
 }
 
 objc_method_description *method_t::getSmallDescription() const {
