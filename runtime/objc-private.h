@@ -112,7 +112,10 @@ public:
 
 struct objc_object {
 private:
-    isa_t isa;
+    char isa_storage[sizeof(isa_t)];
+
+    isa_t &isa() { return *reinterpret_cast<isa_t *>(isa_storage); }
+    const isa_t &isa() const { return *reinterpret_cast<const isa_t *>(isa_storage); }
 
 public:
 
@@ -155,6 +158,9 @@ public:
     // object may be weakly referenced?
     bool isWeaklyReferenced();
     void setWeaklyReferenced_nolock();
+
+    // object may be uniquely referenced?
+    bool isUniquelyReferenced();
 
     // object may have -.cxx_destruct implementation?
     bool hasCxxDtor();
@@ -691,8 +697,10 @@ extern void gdb_objc_class_changed(Class cls, unsigned long changes, const char 
 
 // Settings from environment variables
 #define OPTION(var, env, help) extern bool var;
+#define INTERNAL_OPTION(var, env, help) extern bool var;
 #include "objc-env.h"
 #undef OPTION
+#undef INTERNAL_OPTION
 
 extern void environ_init(void);
 extern void runtime_init(void);
@@ -767,7 +775,8 @@ extern Class look_up_class(const char *aClassName, bool includeUnconnected, bool
 extern "C" void map_images(unsigned count, const char * const paths[],
                            const struct mach_header * const mhdrs[]);
 extern void map_images_nolock(unsigned count, const char * const paths[],
-                              const struct mach_header * const mhdrs[]);
+                              const struct mach_header * const mhdrs[],
+                              bool *disabledClassROEnforcement);
 extern void load_images(const char *path, const struct mach_header *mh);
 extern void unmap_image(const char *path, const struct mach_header *mh);
 extern void unmap_image_nolock(const struct mach_header *mh);

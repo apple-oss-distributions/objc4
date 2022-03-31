@@ -11,11 +11,11 @@
 @end
 
 struct minimal_unrealized_class {
-    void *isa;
-    void *superclass;
+    void * __ptrauth_objc_isa_pointer isa;
+    void * __ptrauth_objc_super_pointer superclass;
     void *cachePtr;
     uintptr_t maskAndOccupied;
-    struct minimal_class_ro *ro;
+    struct minimal_class_ro * __ptrauth_objc_class_ro ro;
 };
 
 struct minimal_class_ro {

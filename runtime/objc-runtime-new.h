@@ -123,7 +123,20 @@
 //   _tryRetain/_isDeallocating/retainWeakReference/allowsWeakReference
 #define FAST_HAS_DEFAULT_RR     (1UL<<2)
 // data pointer
+#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#define FAST_DATA_MASK          0x0000007ffffffff8UL
+#else
 #define FAST_DATA_MASK          0x00007ffffffffff8UL
+#endif
+
+static_assert((MACH_VM_MAX_ADDRESS & FAST_DATA_MASK)
+              == (MACH_VM_MAX_ADDRESS & ~7UL),
+              "FAST_DATA_MASK must not mask off pointer bits");
+
+// just the flags
+#define FAST_FLAGS_MASK         0x0000000000000007UL
+// this bit tells us *quickly* that it's a pointer to an rw, not an ro
+#define FAST_IS_RW_POINTER      0x8000000000000000UL
 
 #if __arm64__
 // class or superclass has .cxx_construct/.cxx_destruct implementation
@@ -189,7 +202,10 @@
 #define FAST_IS_SWIFT_STABLE  (1UL<<1)
 // data pointer
 #define FAST_DATA_MASK        0xfffffffcUL
-
+// flags mask
+#define FAST_FLAGS_MASK       0x00000003UL
+// no fast RW pointer flag on 32-bit
+#define FAST_IS_RW_POINTER    0
 #endif // __LP64__
 
 // The Swift ABI requires that these bits be defined like this on all platforms.
@@ -1612,6 +1628,9 @@ public:
     }
 };
 
+namespace objc {
+    extern uintptr_t ptrauth_class_rx_enforce disableEnforceClassRXPtrAuth;
+}
 
 struct class_data_bits_t {
     friend objc_class;
@@ -1625,52 +1644,146 @@ private:
     }
 
     // Atomically set the bits in `set` and clear the bits in `clear`.
-    // set and clear must not overlap.
+    // set and clear must not overlap.  If the existing bits field is zero,
+    // this function will mark it as using the RW signing scheme.
     void setAndClearBits(uintptr_t set, uintptr_t clear)
     {
         ASSERT((set & clear) == 0);
         uintptr_t newBits, oldBits = LoadExclusive(&bits);
         do {
-            newBits = (oldBits | set) & ~clear;
+            uintptr_t authBits
+                = (oldBits
+                   ? (uintptr_t)ptrauth_auth_data((class_rw_t *)oldBits,
+                                                  CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                                  ptrauth_blend_discriminator(&bits,
+                                                                              CLASS_DATA_BITS_RW_DISCRIMINATOR))
+                   : FAST_IS_RW_POINTER);
+            newBits = (authBits | set) & ~clear;
+            newBits = (uintptr_t)ptrauth_sign_unauthenticated((class_rw_t *)newBits,
+                                                              CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                                              ptrauth_blend_discriminator(&bits,
+                                                                                          CLASS_DATA_BITS_RW_DISCRIMINATOR));
         } while (slowpath(!StoreReleaseExclusive(&bits, &oldBits, newBits)));
     }
 
     void setBits(uintptr_t set) {
-        __c11_atomic_fetch_or((_Atomic(uintptr_t) *)&bits, set, __ATOMIC_RELAXED);
+        setAndClearBits(set, 0);
     }
 
     void clearBits(uintptr_t clear) {
-        __c11_atomic_fetch_and((_Atomic(uintptr_t) *)&bits, ~clear, __ATOMIC_RELAXED);
+        setAndClearBits(0, clear);
     }
 
 public:
 
+    void copyFrom(const class_data_bits_t &other) {
+        bits = (uintptr_t)ptrauth_auth_and_resign((class_rw_t *)other.bits,
+                                                  CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                                  ptrauth_blend_discriminator(&other.bits,
+                                                                              CLASS_DATA_BITS_RW_DISCRIMINATOR),
+                                                  CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                                  ptrauth_blend_discriminator(&bits,
+                                                                              CLASS_DATA_BITS_RW_DISCRIMINATOR));
+    }
+
     class_rw_t* data() const {
-        return (class_rw_t *)(bits & FAST_DATA_MASK);
+        return (class_rw_t *)((uintptr_t)ptrauth_auth_data((class_rw_t *)bits,
+                                                           CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                                           ptrauth_blend_discriminator(&bits,
+                                                                                       CLASS_DATA_BITS_RW_DISCRIMINATOR)) & FAST_DATA_MASK);
     }
     void setData(class_rw_t *newData)
     {
-        ASSERT(!data()  ||  (newData->flags & (RW_REALIZING | RW_FUTURE)));
+        ASSERT(!(bits & FAST_IS_RW_POINTER)
+               || (newData->flags & (RW_REALIZING | RW_FUTURE)));
+
+        uintptr_t authedBits;
+
+        if (objc::disableEnforceClassRXPtrAuth) {
+            authedBits = (uintptr_t)ptrauth_strip((const void *)bits,
+                                                  CLASS_DATA_BITS_RW_SIGNING_KEY);
+        } else {
+            if (!bits)
+                authedBits = 0;
+            else if (bits & FAST_IS_RW_POINTER) {
+                authedBits = (uintptr_t)ptrauth_auth_data((class_rw_t *)bits,
+                                                          CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                                          ptrauth_blend_discriminator(&bits,
+                                                                                      CLASS_DATA_BITS_RW_DISCRIMINATOR));
+            } else {
+                authedBits = (uintptr_t)ptrauth_auth_data((class_ro_t *)bits,
+                                                          CLASS_DATA_BITS_RO_SIGNING_KEY,
+                                                          ptrauth_blend_discriminator(&bits,
+                                                                                      CLASS_DATA_BITS_RO_DISCRIMINATOR));
+            }
+        }
+
         // Set during realization or construction only. No locking needed.
         // Use a store-release fence because there may be concurrent
         // readers of data and data's contents.
-        uintptr_t newBits = (bits & ~FAST_DATA_MASK) | (uintptr_t)newData;
+        uintptr_t newBits = ((authedBits & FAST_FLAGS_MASK)
+                             | (uintptr_t)newData
+                             | FAST_IS_RW_POINTER);
+        class_rw_t *signedData
+            = ptrauth_sign_unauthenticated((class_rw_t *)newBits,
+                                           CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                           ptrauth_blend_discriminator(&bits,
+                                                                       CLASS_DATA_BITS_RW_DISCRIMINATOR));
         atomic_thread_fence(memory_order_release);
-        bits = newBits;
+        bits = (uintptr_t)signedData;
     }
 
     // Get the class's ro data, even in the presence of concurrent realization.
     // fixme this isn't really safe without a compiler barrier at least
     // and probably a memory barrier when realizeClass changes the data field
     const class_ro_t *safe_ro() const {
-        class_rw_t *maybe_rw = data();
+#if FAST_IS_RW_POINTER
+        if (bits & FAST_IS_RW_POINTER) {
+            return data()->ro();
+        } else {
+            uintptr_t authedBits;
+            if (objc::disableEnforceClassRXPtrAuth) {
+                authedBits = (uintptr_t)ptrauth_strip((const void *)bits,
+                                                      CLASS_DATA_BITS_RO_SIGNING_KEY);
+            } else {
+                authedBits = (uintptr_t)ptrauth_auth_data((const void *)bits,
+                                                          CLASS_DATA_BITS_RO_SIGNING_KEY,
+                                                          ptrauth_blend_discriminator(&bits,
+                                                                                      CLASS_DATA_BITS_RO_DISCRIMINATOR));
+            }
+            return (const class_ro_t *)(authedBits & FAST_DATA_MASK);
+        }
+#else
+        class_rw_t *maybe_rw = (class_rw_t *)(bits & FAST_DATA_MASK);
         if (maybe_rw->flags & RW_REALIZED) {
             // maybe_rw is rw
-            return maybe_rw->ro();
+            return data()->ro();
         } else {
             // maybe_rw is actually ro
             return (class_ro_t *)maybe_rw;
         }
+#endif
+    }
+
+    // This intentionally DOES NOT check the signatures
+    uint32_t flags() const {
+        static_assert(offsetof(class_rw_t, flags) == 0
+                      && offsetof(class_ro_t, flags) == 0, "flags at start");
+#if FAST_IS_RW_POINTER
+        const uint32_t *pflags;
+        if (bits & FAST_IS_RW_POINTER) {
+            pflags = ptrauth_strip((const uint32_t *)bits,
+                                   CLASS_DATA_BITS_RW_SIGNING_KEY);
+        } else {
+            pflags = ptrauth_strip((const uint32_t *)bits,
+                                   CLASS_DATA_BITS_RO_SIGNING_KEY);
+        }
+        pflags = (const uint32_t *)((uintptr_t)pflags & FAST_DATA_MASK);
+
+        return *pflags;
+#else
+        return *(const uint32_t *)(bits & FAST_DATA_MASK);
+#endif
     }
 
 #if SUPPORT_INDEXED_ISA
@@ -1708,6 +1821,30 @@ public:
     }
     void setIsSwiftLegacy() {
         setAndClearBits(FAST_IS_SWIFT_LEGACY, FAST_IS_SWIFT_STABLE);
+    }
+
+    // Only for use on unrealized classes
+    void setIsSwiftStableRO() {
+        uintptr_t authedBits;
+
+        ASSERT(!(bits & FAST_IS_RW_POINTER));
+
+        if (objc::disableEnforceClassRXPtrAuth) {
+            authedBits = (uintptr_t)ptrauth_strip((const void *)bits,
+                                                  CLASS_DATA_BITS_RO_SIGNING_KEY);
+        } else {
+            authedBits = (uintptr_t)ptrauth_auth_data((class_ro_t *)bits,
+                                                      CLASS_DATA_BITS_RO_SIGNING_KEY,
+                                                      ptrauth_blend_discriminator(&bits,
+                                                                                      CLASS_DATA_BITS_RO_DISCRIMINATOR));
+        }
+
+        uintptr_t newBits = ((authedBits & ~FAST_IS_SWIFT_LEGACY)
+                             | FAST_IS_SWIFT_STABLE);
+        bits = (uintptr_t)ptrauth_sign_unauthenticated((class_ro_t *)newBits,
+                                                       CLASS_DATA_BITS_RO_SIGNING_KEY,
+                                                       ptrauth_blend_discriminator(&bits,
+                                                                                   CLASS_DATA_BITS_RO_DISCRIMINATOR));
     }
 
     // fixme remove this once the Swift runtime uses the stable bits
@@ -1773,6 +1910,10 @@ struct objc_class : objc_object {
     }
     void setData(class_rw_t *newData) {
         bits.setData(newData);
+    }
+
+    const class_ro_t *safe_ro() const {
+        return bits.safe_ro();
     }
 
     void setInfo(uint32_t set) {
@@ -2013,7 +2154,11 @@ struct objc_class : objc_object {
         if (isUnfixedBackwardDeployingStableSwift()) {
             // Class really is stable Swift, pretending to be pre-stable.
             // Fix its lie.
-            bits.setIsSwiftStable();
+
+            // N.B. At this point, bits is *always* a class_ro pointer; we
+            // can't use setIsSwiftStable() because that only works for a
+            // class_rw pointer.
+            bits.setIsSwiftStableRO();
         }
     }
 
@@ -2062,7 +2207,7 @@ struct objc_class : objc_object {
     }
 
     bool isInitializing() {
-        return getMeta()->data()->flags & RW_INITIALIZING;
+        return getMeta()->bits.flags() & RW_INITIALIZING;
     }
 
     void setInitializing() {
@@ -2071,7 +2216,7 @@ struct objc_class : objc_object {
     }
 
     bool isInitialized() {
-        return getMeta()->data()->flags & RW_INITIALIZED;
+        return getMeta()->bits.flags() & RW_INITIALIZED;
     }
 
     void setInitialized();
@@ -2085,7 +2230,7 @@ struct objc_class : objc_object {
 
     // Locking: To prevent concurrent realization, hold runtimeLock.
     bool isRealized() const {
-        return !isStubClass() && (data()->flags & RW_REALIZED);
+        return !isStubClass() && (bits.flags() & RW_REALIZED);
     }
 
     // Returns true if this is an unrealized future class.
@@ -2093,7 +2238,7 @@ struct objc_class : objc_object {
     bool isFuture() const {
         if (isStubClass())
             return false;
-        return data()->flags & RW_FUTURE;
+        return bits.flags() & RW_FUTURE;
     }
 
     bool isMetaClass() const {
@@ -2112,7 +2257,7 @@ struct objc_class : objc_object {
         static_assert(RO_META == RW_META, "flags alias");
         if (isStubClass())
             return false;
-        return data()->flags & RW_META;
+        return bits.flags() & RW_META;
     }
 
     // NOT identical to this->ISA when this is a metaclass

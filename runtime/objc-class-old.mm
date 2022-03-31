@@ -2442,7 +2442,7 @@ void *objc_destructInstance(id obj)
         }
 
         if (isa->instancesHaveAssociatedObjects()) {
-            _object_remove_assocations(obj);
+            _object_remove_associations(obj);
         }
 
         objc_clear_deallocating(obj);

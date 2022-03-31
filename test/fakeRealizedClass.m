@@ -1,6 +1,9 @@
 /*
 Make sure we detect classes with the RW_REALIZED bit set in the binary. rdar://problem/67692760
-TEST_CONFIG OS=macosx
+
+(Note that on arm64e, this problem will cause a pointer auth failure.)
+
+TEST_CONFIG OS=macosx ARCH=!arm64e
 TEST_CRASHES
 TEST_RUN_OUTPUT
 objc\[\d+\]: realized class 0x[0-9a-fA-F]+ has corrupt data pointer: malloc_size\(0x[0-9a-fA-F]+\) = 0

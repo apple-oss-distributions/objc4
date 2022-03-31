@@ -1,6 +1,6 @@
 // Run test badPool as if it were built with an old SDK.
 
-// TEST_CONFIG MEM=mrc OS=iphoneos,iphonesimulator ARCH=x86_64,arm64
+// TEST_CONFIG MEM=mrc OS=iphoneos ARCH=arm64
 // TEST_CRASHES
 // TEST_CFLAGS -DOLD=1 -Xlinker -platform_version -Xlinker ios -Xlinker 9.0 -Xlinker 9.0 -miphoneos-version-min=9.0
 

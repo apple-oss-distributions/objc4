@@ -1,71 +1,75 @@
 // TEST_CRASHES
 // TEST_CONFIG MEM=mrc
-/* 
+/*
+
+Note: on arm64e, the unknown class case will cause a pointer auth failure,
+hence the "CRASHED: SIGTRAP" lines below.
+
 TEST_RUN_OUTPUT
 Testing object_getMethodImplementation
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_getInstanceMethod
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_getMethodImplementation
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_respondsToSelector
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_conformsToProtocol
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_copyProtocolList
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_getProperty
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_copyPropertyList
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_addMethod
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_replaceMethod
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_addIvar
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_addProtocol
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_addProperty
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_replaceProperty
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_setIvarLayout
 objc\[\d+\]: \*\*\* Can't set ivar layout for already-registered class 'TestRoot'
 objc\[\d+\]: \*\*\* Can't set ivar layout for already-registered class 'NSObject'
 objc\[\d+\]: \*\*\* Can't set ivar layout for already-registered class 'AllocatedTestClass2'
 objc\[\d+\]: \*\*\* Can't set ivar layout for already-registered class 'DuplicateClass'
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing class_setWeakIvarLayout
 objc\[\d+\]: \*\*\* Can't set weak ivar layout for already-registered class 'TestRoot'
 objc\[\d+\]: \*\*\* Can't set weak ivar layout for already-registered class 'TestRoot'
@@ -76,27 +80,27 @@ objc\[\d+\]: \*\*\* Can't set weak ivar layout for already-registered class 'All
 objc\[\d+\]: \*\*\* Can't set weak ivar layout for already-registered class 'TestRoot'
 objc\[\d+\]: \*\*\* Can't set weak ivar layout for already-registered class 'DuplicateClass'
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing objc_registerClassPair
 objc\[\d+\]: objc_registerClassPair: class 'TestRoot' was not allocated with objc_allocateClassPair!
 objc\[\d+\]: objc_registerClassPair: class 'NSObject' was not allocated with objc_allocateClassPair!
 objc\[\d+\]: objc_registerClassPair: class 'AllocatedTestClass2' was already registered!
 objc\[\d+\]: objc_registerClassPair: class 'DuplicateClass' was not allocated with objc_allocateClassPair!
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing objc_duplicateClass
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Testing objc_disposeClassPair
 objc\[\d+\]: objc_disposeClassPair: class 'TestRoot' was not allocated with objc_allocateClassPair!
 objc\[\d+\]: objc_disposeClassPair: class 'NSObject' was not allocated with objc_allocateClassPair!
 objc\[\d+\]: objc_disposeClassPair: class 'DuplicateClass' was not allocated with objc_allocateClassPair!
 Completed test on good classes.
-objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
-objc\[\d+\]: HALTED
+(objc\[\d+\]: Attempt to use unknown class 0x[0-9a-f]+.
+objc\[\d+\]: HALTED|CRASHED: SIGTRAP)
 Completed!
 END
  */

@@ -7,5 +7,15 @@
 		<key>Enabled</key>
 		<true/>
 	</dict>
+    <key>classRxSigning</key>
+    <dict>
+        <key>Enabled</key>
+        <true/>
+    </dict>
+    <key>classRoSigningFaults</key>
+    <dict>
+        <key>Enabled</key>
+        <false/>
+    </dict>
 </dict>
 </plist>

@@ -57,7 +57,8 @@ int main()
     // Re-sign the isa and super pointers in the new location.
     ((Class __ptrauth_objc_isa_pointer *)(void *)Sub2_buf)[0] = ((Class __ptrauth_objc_isa_pointer *)(void *)&OBJC_CLASS_$_Sub)[0];
     ((Class __ptrauth_objc_super_pointer *)(void *)Sub2_buf)[1] = ((Class __ptrauth_objc_super_pointer *)(void *)&OBJC_CLASS_$_Sub)[1];
-    
+    ((void *__ptrauth_objc_class_ro *)(void *)Sub2_buf)[4] = ((void * __ptrauth_objc_class_ro *)(void *)&OBJC_CLASS_$_Sub)[4];
+
     Class Sub = objc_readClassPair((__bridge Class)(void*)&OBJC_CLASS_$_Sub, &ii);
     testassert(Sub);
 

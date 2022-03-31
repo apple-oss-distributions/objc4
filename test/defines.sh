@@ -29,7 +29,7 @@ ERROR=
 
 extract_defines() {
     echo "$INCLUDES" | $1 - -dM -E \
-        | sed 's/\(#define [^(]*\)[( ].*/\1/g' \
+        | sed 's/\(#define [_A-Za-z][_A-Za-z0-9]*\).*/\1/g' \
         | sort | uniq
 }
 

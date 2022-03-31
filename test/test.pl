@@ -1384,8 +1384,11 @@ sub make_one_config {
         # libarclite no longer available on i386
         # fixme need an archived copy for bincompat testing
         $C{FORCE_LOAD_ARCLITE} = "";
-    } elsif ($C{OS} eq "bridgeos") {
-        # no libarclite on bridgeOS
+    } elsif ($C{OS} eq "bridgeos" || $C{OS} =~ /simulator/) {
+        # no libarclite on bridgeOS or simulators
+        $C{FORCE_LOAD_ARCLITE} = "";
+    } elsif ($C{ARCH} eq "arm64e") {
+        # no libarclite for arm64e
         $C{FORCE_LOAD_ARCLITE} = "";
     } else {
         $C{FORCE_LOAD_ARCLITE} = "-Xlinker -force_load -Xlinker " . dirname($C{CC}) . "/../lib/arc/libarclite_$C{OS}.a";

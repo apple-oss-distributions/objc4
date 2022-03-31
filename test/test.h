@@ -113,9 +113,9 @@ static inline void failnotequal(uint8_t *lhs, size_t lhsSize, uint8_t *rhs, size
 }
 
 #define testassertequal(lhs, rhs) do {\
-    __typeof__(lhs) __lhs = lhs; \
-    __typeof__(rhs) __rhs = rhs; \
-    if ((lhs) != (rhs)) failnotequal((uint8_t *)&__lhs, sizeof(__lhs), (uint8_t *)&__rhs, sizeof(__rhs), #lhs, #rhs, __FILE__, __LINE__); \
+    __typeof__(0 ? lhs : rhs) __lhs = lhs; \
+    __typeof__(0 ? lhs : rhs) __rhs = rhs; \
+    if ((__lhs) != (__rhs)) failnotequal((uint8_t *)&__lhs, sizeof(__lhs), (uint8_t *)&__rhs, sizeof(__rhs), #lhs, #rhs, __FILE__, __LINE__); \
 } while(0)
 
 /* time-sensitive assertion, disabled under valgrind */

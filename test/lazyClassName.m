@@ -20,7 +20,7 @@ struct ObjCClass {
     struct ObjCClass * __ptrauth_objc_super_pointer superclass;
     void *cachePtr;
     uintptr_t zero;
-    uintptr_t data;
+    void *__ptrauth_objc_class_ro data;
 };
 
 struct ObjCClass_ro {
@@ -62,7 +62,7 @@ struct ObjCClass LazyClassNameMetaclass = {
     .isa = &OBJC_METACLASS_$_NSObject,
     .superclass = &OBJC_METACLASS_$_NSObject,
     .cachePtr = &_objc_empty_cache,
-    .data = (uintptr_t)&LazyClassNameMetaclass_ro,
+    .data = &LazyClassNameMetaclass_ro,
 };
 
 struct ObjCClass_ro LazyClassName_ro = {
@@ -74,7 +74,7 @@ struct ObjCClass LazyClassName = {
     .isa = &LazyClassNameMetaclass,
     .superclass = &OBJC_CLASS_$_NSObject,
     .cachePtr = &_objc_empty_cache,
-    .data = (uintptr_t)&LazyClassName_ro + 2,
+    .data = (void *)((uintptr_t)&LazyClassName_ro + 2),
 };
 
 struct ObjCClass_ro LazyClassName2Metaclass_ro = {
@@ -88,7 +88,7 @@ struct ObjCClass LazyClassName2Metaclass = {
     .isa = &OBJC_METACLASS_$_NSObject,
     .superclass = &OBJC_METACLASS_$_NSObject,
     .cachePtr = &_objc_empty_cache,
-    .data = (uintptr_t)&LazyClassName2Metaclass_ro,
+    .data = &LazyClassName2Metaclass_ro,
 };
 
 struct ObjCClass_ro LazyClassName2_ro = {
@@ -100,7 +100,7 @@ struct ObjCClass LazyClassName2 = {
     .isa = &LazyClassName2Metaclass,
     .superclass = &OBJC_CLASS_$_NSObject,
     .cachePtr = &_objc_empty_cache,
-    .data = (uintptr_t)&LazyClassName2_ro + 2,
+    .data = (void *)((uintptr_t)&LazyClassName2_ro + 2),
 };
 
 static objc_hook_lazyClassNamer OrigNamer;

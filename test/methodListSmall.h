@@ -5,7 +5,7 @@ struct ObjCClass {
     struct ObjCClass * __ptrauth_objc_super_pointer superclass;
     void *cachePtr;
     uintptr_t zero;
-    struct ObjCClass_ro *data;
+    struct ObjCClass_ro * __ptrauth_objc_class_ro data;
 };
 
 struct ObjCClass_ro {

@@ -1116,6 +1116,7 @@
 					"-Wno-unused-parameter",
 					"-Wno-deprecated-objc-isa-usage",
 					"-Wno-cast-of-sel-type",
+					"-Wformat-nonliteral",
 				);
 			};
 			name = Debug;
@@ -1165,6 +1166,7 @@
 					"-Wno-unused-parameter",
 					"-Wno-deprecated-objc-isa-usage",
 					"-Wno-cast-of-sel-type",
+					"-Wformat-nonliteral",
 				);
 			};
 			name = Release;

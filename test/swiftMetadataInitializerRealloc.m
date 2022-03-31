@@ -9,7 +9,7 @@ END
 
 #include "test.h"
 #include "swift-class-def.m"
-
+#include <ptrauth.h>
 
 // _objc_swiftMetadataInitializer hooks for the classes in swift-class-def.m
 
@@ -32,7 +32,10 @@ bool isRealized(Class cls)
 #endif
 #define RW_REALIZED (1<<31)
     
-    uintptr_t rw = ((uintptr_t *)cls)[4] & mask;  // class_t->data
+    uint32_t *rw = (uint32_t *)(((uintptr_t *)cls)[4] & mask);  // class_t->data
+
+    rw = ptrauth_strip(rw, ptrauth_key_process_dependent_data);
+
     return ((uint32_t *)rw)[0] & RW_REALIZED;  // class_rw_t->flags
 }
 
@@ -68,6 +71,7 @@ Class initSub(Class cls, void *arg)
     // Re-sign the isa and super pointers in the new location.
     ((Class __ptrauth_objc_isa_pointer *)(void *)HeapSwiftSub)[0] = ((Class __ptrauth_objc_isa_pointer *)(void *)RawRealSwiftSub)[0];
     ((Class __ptrauth_objc_super_pointer *)(void *)HeapSwiftSub)[1] = ((Class __ptrauth_objc_super_pointer *)(void *)RawRealSwiftSub)[1];
+    ((void *__ptrauth_objc_class_ro *)(void *)HeapSwiftSub)[4] = ((void * __ptrauth_objc_class_ro *)(void *)RawRealSwiftSub)[4];
 
     testprintf("initSub beginning _objc_realizeClassFromSwift\n");
     _objc_realizeClassFromSwift(HeapSwiftSub, cls);

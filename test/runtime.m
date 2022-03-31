@@ -63,6 +63,17 @@ __attribute__((objc_runtime_name(SwiftV1MangledName4)))
 @interface SwiftV1Class4 : TestRoot @end
 @implementation SwiftV1Class4 @end
 
+void setSwiftFlag(Class cls) {
+    uintptr_t *pbits = &((uintptr_t *)cls)[4];
+    uintptr_t newVal
+        = (uintptr_t)ptrauth_strip((void *)*pbits,
+                                   ptrauth_key_process_dependent_data) | 2;
+    *pbits
+        = (uintptr_t)ptrauth_sign_unauthenticated((void *)newVal,
+                                                  ptrauth_key_process_dependent_data,
+                                                  ptrauth_blend_discriminator(pbits,
+                                                                              0xc93a));
+}
 
 int main()
 {
@@ -129,10 +140,10 @@ int main()
 
     // So that demangling works, fake what would have happened with Swift
     // and force the "Swift" bit on the class
-    ((uintptr_t *)objc_getClass(SwiftV1MangledName))[4] |= 2;
-    ((uintptr_t *)objc_getClass(SwiftV1MangledName2))[4] |= 2;
-    ((uintptr_t *)objc_getClass(SwiftV1MangledName3))[4] |= 2;
-    ((uintptr_t *)objc_getClass(SwiftV1MangledName4))[4] |= 2;
+    setSwiftFlag(objc_getClass(SwiftV1MangledName));
+    setSwiftFlag(objc_getClass(SwiftV1MangledName2));
+    setSwiftFlag(objc_getClass(SwiftV1MangledName3));
+    setSwiftFlag(objc_getClass(SwiftV1MangledName4));
 
     count = objc_getClassList(list, count0);
     testassert(count == count0);

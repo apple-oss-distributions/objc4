@@ -38,6 +38,7 @@ EXTERN_C Class initSwiftClass(Class cls, void *arg __unused)
     // Re-sign the isa and super pointers in the new location.
     ((Class __ptrauth_objc_isa_pointer *)(void *)HeapClass)[0] = ((Class __ptrauth_objc_isa_pointer *)(void *)source)[0];
     ((Class __ptrauth_objc_super_pointer *)(void *)HeapClass)[1] = ((Class __ptrauth_objc_super_pointer *)(void *)source)[1];
+    ((void *__ptrauth_objc_class_ro *)(void *)HeapClass)[4] = ((void * __ptrauth_objc_class_ro *)(void *)source)[4];
 
     _objc_realizeClassFromSwift(HeapClass, cls);
 

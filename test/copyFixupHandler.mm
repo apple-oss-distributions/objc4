@@ -13,21 +13,21 @@ static Class expectedOldClass;
 
 static std::vector<Class> observedNewClasses1;
 static void handler1(Class _Nonnull oldClass, Class _Nonnull newClass) {
-    testprintf("%s(%p, %p)", __func__, oldClass, newClass);
+    testprintf("%s(%p, %p)\n", __func__, oldClass, newClass);
     testassert(oldClass == expectedOldClass);
     observedNewClasses1.push_back(newClass);
 }
 
 static std::vector<Class> observedNewClasses2;
 static void handler2(Class _Nonnull oldClass, Class _Nonnull newClass) {
-    testprintf("%s(%p, %p)", __func__, oldClass, newClass);
+    testprintf("%s(%p, %p)\n", __func__, oldClass, newClass);
     testassert(oldClass == expectedOldClass);
     observedNewClasses2.push_back(newClass);
 }
 
 static std::vector<Class> observedNewClasses3;
 static void handler3(Class _Nonnull oldClass, Class _Nonnull newClass) {
-    testprintf("%s(%p, %p)", __func__, oldClass, newClass);
+    testprintf("%s(%p, %p)\n", __func__, oldClass, newClass);
     testassert(oldClass == expectedOldClass);
     observedNewClasses3.push_back(newClass);
 }

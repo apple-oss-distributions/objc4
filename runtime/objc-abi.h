@@ -105,7 +105,7 @@ typedef struct objc_image_info {
         SupportsGC          = 1<<1,  // image supports GC
         RequiresGC          = 1<<2,  // image requires GC
         OptimizedByDyld     = 1<<3,  // image is from an optimized shared cache
-        CorrectedSynthesize = 1<<4,  // used for an old workaround, now ignored
+        SignedClassRO       = 1<<4,  // class_ro_t pointers are signed
         IsSimulated         = 1<<5,  // image compiled for a simulator platform
         HasCategoryClassProperties  = 1<<6,  // class properties in category_t
         OptimizedByDyldClosure = 1 << 7, // dyld (not the shared cache) optimized this.
@@ -140,6 +140,7 @@ typedef struct objc_image_info {
     bool hasCategoryClassProperties() const { return flags & HasCategoryClassProperties; }
     bool optimizedByDyldClosure() const { return flags & OptimizedByDyldClosure; }
     bool containsSwift()   const { return (flags & SwiftUnstableVersionMask) != 0; }
+    bool shouldEnforceClassRoSigning() const { return flags & SignedClassRO; }
     uint32_t swiftUnstableVersion() const { return (flags & SwiftUnstableVersionMask) >> SwiftUnstableVersionMaskShift; }
 #endif
 } objc_image_info;

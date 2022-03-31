@@ -53,6 +53,7 @@
 // Termination reasons in the OS_REASON_OBJC namespace.
 #define OBJC_EXIT_REASON_UNSPECIFIED 1
 #define OBJC_EXIT_REASON_GC_NOT_SUPPORTED 2
+#define OBJC_EXIT_REASON_CLASS_RO_SIGNING_REQUIRED 3
 
 // This is the allocation size required for each of the class and the metaclass 
 // with objc_initializeClassPair() and objc_readClassPair().
@@ -239,7 +240,7 @@ _objc_setBadAllocHandler(id _Nullable (* _Nonnull newHandler)
 #if !__OBJC2__
 OBJC_EXPORT void
 _objc_error(id _Nullable rcv, const char * _Nonnull fmt, va_list args)
-    __attribute__((noreturn, cold))
+    __attribute__((noreturn, cold, format(printf, 2, 0)))
     OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(10.0, 10.5, "use other logging facilities instead");
 
 #endif
@@ -499,9 +500,9 @@ static inline uintptr_t _objc_obfuscatedTagToBasicTag(uintptr_t tag) {
 #endif
 
 static inline void * _Nonnull
-_objc_encodeTaggedPointer(uintptr_t ptr)
+_objc_encodeTaggedPointer_withObfuscator(uintptr_t ptr, uintptr_t obfuscator)
 {
-    uintptr_t value = (objc_debug_taggedpointer_obfuscator ^ ptr);
+    uintptr_t value = (obfuscator ^ ptr);
 #if OBJC_SPLIT_TAGGED_POINTERS
     if ((value & _OBJC_TAG_NO_OBFUSCATION_MASK) == _OBJC_TAG_NO_OBFUSCATION_MASK)
         return (void *)ptr;
@@ -514,20 +515,23 @@ _objc_encodeTaggedPointer(uintptr_t ptr)
 }
 
 static inline uintptr_t
-_objc_decodeTaggedPointer_noPermute(const void * _Nullable ptr)
+_objc_decodeTaggedPointer_noPermute_withObfuscator(const void * _Nullable ptr,
+                                                   uintptr_t obfuscator)
 {
     uintptr_t value = (uintptr_t)ptr;
 #if OBJC_SPLIT_TAGGED_POINTERS
     if ((value & _OBJC_TAG_NO_OBFUSCATION_MASK) == _OBJC_TAG_NO_OBFUSCATION_MASK)
         return value;
 #endif
-    return value ^ objc_debug_taggedpointer_obfuscator;
+    return value ^ obfuscator;
 }
 
 static inline uintptr_t
-_objc_decodeTaggedPointer(const void * _Nullable ptr)
+_objc_decodeTaggedPointer_withObfuscator(const void * _Nullable ptr,
+                                         uintptr_t obfuscator)
 {
-    uintptr_t value = _objc_decodeTaggedPointer_noPermute(ptr);
+    uintptr_t value
+      = _objc_decodeTaggedPointer_noPermute_withObfuscator(ptr, obfuscator);
 #if OBJC_SPLIT_TAGGED_POINTERS
     uintptr_t basicTag = (value >> _OBJC_TAG_INDEX_SHIFT) & _OBJC_TAG_INDEX_MASK;
 
@@ -535,6 +539,24 @@ _objc_decodeTaggedPointer(const void * _Nullable ptr)
     value |= _objc_obfuscatedTagToBasicTag(basicTag) << _OBJC_TAG_INDEX_SHIFT;
 #endif
     return value;
+}
+
+static inline void * _Nonnull
+_objc_encodeTaggedPointer(uintptr_t ptr)
+{
+    return _objc_encodeTaggedPointer_withObfuscator(ptr, objc_debug_taggedpointer_obfuscator);
+}
+
+static inline uintptr_t
+_objc_decodeTaggedPointer_noPermute(const void * _Nullable ptr)
+{
+    return _objc_decodeTaggedPointer_noPermute_withObfuscator(ptr, objc_debug_taggedpointer_obfuscator);
+}
+
+static inline uintptr_t
+_objc_decodeTaggedPointer(const void * _Nullable ptr)
+{
+    return _objc_decodeTaggedPointer_withObfuscator(ptr, objc_debug_taggedpointer_obfuscator);
 }
 
 static inline bool
@@ -545,7 +567,8 @@ _objc_taggedPointersEnabled(void)
 }
 
 static inline void * _Nonnull
-_objc_makeTaggedPointer(objc_tag_index_t tag, uintptr_t value)
+_objc_makeTaggedPointer_withObfuscator(objc_tag_index_t tag, uintptr_t value,
+                                       uintptr_t obfuscator)
 {
     // PAYLOAD_LSHIFT and PAYLOAD_RSHIFT are the payload extraction shifts.
     // They are reversed here for payload insertion.
@@ -557,7 +580,7 @@ _objc_makeTaggedPointer(objc_tag_index_t tag, uintptr_t value)
             (_OBJC_TAG_MASK | 
              ((uintptr_t)tag << _OBJC_TAG_INDEX_SHIFT) | 
              ((value << _OBJC_TAG_PAYLOAD_RSHIFT) >> _OBJC_TAG_PAYLOAD_LSHIFT));
-        return _objc_encodeTaggedPointer(result);
+        return _objc_encodeTaggedPointer_withObfuscator(result, obfuscator);
     } else {
         // ASSERT(tag >= OBJC_TAG_First52BitPayload);
         // ASSERT(tag <= OBJC_TAG_Last52BitPayload);
@@ -566,11 +589,17 @@ _objc_makeTaggedPointer(objc_tag_index_t tag, uintptr_t value)
             (_OBJC_TAG_EXT_MASK |
              ((uintptr_t)(tag - OBJC_TAG_First52BitPayload) << _OBJC_TAG_EXT_INDEX_SHIFT) |
              ((value << _OBJC_TAG_EXT_PAYLOAD_RSHIFT) >> _OBJC_TAG_EXT_PAYLOAD_LSHIFT));
-        return _objc_encodeTaggedPointer(result);
+        return _objc_encodeTaggedPointer_withObfuscator(result, obfuscator);
     }
 }
 
-static inline bool 
+static inline void * _Nonnull
+_objc_makeTaggedPointer(objc_tag_index_t tag, uintptr_t value)
+{
+    return _objc_makeTaggedPointer_withObfuscator(tag, value, objc_debug_taggedpointer_obfuscator);
+}
+
+static inline bool
 _objc_isTaggedPointer(const void * _Nullable ptr)
 {
     return ((uintptr_t)ptr & _OBJC_TAG_MASK) == _OBJC_TAG_MASK;
@@ -585,11 +614,12 @@ _objc_isTaggedPointerOrNil(const void * _Nullable ptr)
     return !ptr || ((uintptr_t)ptr & _OBJC_TAG_MASK) == _OBJC_TAG_MASK;
 }
 
-static inline objc_tag_index_t 
-_objc_getTaggedPointerTag(const void * _Nullable ptr) 
+static inline objc_tag_index_t
+_objc_getTaggedPointerTag_withObfuscator(const void * _Nullable ptr,
+                                         uintptr_t obfuscator)
 {
     // ASSERT(_objc_isTaggedPointer(ptr));
-    uintptr_t value = _objc_decodeTaggedPointer(ptr);
+    uintptr_t value = _objc_decodeTaggedPointer_withObfuscator(ptr, obfuscator);
     uintptr_t basicTag = (value >> _OBJC_TAG_INDEX_SHIFT) & _OBJC_TAG_INDEX_MASK;
     uintptr_t extTag =   (value >> _OBJC_TAG_EXT_INDEX_SHIFT) & _OBJC_TAG_EXT_INDEX_MASK;
     if (basicTag == _OBJC_TAG_INDEX_MASK) {
@@ -600,10 +630,11 @@ _objc_getTaggedPointerTag(const void * _Nullable ptr)
 }
 
 static inline uintptr_t
-_objc_getTaggedPointerValue(const void * _Nullable ptr) 
+_objc_getTaggedPointerValue_withObfuscator(const void * _Nullable ptr,
+                                           uintptr_t obfuscator)
 {
     // ASSERT(_objc_isTaggedPointer(ptr));
-    uintptr_t value = _objc_decodeTaggedPointer_noPermute(ptr);
+    uintptr_t value = _objc_decodeTaggedPointer_noPermute_withObfuscator(ptr, obfuscator);
     uintptr_t basicTag = (value >> _OBJC_TAG_INDEX_SHIFT) & _OBJC_TAG_INDEX_MASK;
     if (basicTag == _OBJC_TAG_INDEX_MASK) {
         return (value << _OBJC_TAG_EXT_PAYLOAD_LSHIFT) >> _OBJC_TAG_EXT_PAYLOAD_RSHIFT;
@@ -613,16 +644,35 @@ _objc_getTaggedPointerValue(const void * _Nullable ptr)
 }
 
 static inline intptr_t
-_objc_getTaggedPointerSignedValue(const void * _Nullable ptr) 
+_objc_getTaggedPointerSignedValue_withObfuscator(const void * _Nullable ptr,
+                                                 uintptr_t obfuscator)
 {
     // ASSERT(_objc_isTaggedPointer(ptr));
-    uintptr_t value = _objc_decodeTaggedPointer_noPermute(ptr);
+    uintptr_t value = _objc_decodeTaggedPointer_noPermute_withObfuscator(ptr, obfuscator);
     uintptr_t basicTag = (value >> _OBJC_TAG_INDEX_SHIFT) & _OBJC_TAG_INDEX_MASK;
     if (basicTag == _OBJC_TAG_INDEX_MASK) {
         return ((intptr_t)value << _OBJC_TAG_EXT_PAYLOAD_LSHIFT) >> _OBJC_TAG_EXT_PAYLOAD_RSHIFT;
     } else {
         return ((intptr_t)value << _OBJC_TAG_PAYLOAD_LSHIFT) >> _OBJC_TAG_PAYLOAD_RSHIFT;
     }
+}
+
+static inline objc_tag_index_t
+_objc_getTaggedPointerTag(const void * _Nullable ptr)
+{
+    return _objc_getTaggedPointerTag_withObfuscator(ptr, objc_debug_taggedpointer_obfuscator);
+}
+
+static inline uintptr_t
+_objc_getTaggedPointerValue(const void * _Nullable ptr)
+{
+    return _objc_getTaggedPointerValue_withObfuscator(ptr, objc_debug_taggedpointer_obfuscator);
+}
+
+static inline intptr_t
+_objc_getTaggedPointerSignedValue(const void * _Nullable ptr)
+{
+    return _objc_getTaggedPointerSignedValue_withObfuscator(ptr, objc_debug_taggedpointer_obfuscator);
 }
 
 #   if OBJC_SPLIT_TAGGED_POINTERS
@@ -923,6 +973,12 @@ objc_retainAutorelease(id _Nullable obj)
 OBJC_EXPORT id _Nullable
 objc_retain_autorelease(id _Nullable obj)
     OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+// Returns true if the object's retain count is 1.
+#define OBJC_ISUNIQUELYREFERENCED_DEFINED 1
+OBJC_EXPORT bool
+objc_isUniquelyReferenced(id _Nullable obj)
+    OBJC_AVAILABLE(12.3, 15.4, 15.4, 8.4, 6.4);
 
 OBJC_EXPORT id _Nullable
 objc_loadWeakRetained(id _Nullable * _Nonnull location)

@@ -2,7 +2,7 @@
 
 #include "test.h"
 #include "swift-class-def.m"
-
+#include <ptrauth.h>
 
 SWIFT_CLASS(SwiftSuper, NSObject, initSuper);
 SWIFT_CLASS(SwiftSub, SwiftSuper, initSub);
@@ -27,8 +27,11 @@ bool isRealized(Class cls)
 # define mask (~(uintptr_t)3)
 #endif
 #define RW_REALIZED (1<<31)
-    
-    uintptr_t rw = ((uintptr_t *)cls)[4] & mask;  // class_t->data
+
+    uint32_t *rw = (uint32_t *)(((uintptr_t *)cls)[4] & mask);  // class_t->data
+
+    rw = ptrauth_strip(rw, ptrauth_key_process_dependent_data);
+
     return ((uint32_t *)rw)[0] & RW_REALIZED;  // class_rw_t->flags
 }
 

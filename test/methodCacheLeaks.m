@@ -1,4 +1,4 @@
-// TEST_CONFIG MEM=mrc LANGUAGE=objective-c
+// TEST_CONFIG MEM=mrc LANGUAGE=objective-c ARCH=!arm64e,!arm64
 /*
 TEST_RUN_OUTPUT
 [\S\s]*0 leaks for 0 total leaked bytes[\S\s]*

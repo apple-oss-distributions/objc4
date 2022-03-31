@@ -210,5 +210,13 @@ template <typename T> using RawPtr = WrappedPtr<T, PtrauthRaw>;
     template <typename T> using name ## _authed_ptr = RawPtr<T>;
 #endif
 
+// These are used to protect the class_rx_t pointer enforcement flag
+#if __has_feature(ptrauth_calls)
+#define ptrauth_class_rx_enforce \
+    __ptrauth_restricted_intptr(ptrauth_key_process_dependent_data, 0, 0x47f5)
+#else
+#define ptrauth_class_rx_enforce
+#endif
+
 // _OBJC_PTRAUTH_H_
 #endif

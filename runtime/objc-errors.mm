@@ -158,7 +158,7 @@ static void _objc_syslog(const char *message)
 #if !__OBJC2__
 // used by ExceptionHandling.framework
 #endif
-__attribute__((noreturn, cold))
+__attribute__((noreturn, cold, format(printf, 2, 0)))
 void _objc_error(id self, const char *fmt, va_list ap) 
 { 
     char *buf;
@@ -181,7 +181,7 @@ void __objc_error(id rcv, const char *fmt, ...)
     va_end(vp);
 }
 
-static __attribute__((noreturn, cold))
+static __attribute__((noreturn, cold, format(printf, 3, 0)))
 void _objc_fatalv(uint64_t reason, uint64_t flags, const char *fmt, va_list ap)
 {
     char *buf1;

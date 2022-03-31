@@ -30,6 +30,7 @@
 #define _OBJC_OS_H
 
 #include <atomic>
+#include <utility>
 #include <TargetConditionals.h>
 #include "objc-config.h"
 #include "objc-private.h"

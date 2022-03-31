@@ -415,6 +415,22 @@ static bool shouldRejectGCImage(const headerType *mhdr)
 // SUPPORT_GC_COMPAT
 #endif
 
+/***********************************************************************
+* hasSignedClassROPointers
+* Test if an image has signed class_ro_t pointers.
+**********************************************************************/
+static bool hasSignedClassROPointers(const header_info *hi)
+{
+    size_t infoSize = 0;
+    objc_image_info *info = _getObjcImageInfo(hi->mhdr(), &infoSize);
+    if (!info) {
+        // If there's no ObjC in an image, return true; if there really are
+        // classes in the image anyway, we'll die with a pointer auth failure
+        // later on.
+        return true;
+    }
+    return info->shouldEnforceClassRoSigning();
+}
 
 // Swift currently adds 4 callbacks.
 static GlobalSmallVector<objc_func_loadImage, 4> loadImageFuncs;
@@ -454,12 +470,18 @@ void objc_addLoadImageFunc(objc_func_loadImage _Nonnull func) {
 
 void 
 map_images_nolock(unsigned mhCount, const char * const mhPaths[],
-                  const struct mach_header * const mhdrs[])
+                  const struct mach_header * const mhdrs[],
+                  bool *disabledClassROEnforcement)
 {
     static bool firstTime = YES;
+    static bool executableHasClassROSigning = false;
+    static bool executableIsARM64e = false;
+
     header_info *hList[mhCount];
     uint32_t hCount;
     size_t selrefCount = 0;
+
+    *disabledClassROEnforcement = false;
 
     // Perform first-time initialization if necessary.
     // This function is called before ordinary library initializers. 
@@ -517,10 +539,14 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
                          "is no longer supported.");
                 }
 #endif
+
+                if (hasSignedClassROPointers(hi)) {
+                    executableHasClassROSigning = true;
+                }
             }
-            
+
             hList[hCount++] = hi;
-            
+
             if (PrintImages) {
                 _objc_inform("IMAGES: loading image for %s%s%s%s%s\n", 
                              hi->fname(),
@@ -591,6 +617,52 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
         }
 #endif
 
+        // Check the main executable for ARM64e-ness. Note, we cannot
+        // check the headers we get passed in for an MH_EXECUTABLE,
+        // because dyld helpfully omits images that contain no ObjC,
+        // and the main executable might not contain ObjC.
+        const headerType *mainExecutableHeader = (headerType *)_dyld_get_prog_image_header();
+        if (mainExecutableHeader
+            && mainExecutableHeader->cputype == CPU_TYPE_ARM64
+            && ((mainExecutableHeader->cpusubtype & ~CPU_SUBTYPE_MASK)
+                == CPU_SUBTYPE_ARM64E)) {
+            executableIsARM64e = true;
+        }
+    }
+
+    // If the main executable is ARM64e, make sure every image that is loaded
+    // has pointer signing turned on.
+    if (executableIsARM64e) {
+        bool shouldWarn = (executableHasClassROSigning
+                           && DebugClassRXSigning);
+        for (uint32_t i = 0; i < hCount; ++i) {
+            auto hi = hList[i];
+            if (!hasSignedClassROPointers(hi)) {
+                if (!objc::disableEnforceClassRXPtrAuth) {
+                    *disabledClassROEnforcement = true;
+                    objc::disableEnforceClassRXPtrAuth = 1;
+
+                    // We *don't* want to log here, because that will give
+                    // attackers an indication that they've managed to disable
+                    // enforcement.
+
+                    // Later, when we're really confident, we might be able to
+                    // do this instead:
+                    //
+                    // _objc_fatal_with_reason
+                    //     (OBJC_EXIT_REASON_CLASS_RO_SIGNING_REQUIRED,
+                    //      OS_REASON_FLAG_CONSISTENT_FAILURE,
+                    //      "%s was built without class_ro_t pointer signing",
+                    //      hi->fname());
+                }
+
+                if (shouldWarn) {
+                    _objc_inform("%s has un-signed class_ro_t pointers, but the "
+                                 "main executable was compiled with class_ro_t "
+                                 "pointer signing enabled", hi->fname());
+                }
+            }
+        }
     }
 
     if (hCount > 0) {
@@ -598,7 +670,7 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
     }
 
     firstTime = NO;
-    
+
     // Call image load funcs after everything is set up.
     for (auto func : loadImageFuncs) {
         for (uint32_t i = 0; i < mhCount; i++) {
@@ -657,16 +729,21 @@ unmap_image_nolock(const struct mach_header *mh)
 **********************************************************************/
 static void static_init()
 {
-    size_t count;
-    auto inits = getLibobjcInitializers(&_mh_dylib_header, &count);
-    for (size_t i = 0; i < count; i++) {
+    size_t count1;
+    auto inits = getLibobjcInitializers(&_mh_dylib_header, &count1);
+    for (size_t i = 0; i < count1; i++) {
         inits[i]();
     }
-    auto offsets = getLibobjcInitializerOffsets(&_mh_dylib_header, &count);
-    for (size_t i = 0; i < count; i++) {
+    size_t count2;
+    auto offsets = getLibobjcInitializerOffsets(&_mh_dylib_header, &count2);
+    for (size_t i = 0; i < count2; i++) {
         UnsignedInitializer init(offsets[i]);
         init();
     }
+#if DEBUG
+    if (count1 == 0 && count2 == 0)
+        _objc_inform("No static initializers found in libobjc. This is unexpected for a debug build. Make sure the 'markgc' build phase ran on this dylib. This process is probably going to crash momentarily due to using uninitialized global data.");
+#endif
 }
 
 

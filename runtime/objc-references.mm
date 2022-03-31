@@ -224,7 +224,7 @@ _object_set_associative_reference(id object, const void *key, id value, uintptr_
 // raw isa objects (such as OS Objects) that can't track
 // whether they have associated objects.
 void
-_object_remove_assocations(id object, bool deallocating)
+_object_remove_associations(id object, bool deallocating)
 {
     ObjectAssociationMap refs{};
 

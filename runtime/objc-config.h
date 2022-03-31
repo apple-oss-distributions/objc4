@@ -266,6 +266,16 @@
 // access it.
 #define TAGGED_POINTER_TABLE_ENTRY_DISCRIMINATOR 0x8F9D // hash of "objc_taggedpointer_table"
 
+// Constants for signing the "bits" field in classes
+
+// ... when it's a class_rw_t pointer (*not* including flags)
+#define CLASS_DATA_BITS_RW_SIGNING_KEY   ptrauth_key_process_dependent_data
+#define CLASS_DATA_BITS_RW_DISCRIMINATOR 0xc93a // "class_data_bits_rw"
+
+// ... when it's a class_ro_t pointer (*including* flags)
+#define CLASS_DATA_BITS_RO_SIGNING_KEY   ptrauth_key_process_independent_data
+#define CLASS_DATA_BITS_RO_DISCRIMINATOR 0x61f8 // "class_data_bits"
+
 #if defined(__arm64__) && TARGET_OS_IOS && !TARGET_OS_SIMULATOR && !TARGET_OS_MACCATALYST
 #define CONFIG_USE_PREOPT_CACHES 1
 #else

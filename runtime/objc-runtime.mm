@@ -34,6 +34,7 @@
 **********************************************************************/
 
 #include <os/feature_private.h> // os_feature_enabled_simple()
+#include <os/variant_private.h> // os_variant_allows_internal_security_policies()
 #include "objc-private.h"
 #include "objc-loadmethod.h"
 #include "objc-file.h"
@@ -72,20 +73,26 @@ const char __objc_nsobject_class_10_7 = 0;
 
 // Settings from environment variables
 #define OPTION(var, env, help) bool var = false;
+#define INTERNAL_OPTION(var, env, help) bool var = false;
 #include "objc-env.h"
 #undef OPTION
+#undef INTERNAL_OPTION
 
 struct option_t {
     bool* var;
     const char *env;
     const char *help;
     size_t envlen;
+    bool internal;
 };
 
 const option_t Settings[] = {
-#define OPTION(var, env, help) option_t{&var, #env, help, strlen(#env)}, 
+#define OPTION(var, env, help) option_t{&var, #env, help, strlen(#env), false},
+#define INTERNAL_OPTION(var, env, help) \
+    option_t{&var, #env, help, strlen(#env), true},
 #include "objc-env.h"
 #undef OPTION
+#undef INTERNAL_OPTION
 };
 
 namespace objc {
@@ -379,6 +386,17 @@ void environ_init(void)
     if (!dyld_program_sdk_at_least(dyld_fall_2020_os_versions))
         DisableAutoreleaseCoalescingLRU = true;
 
+    // class_rx_t pointer signing enforcement is *disabled* by default unless
+    // this OS feature is enabled, but it can be explicitly enabled by setting
+    // the environment variable, for testing.
+    if (!os_feature_enabled_simple(objc4, classRxSigning, false))
+        DisableClassRXSigningEnforcement = true;
+
+    // Faults for class_ro_t pointer signing enforcement are disabled by
+    // default unless this OS feature is enabled.
+    if (!os_feature_enabled_simple(objc4, classRoSigningFaults, false))
+        DisableClassROFaults = true;
+
     bool PrintHelp = false;
     bool PrintOptions = false;
     bool maybeMallocDebugging = false;
@@ -414,6 +432,9 @@ void environ_init(void)
         
         for (size_t i = 0; i < sizeof(Settings)/sizeof(Settings[0]); i++) {
             const option_t *opt = &Settings[i];
+            if (opt->internal
+                && !os_variant_allows_internal_security_policies("com.apple.obj-c"))
+                continue;
             if ((size_t)(value - *p) == 1+opt->envlen  &&  
                 0 == strncmp(*p, opt->env, opt->envlen))
             {
@@ -460,7 +481,10 @@ void environ_init(void)
         }
 
         for (size_t i = 0; i < sizeof(Settings)/sizeof(Settings[0]); i++) {
-            const option_t *opt = &Settings[i];            
+            const option_t *opt = &Settings[i];
+            if (opt->internal
+                && !os_variant_allows_internal_security_policies("com.apple.obj-c"))
+                continue;
             if (PrintHelp) _objc_inform("%s: %s", opt->env, opt->help);
             if (PrintOptions && *opt->var) _objc_inform("%s is set", opt->env);
         }
@@ -703,7 +727,7 @@ objc_setAssociatedObject(id object, const void *key, id value, objc_AssociationP
 void objc_removeAssociatedObjects(id object) 
 {
     if (object && object->hasAssociatedObjects()) {
-        _object_remove_assocations(object, /*deallocating*/false);
+        _object_remove_associations(object, /*deallocating*/false);
     }
 }
 

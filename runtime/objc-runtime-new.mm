@@ -28,6 +28,7 @@
 
 #if __OBJC2__
 
+#include <cstdint>
 #include "DenseMapExtras.h"
 #include "objc-private.h"
 #include "objc-runtime-new.h"
@@ -36,6 +37,12 @@
 #include <Block.h>
 #include <objc/message.h>
 #include <mach/shared_region.h>
+
+extern "C" {
+#include <os/bsd.h>
+#include <os/reason_private.h>
+#include <os/variant_private.h>
+}
 
 #define newprotocol(p) ((protocol_t *)p)
 
@@ -188,6 +195,17 @@ const uintptr_t objc_debug_isa_magic_value = 0;
 // not SUPPORT_PACKED_ISA
 #endif
 
+// We use a *signed* "pointer" to control enforcement.  It's signed so that
+// an attacker can't just overwrite it with some random thing to turn off
+// pointer authentication of the class_ro_t pointers.
+//
+// Note that this is *disable* rather than *enable* because NULL pointers
+// are not signed, and we want to protect against it being turned off;
+// enabling it increases security so an attacker is unlikely to want to
+// do that.
+namespace objc {
+    uintptr_t ptrauth_class_rx_enforce disableEnforceClassRXPtrAuth;
+}
 
 /***********************************************************************
 * Swift marker bits
@@ -231,7 +249,15 @@ bool didCallDyldNotifyRegister = false;
 * Locking: runtimeLock must be held when accessing this map.
 **********************************************************************/
 namespace objc {
-    static objc::LazyInitDenseMap<const method_t *, IMP> smallMethodIMPMap;
+    // The value type of smallMethodIMPMap is really IMP, but signed with a
+    // custom discriminator and blended with the method_t* that it's associated
+    // with. This securely ties the IMP in the table to the method that it
+    // belongs to, without requiring the table itself to be aware of address
+    // discrimination or hashing signed pointers.
+    static objc::LazyInitDenseMap<const method_t *, void *> smallMethodIMPMap;
+#define smallMethodIMPMapKey ptrauth_key_process_dependent_code
+#define smallMethodIMPMapDiscriminator(methodPtr) \
+    ptrauth_blend_discriminator(methodPtr, ptrauth_string_discriminator("smallMethodIMPMap"))
 }
 
 static IMP method_t_remappedImp_nolock(const method_t *m) {
@@ -242,7 +268,8 @@ static IMP method_t_remappedImp_nolock(const method_t *m) {
     auto iter = map->find(m);
     if (iter == map->end())
         return nullptr;
-    return iter->second;
+    return (IMP)ptrauth_auth_function(iter->second, smallMethodIMPMapKey,
+                                      smallMethodIMPMapDiscriminator(m));
 }
 
 IMP method_t::remappedImp(bool needsLock) const {
@@ -260,7 +287,8 @@ void method_t::remapImp(IMP imp) {
     ASSERT(isSmall());
     runtimeLock.assertLocked();
     auto *map = objc::smallMethodIMPMap.get(true);
-    (*map)[this] = imp;
+    (*map)[this] = (void *)ptrauth_auth_and_resign(imp, ptrauth_key_function_pointer, 0,
+                                                   smallMethodIMPMapKey, smallMethodIMPMapDiscriminator(this));
 }
 
 objc_method_description *method_t::getSmallDescription() const {
@@ -508,7 +536,7 @@ ALWAYS_INLINE
 static bool
 isKnownClass(Class cls)
 {
-    if (fastpath(objc::dataSegmentsRanges.contains(cls->data()->witness, (uintptr_t)cls))) {
+    if (fastpath(cls->isRealized() && objc::dataSegmentsRanges.contains(cls->data()->witness, (uintptr_t)cls))) {
         return true;
     }
     auto &set = objc::allocatedClasses.get();
@@ -1174,6 +1202,7 @@ public:
                 if (_u.array[i].cat == cat) {
                     // shift entries to preserve list order
                     memmove(&_u.array[i], &_u.array[i+1], arrayByteSize(_u.count - i - 1));
+                    _u.count--;
                     return;
                 }
             }
@@ -1790,7 +1819,7 @@ static void addNamedClass(Class cls, const char *name, Class replacing = nil)
     } else {
         NXMapInsert(gdb_objc_realized_classes, name, cls);
     }
-    ASSERT(!(cls->data()->flags & RO_META));
+    ASSERT(!cls->isMetaClassMaybeUnrealized());
 
     // wrong: constructed classes are already realized when they get here
     // ASSERT(!cls->isRealized());
@@ -2575,7 +2604,7 @@ static Class realizeClassWithoutSwift(Class cls, Class previously)
 
     // fixme verify class is not in an un-dlopened part of the shared cache?
 
-    auto ro = (const class_ro_t *)cls->data();
+    auto ro = cls->safe_ro();
     auto isMeta = ro->flags & RO_META;
     if (ro->flags & RO_FUTURE) {
         // This was a future class. rw data is already allocated.
@@ -2876,7 +2905,7 @@ missingWeakSuperclass(Class cls)
 
     if (!cls->getSuperclass()) {
         // superclass nil. This is normal for root classes only.
-        return (!(cls->data()->flags & RO_ROOT));
+        return (!(cls->safe_ro()->flags & RO_ROOT));
     } else {
         // superclass not nil. Check if a higher superclass is missing.
         Class supercls = remapClass(cls->getSuperclass());
@@ -3078,6 +3107,23 @@ void _objc_flush_caches(Class cls)
 
 
 /***********************************************************************
+* is_root_ramdisk
+* Returns true if we're running from a ramdisk, for instance when
+* we're in restoreOS.  In that case, we mustn't generate simulated
+* crashes.
+**********************************************************************/
+static bool
+is_root_ramdisk()
+{
+    char value[32];
+    if (os_parse_boot_arg_string("rd", value, sizeof(value))
+        || os_parse_boot_arg_string("rootdev", value, sizeof(value))) {
+        return value[0] == 'm' && value[1] == 'd' && value[3] == 0;
+    }
+    return false;
+}
+
+/***********************************************************************
 * map_images
 * Process the given images which are being mapped in by dyld.
 * Calls ABI-agnostic code after taking ABI-specific locks.
@@ -3088,8 +3134,29 @@ void
 map_images(unsigned count, const char * const paths[],
            const struct mach_header * const mhdrs[])
 {
-    mutex_locker_t lock(runtimeLock);
-    return map_images_nolock(count, paths, mhdrs);
+    bool takeEnforcementDisableFault;
+
+    {
+        mutex_locker_t lock(runtimeLock);
+        map_images_nolock(count, paths, mhdrs, &takeEnforcementDisableFault);
+    }
+
+    if (takeEnforcementDisableFault) {
+#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+        bool objcModeNoFaults = DisableFaults
+            || DisableClassROFaults
+            || getpid() == 1
+            || is_root_ramdisk()
+            || !os_variant_has_internal_diagnostics("com.apple.obj-c");
+        if (!objcModeNoFaults) {
+            os_fault_with_payload(OS_REASON_LIBSYSTEM,
+                                  OS_REASON_LIBSYSTEM_CODE_FAULT,
+                                  NULL, 0,
+                                  "class_ro_t enforcement disabled",
+                                  0);
+        }
+#endif
+    }
 }
 
 
@@ -3325,15 +3392,16 @@ Class readClass(Class cls, bool headerIsBundle, bool headerIsPreoptimized)
 
             class_rw_t *rw = newCls->data();
             const class_ro_t *old_ro = rw->ro();
-            memcpy(newCls, cls, sizeof(objc_class));
 
-            // Manually set address-discriminated ptrauthed fields
-            // so that newCls gets the correct signatures.
             newCls->setSuperclass(cls->getSuperclass());
             newCls->initIsa(cls->getIsa());
+            memcpy(&newCls->cache, &cls->cache, sizeof(newCls->cache));
+            if (cls->hasCustomRR())
+                newCls->setHasCustomRR();
+            else
+                newCls->setHasDefaultRR();
+            rw->set_ro(cls->safe_ro());
 
-            rw->set_ro((class_ro_t *)newCls->data());
-            newCls->setData(rw);
             freeIfMutable((char *)old_ro->getName());
             free((void *)old_ro);
 
@@ -3363,10 +3431,10 @@ Class readClass(Class cls, bool headerIsBundle, bool headerIsPreoptimized)
 
     // for future reference: shared cache never contains MH_BUNDLEs
     if (headerIsBundle) {
-        cls->data()->flags |= RO_FROM_BUNDLE;
-        cls->ISA()->data()->flags |= RO_FROM_BUNDLE;
+        const_cast<class_ro_t *>(cls->safe_ro())->flags |= RO_FROM_BUNDLE;
+        const_cast<class_ro_t *>(cls->ISA()->safe_ro())->flags |= RO_FROM_BUNDLE;
     }
-    
+
     return cls;
 }
 
@@ -5029,6 +5097,9 @@ objc_getRealizedClassList_nolock(Class *buffer, int bufferLen)
     return count;
 }
 
+// This function is called by LLDB to fetch the class list. Make sure it
+// always gets emitted.
+__attribute__((used))
 static Class *
 objc_copyRealizedClassList_nolock(unsigned int *outCount)
 {
@@ -5344,38 +5415,6 @@ class_copyPropertyList(Class cls, unsigned int *outCount)
 
 
 /***********************************************************************
-* objc_class::getLoadMethod
-* fixme
-* Called only from add_class_to_loadable_list.
-* Locking: runtimeLock must be read- or write-locked by the caller.
-**********************************************************************/
-IMP 
-objc_class::getLoadMethod()
-{
-    runtimeLock.assertLocked();
-
-    const method_list_t *mlist;
-
-    ASSERT(isRealized());
-    ASSERT(ISA()->isRealized());
-    ASSERT(!isMetaClass());
-    ASSERT(ISA()->isMetaClass());
-
-    mlist = ISA()->data()->ro()->baseMethods;
-    if (mlist) {
-        for (const auto& meth : *mlist) {
-            const char *name = sel_cname(meth.name());
-            if (0 == strcmp(name, "load")) {
-                return meth.imp(false);
-            }
-        }
-    }
-
-    return nil;
-}
-
-
-/***********************************************************************
 * _category_getName
 * Returns a category's name.
 * Locking: none
@@ -5415,38 +5454,6 @@ _category_getClass(Category cat)
     Class result = remapClass(cat->cls);
     ASSERT(result->isRealized());  // ok for call_category_loads' usage
     return result;
-}
-
-
-/***********************************************************************
-* _category_getLoadMethod
-* fixme
-* Called only from add_category_to_loadable_list
-* Locking: runtimeLock must be read- or write-locked by the caller
-**********************************************************************/
-IMP 
-_category_getLoadMethod(Category cat)
-{
-    runtimeLock.assertLocked();
-
-    const method_list_t *mlist;
-
-    mlist = cat->classMethods;
-    if (mlist) {
-        for (const auto& meth : *mlist) {
-            const char *name = sel_cname(meth.name());
-            // Manually check for "load\0" to avoid a function call that might
-            // spill unauthenticated method pointers.
-            if (name[0] == 'l' &&
-                name[1] == 'o' &&
-                name[2] == 'a' &&
-                name[3] == 'd' &&
-                name[4] == 0)
-                return meth.imp(false);
-        }
-    }
-
-    return nil;
 }
 
 
@@ -6072,6 +6079,58 @@ search_method_list(const method_list_t *mlist, SEL sel)
 {
     return search_method_list_inline(mlist, sel);
 }
+
+
+/***********************************************************************
+* _getLoadMethod
+**********************************************************************/
+ALWAYS_INLINE static IMP
+_getLoadMethod(const method_list_t *mlist)
+{
+    if (!mlist)
+        return nil;
+
+    if (auto meth = search_method_list_inline(mlist, @selector(load))) {
+        return meth->imp(false);
+    }
+
+    return nil;
+}
+
+/***********************************************************************
+* objc_class::getLoadMethod
+* fixme
+* Called only from add_class_to_loadable_list.
+* Locking: runtimeLock must be read- or write-locked by the caller.
+**********************************************************************/
+NEVER_INLINE IMP
+objc_class::getLoadMethod()
+{
+    runtimeLock.assertLocked();
+
+    ASSERT(isRealized());
+    ASSERT(ISA()->isRealized());
+    ASSERT(!isMetaClass());
+    ASSERT(ISA()->isMetaClass());
+
+    return _getLoadMethod(ISA()->data()->ro()->baseMethods);
+}
+
+
+/***********************************************************************
+* _category_getLoadMethod
+* fixme
+* Called only from add_category_to_loadable_list
+* Locking: runtimeLock must be read- or write-locked by the caller
+**********************************************************************/
+NEVER_INLINE IMP
+_category_getLoadMethod(Category cat)
+{
+    runtimeLock.assertLocked();
+
+    return _getLoadMethod(cat->classMethods);
+}
+
 
 /***********************************************************************
  * method_lists_contains_any
@@ -7533,7 +7592,7 @@ objc_duplicateClass(Class original, const char *name,
     rw->firstSubclass = nil;
     rw->nextSiblingClass = nil;
 
-    duplicate->bits = original->bits;
+    duplicate->bits.copyFrom(original->bits);
     duplicate->setData(rw);
 
     auto ro = orig_ro->duplicate();
@@ -7626,8 +7685,9 @@ static void objc_initializeClassPair_internal(Class superclass, const char *name
         meta->setInstanceSize(meta_ro_w->instanceStart);
     }
 
-    cls_ro_w->name.store(strdupIfMutable(name), std::memory_order_release);
-    meta_ro_w->name.store(strdupIfMutable(name), std::memory_order_release);
+    const char *dupedIfMutableName = strdupIfMutable(name);
+    cls_ro_w->name.store(dupedIfMutableName, std::memory_order_release);
+    meta_ro_w->name.store(dupedIfMutableName, std::memory_order_release);
 
     cls_ro_w->ivarLayout = &UnsetLayout;
     cls_ro_w->weakIvarLayout = &UnsetLayout;
@@ -7804,7 +7864,7 @@ Class objc_readClassPair(Class bits, const struct objc_image_info *info)
     (void)info;
 
     // Fail if the superclass isn't kosher.
-    bool rootOK = bits->data()->flags & RO_ROOT;
+    bool rootOK = bits->safe_ro()->flags & RO_ROOT;
     if (!verifySuperclass(bits->getSuperclass(), rootOK)){
         return nil;
     }
@@ -7907,7 +7967,8 @@ static void free_class(Class cls)
     
     try_free(ro->getIvarLayout());
     try_free(ro->weakIvarLayout);
-    try_free(ro->getName());
+    if (!cls->isMetaClass())
+        try_free(ro->getName());
     try_free(ro);
     objc::zfree(rwe);
     objc::zfree(rw);
@@ -8168,7 +8229,7 @@ void *objc_destructInstance(id obj)
 
         // This order is important.
         if (cxx) object_cxxDestruct(obj);
-        if (assoc) _object_remove_assocations(obj, /*deallocating*/true);
+        if (assoc) _object_remove_associations(obj, /*deallocating*/true);
         obj->clearDeallocating();
     }
 
@@ -8563,6 +8624,7 @@ Class class_setSuperclass(Class cls, Class newSuper)
 
 void runtime_init(void)
 {
+    objc::disableEnforceClassRXPtrAuth = DisableClassRXSigningEnforcement;
     objc::unattachedCategories.init(32);
     objc::allocatedClasses.init();
 }

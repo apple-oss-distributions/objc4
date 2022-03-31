@@ -71,8 +71,7 @@ int main()
     // catches failure to cache or (abi=2) failure to fixup (#5584187)
     // fixme unless they all fail
 
-    uint64_t startTime;
-    uint64_t totalTime;
+    uint64_t minTime;
     uint64_t targetTime;
 
     Sub *sub = [Sub new];
@@ -112,65 +111,59 @@ int main()
 
     // ALIGN_ matches loop alignment to make -O0 work
 
-#define COUNT 1000000
+#define TRIALS 50
+#define MESSAGES 1000000
 
-    startTime = mach_absolute_time();
-    ALIGN_();
-    for (int i = 0; i < COUNT; i++) {
-        [sub voidret_nop];
-    }
-    totalTime = mach_absolute_time() - startTime;
-    testprintf("time: voidret  %llu\n", totalTime);
-    targetTime = totalTime;
-
-    startTime = mach_absolute_time();
-    ALIGN_();
-    for (int i = 0; i < COUNT; i++) {
-        [sub voidret_nop2];  
-    }
-    totalTime = mach_absolute_time() - startTime;
-    testprintf("time: voidret2  %llu\n", totalTime);
-    if (totalTime < targetTime) targetTime = totalTime;
-
-    startTime = mach_absolute_time();
-    ALIGN_();
-    for (int i = 0; i < COUNT; i++) {
-        [sub llret_nop];
-    }
-    totalTime = mach_absolute_time() - startTime;
-    timecheck("llret ", totalTime, targetTime * 0.65, targetTime * 2.0);
-
-    startTime = mach_absolute_time();
-    ALIGN_();
-    for (int i = 0; i < COUNT; i++) {
-        [sub stret_nop];
-    }
-    totalTime = mach_absolute_time() - startTime;
-    timecheck("stret ", totalTime, targetTime * 0.65, targetTime * 5.0);
-
-    startTime = mach_absolute_time();
-    ALIGN_();
-    for (int i = 0; i < COUNT; i++) {        
-        [sub fpret_nop];
-    }
-    totalTime = mach_absolute_time() - startTime;
-    timecheck("fpret ", totalTime, targetTime * 0.65, targetTime * 4.0);
-
-    startTime = mach_absolute_time();
-    ALIGN_();
-    for (int i = 0; i < COUNT; i++) {
-        [sub lfpret_nop];
-    }
-    totalTime = mach_absolute_time() - startTime;
-    timecheck("lfpret", totalTime, targetTime * 0.65, targetTime * 4.0);
-
-    startTime = mach_absolute_time();
-    ALIGN_();
-    for (int i = 0; i < COUNT; i++) {
-        [sub vecret_nop];
-    }
-    totalTime = mach_absolute_time() - startTime;
-    timecheck("vecret", totalTime, targetTime * 0.65, targetTime * 4.0);
+    // Measure the time needed to send MESSAGES messages. To reduce the
+    // influence of transient effects on the result, it will perform TRIALS
+    // measurements, then take the minimum time from those trials. On
+    // completion, the minimum measured time is stored in `minTime`.
+    //
+    // We take a minimum over many trials rather than a simple average for two
+    // reasons:
+    //
+    // 1. If preemption or sudden system load makes a trial slow, it is not
+    //    useful to incorporate that into the data. We want to reject those
+    //    trials. There aren't transient events that will make a trial unusually
+    //    *fast*, so the minimum is what we want to measure.
+    // 2. Some hardware seems to take time to ramp up performance when suddenly
+    //    placed under load. The first ~10 trials of a test run can be much
+    //    slower than the rest, causing subsequent tests to be "too fast.'
+#define MEASURE(message)                                           \
+    do {                                                           \
+        minTime = UINT64_MAX;                                      \
+        for (int i = 0; i < TRIALS; i++) {                         \
+            uint64_t startTime = mach_absolute_time();             \
+            ALIGN_();                                              \
+            for (int i = 0; i < MESSAGES; i++)                     \
+                [sub message];                                     \
+            uint64_t totalTime = mach_absolute_time() - startTime; \
+            testprintf("trial: " #message "  %llu\n", totalTime);  \
+            if (totalTime < minTime)                               \
+                minTime = totalTime;                               \
+        }                                                          \
+    } while(0)
+    
+    MEASURE(voidret_nop);
+    testprintf("BASELINE: voidret  %llu\n", minTime);
+    targetTime = minTime;
+    
+    MEASURE(voidret_nop2);
+    testprintf("BASELINE: voidret2  %llu\n", minTime);
+    if (minTime < targetTime)
+        targetTime = minTime;
+    
+#define CHECK(message)                                                         \
+    do {                                                                       \
+        MEASURE(message);                                                      \
+        timecheck(#message " ", minTime, targetTime * 0.65, targetTime * 2.0); \
+    } while(0)
+    
+    CHECK(llret_nop);
+    CHECK(stret_nop);
+    CHECK(fpret_nop);
+    CHECK(lfpret_nop);
+    CHECK(vecret_nop);
 
     succeed(__FILE__);
 }

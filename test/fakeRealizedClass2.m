@@ -1,6 +1,9 @@
 /*
 Variant on fakeRealizedClass which tests a fake class with no superclass rdar://problem/67692760
-TEST_CONFIG OS=macosx
+
+(On arm64e, this will cause a pointer auth failure.)
+
+TEST_CONFIG OS=macosx ARCH=!arm64e
 TEST_CRASHES
 TEST_RUN_OUTPUT
 objc\[\d+\]: realized class 0x[0-9a-fA-F]+ has corrupt data pointer: malloc_size\(0x[0-9a-fA-F]+\) = 0

@@ -15,11 +15,13 @@
 #   define SIGNED_METHOD_LIST "@AUTH(da,0xC310,addr) "
 #   define SIGNED_ISA "@AUTH(da, 0x6AE1, addr) "
 #   define SIGNED_SUPER "@AUTH(da, 0xB5AB, addr) "
+#   define SIGNED_RO  "@AUTH(da, 0x61F8, addr) "
 #else
 #   define SIGNED_METHOD_LIST_IMP
 #   define SIGNED_METHOD_LIST
 #   define SIGNED_ISA
 #   define SIGNED_SUPER
+#   define SIGNED_RO
 #endif
 
 #define str(x) #x
@@ -39,7 +41,7 @@ asm(
     PTR "0                                    \n"
     PTR "__objc_empty_cache                   \n"
     PTR "0                                    \n"
-    PTR "L_ro                                 \n"
+    PTR "L_ro" SIGNED_RO "                    \n"
     // pad to OBJC_MAX_CLASS_SIZE
     PTR "0 \n"
     PTR "0 \n"
@@ -74,7 +76,7 @@ asm(
     PTR "_OBJC_CLASS_$_Super" SIGNED_SUPER   "\n"
     PTR "__objc_empty_cache                   \n"
     PTR "0                                    \n"
-    PTR "L_meta_ro                            \n"
+    PTR "L_meta_ro" SIGNED_RO "               \n"
     // pad to OBJC_MAX_CLASS_SIZE
     PTR "0 \n"
     PTR "0 \n"
@@ -150,7 +152,7 @@ asm(
     PTR "_OBJC_CLASS_$_Super" SIGNED_SUPER "\n"
     PTR "__objc_empty_cache                 \n"
     PTR "0                                  \n"
-    PTR "L_sub_ro                           \n"
+    PTR "L_sub_ro" SIGNED_RO "              \n"
     // pad to OBJC_MAX_CLASS_SIZE
     PTR "0 \n"
     PTR "0 \n"
@@ -185,7 +187,7 @@ asm(
     PTR "_OBJC_METACLASS_$_Super" SIGNED_SUPER "\n"
     PTR "__objc_empty_cache                     \n"
     PTR "0                                      \n"
-    PTR "L_sub_meta_ro                          \n"
+    PTR "L_sub_meta_ro" SIGNED_RO "             \n"
     // pad to OBJC_MAX_CLASS_SIZE
     PTR "0 \n"
     PTR "0 \n"
