@@ -59,7 +59,7 @@ struct SideTable {
 
     void lock() { slock.lock(); }
     void unlock() { slock.unlock(); }
-    void forceReset() { slock.forceReset(); }
+    void reset() { slock.reset(); }
 
     // Address-ordered lock discipline for a pair of side tables.
 

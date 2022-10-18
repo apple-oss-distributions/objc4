@@ -23,7 +23,7 @@
 
 #ifdef __x86_64__
 
-#include <mach/vm_param.h>
+#include "objc-vm.h"
 
 .text
 .globl __objc_blockTrampolineImpl

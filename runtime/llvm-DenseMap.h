@@ -922,7 +922,7 @@ class SmallDenseMap
   // simplicity of referring to them.
   using BaseT = DenseMapBase<SmallDenseMap, KeyT, ValueT, ValueInfoT, KeyInfoT, BucketT>;
 
-  static_assert(powerof2(InlineBuckets),
+  static_assert(IsPowerOf2(InlineBuckets),
                 "InlineBuckets must be a power of 2.");
 
   unsigned Small : 1;

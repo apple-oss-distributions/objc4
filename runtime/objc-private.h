@@ -188,7 +188,6 @@ private:
 
     // Slow paths for inline control
     id rootAutorelease2();
-    uintptr_t overrelease_error();
 
 #if SUPPORT_NONPOINTER_ISA
     // Controls what parts of root{Retain,Release} to emit/inline
@@ -242,6 +241,8 @@ private:
 #if DEBUG
     bool sidetable_present();
 #endif
+
+    void performDealloc();
 };
 
 
@@ -278,11 +279,7 @@ typedef struct property_t *objc_property_t;
 
 #include "objc-ptrauth.h"
 
-#if __OBJC2__
 #include "objc-runtime-new.h"
-#else
-#include "objc-runtime-old.h"
-#endif
 
 #include "objc-references.h"
 #include "objc-initialize.h"
@@ -518,25 +515,6 @@ public:
 
     bool hasPreoptimizedSectionLookups() const;
 
-#if !__OBJC2__
-    struct old_protocol **proto_refs;
-    struct objc_module *mod_ptr;
-    size_t              mod_count;
-# if TARGET_OS_WIN32
-    struct objc_module **modules;
-    size_t moduleCount;
-    struct old_protocol **protocols;
-    size_t protocolCount;
-    void *imageinfo;
-    size_t imageinfoBytes;
-    SEL *selrefs;
-    size_t selrefCount;
-    struct objc_class **clsrefs;
-    size_t clsrefCount;    
-    TCHAR *moduleName;
-# endif
-#endif
-
 private:
     // Images in the shared cache will have an empty array here while those
     // allocated at run time will allocate a single entry.
@@ -571,11 +549,7 @@ static inline bool sectnameStartsWith(const char *sectname, const char *prefix){
     return segnameStartsWith(sectname, prefix);
 }
 
-
-#if __OBJC2__
 extern bool didCallDyldNotifyRegister;
-#endif
-
 
 /* selectors */
 extern void sel_init(size_t selrefCount);
@@ -709,7 +683,7 @@ extern void logReplacedMethod(const char *className, SEL s, bool isMeta, const c
 
 
 // objc per-thread storage
-typedef struct {
+struct _objc_pthread_data {
     struct _objc_initializing_classes *initializingClasses; // for +initialize
     struct SyncCache *syncCache;  // for @synchronize
     struct alt_handler_list *handlerList;  // for exception alt handlers
@@ -718,13 +692,11 @@ typedef struct {
     unsigned classNameLookupsAllocated;
     unsigned classNameLookupsUsed;
 
-    // If you add new fields here, don't forget to update 
-    // _objc_pthread_destroyspecific()
-
-} _objc_pthread_data;
+    // If you add new fields here, don't forget to update the destructor
+    ~_objc_pthread_data();
+};
 
 extern _objc_pthread_data *_objc_fetch_pthread_data(bool create);
-extern void tls_init(void);
 
 // encoding.h
 extern unsigned int encoding_getNumberOfArguments(const char *typedesc);
@@ -962,24 +934,24 @@ class StripedMap {
 
     void forceResetAll() {
         for (unsigned int i = 0; i < StripeCount; i++) {
-            array[i].value.forceReset();
+            array[i].value.reset();
         }
     }
 
     void defineLockOrder() {
         for (unsigned int i = 1; i < StripeCount; i++) {
-            lockdebug_lock_precedes_lock(&array[i-1].value, &array[i].value);
+            lockdebug::lock_precedes_lock(&array[i-1].value, &array[i].value);
         }
     }
 
     void precedeLock(const void *newlock) {
         // assumes defineLockOrder is also called
-        lockdebug_lock_precedes_lock(&array[StripeCount-1].value, newlock);
+        lockdebug::lock_precedes_lock(&array[StripeCount-1].value, newlock);
     }
 
     void succeedLock(const void *oldlock) {
         // assumes defineLockOrder is also called
-        lockdebug_lock_precedes_lock(oldlock, &array[0].value);
+        lockdebug::lock_precedes_lock(oldlock, &array[0].value);
     }
 
     const void *getLock(int i) {

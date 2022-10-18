@@ -69,8 +69,11 @@
         uintptr_t shiftcls_and_sig  : 52;                                      \
         uintptr_t has_sidetable_rc  : 1;                                       \
         uintptr_t extra_rc          : 8
-#     define RC_ONE   (1ULL<<56)
-#     define RC_HALF  (1ULL<<7)
+#     define ISA_HAS_INLINE_RC    1
+#     define RC_HAS_SIDETABLE_BIT 55
+#     define RC_ONE_BIT           (RC_HAS_SIDETABLE_BIT+1)
+#     define RC_ONE               (1ULL<<RC_ONE_BIT)
+#     define RC_HALF              (1ULL<<7)
 #   else
 #     define ISA_MASK        0x0000000ffffffff8ULL
 #     define ISA_MAGIC_MASK  0x000003f000000001ULL
@@ -86,8 +89,19 @@
         uintptr_t unused            : 1;                                       \
         uintptr_t has_sidetable_rc  : 1;                                       \
         uintptr_t extra_rc          : 19
-#     define RC_ONE   (1ULL<<45)
-#     define RC_HALF  (1ULL<<18)
+#     define ISA_HAS_INLINE_RC    1
+#     define RC_HAS_SIDETABLE_BIT 44
+#     define RC_ONE_BIT           (RC_HAS_SIDETABLE_BIT+1)
+#     define RC_ONE               (1ULL<<RC_ONE_BIT)
+#     define RC_HALF              (1ULL<<18)
+#   endif
+
+#   if TARGET_OS_SIMULATOR
+#     define ISA_MASK_NOSIG ISA_MASK
+#   elif TARGET_OS_OSX
+#     define ISA_MASK_NOSIG 0x00007ffffffffff8ULL
+#   else
+#     define ISA_MASK_NOSIG 0x0000000ffffffff8ULL
 #   endif
 
 # elif __x86_64__
@@ -105,8 +119,11 @@
       uintptr_t unused            : 1;                                         \
       uintptr_t has_sidetable_rc  : 1;                                         \
       uintptr_t extra_rc          : 8
-#   define RC_ONE   (1ULL<<56)
-#   define RC_HALF  (1ULL<<7)
+#   define ISA_HAS_INLINE_RC    1
+#   define RC_HAS_SIDETABLE_BIT 55
+#   define RC_ONE_BIT           (RC_HAS_SIDETABLE_BIT+1)
+#   define RC_ONE               (1ULL<<RC_ONE_BIT)
+#   define RC_HALF              (1ULL<<7)
 
 # else
 #   error unknown architecture for packed isa
@@ -140,8 +157,11 @@
       uintptr_t unused            : 1;          \
       uintptr_t has_sidetable_rc  : 1;          \
       uintptr_t extra_rc          : 7
-#   define RC_ONE   (1ULL<<25)
-#   define RC_HALF  (1ULL<<6)
+#   define ISA_HAS_INLINE_RC    1
+#   define RC_HAS_SIDETABLE_BIT 24
+#   define RC_ONE_BIT           (RC_HAS_SIDETABLE_BIT+1)
+#   define RC_ONE               (1ULL<<RC_ONE_BIT)
+#   define RC_HALF              (1ULL<<6)
 
 # else
 #   error unknown architecture for indexed isa

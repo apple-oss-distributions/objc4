@@ -21,24 +21,6 @@ Class initSuper(Class cls __unused, void *arg __unused)
     fail("SwiftSuper's init should not have been called");
 }
 
-bool isRealized(Class cls)
-{
-    // check the is-realized bits directly
-
-#if __LP64__
-# define mask (~(uintptr_t)7)
-#else
-# define mask (~(uintptr_t)3)
-#endif
-#define RW_REALIZED (1<<31)
-    
-    uint32_t *rw = (uint32_t *)(((uintptr_t *)cls)[4] & mask);  // class_t->data
-
-    rw = ptrauth_strip(rw, ptrauth_key_process_dependent_data);
-
-    return ((uint32_t *)rw)[0] & RW_REALIZED;  // class_rw_t->flags
-}
-
 SWIFT_CLASS(SwiftSuper, NSObject, initSuper);
 SWIFT_CLASS(RealSwiftSub, SwiftSuper, initSub);
 

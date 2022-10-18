@@ -287,7 +287,7 @@ static void _finishInitializing(Class cls, Class supercls)
 {
     PendingInitialize *pending;
 
-    classInitLock.assertLocked();
+    lockdebug::assert_locked(&classInitLock);
     ASSERT(!supercls  ||  supercls->isInitialized());
 
     if (PrintInitializing) {
@@ -332,7 +332,7 @@ static void _finishInitializing(Class cls, Class supercls)
 static void _finishInitializingAfter(Class cls, Class supercls)
 {
 
-    classInitLock.assertLocked();
+    lockdebug::assert_locked(&classInitLock);
 
     if (PrintInitializing) {
         _objc_inform("INITIALIZE: thread %p: class %s will be marked as fully "
@@ -544,12 +544,7 @@ void initializeNonMetaClass(Class cls)
         // Exceptions: A +initialize call that throws an exception 
         // is deemed to be a complete and successful +initialize.
         //
-        // Only __OBJC2__ adds these handlers. !__OBJC2__ has a
-        // bootstrapping problem of this versus CF's call to
-        // objc_exception_set_functions().
-#if __OBJC2__
         @try
-#endif
         {
             callInitialize(cls);
 
@@ -558,7 +553,6 @@ void initializeNonMetaClass(Class cls)
                              objc_thread_self(), cls->nameForLogging());
             }
         }
-#if __OBJC2__
         @catch (...) {
             if (PrintInitializing) {
                 _objc_inform("INITIALIZE: thread %p: +[%s initialize] "
@@ -568,7 +562,6 @@ void initializeNonMetaClass(Class cls)
             @throw;
         }
         @finally
-#endif
         {
             // Done initializing.
             lockAndFinishInitializing(cls, supercls);
@@ -614,7 +607,6 @@ void initializeNonMetaClass(Class cls)
 }
 
 void _objc_addWillInitializeClassFunc(_objc_func_willInitializeClass _Nonnull func, void * _Nullable context) {
-#if __OBJC2__
     unsigned count;
     Class *realizedClasses;
 
@@ -640,5 +632,4 @@ void _objc_addWillInitializeClassFunc(_objc_func_willInitializeClass _Nonnull fu
     }
 
     free(realizedClasses);
-#endif
 }

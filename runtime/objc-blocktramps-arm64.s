@@ -1,6 +1,8 @@
+#include <TargetConditionals.h>
+
 #if __arm64__
 
-#include <mach/vm_param.h>
+#include "objc-vm.h"
 #include "arm64-asm.h"
 
 // Offset of block->invoke field.

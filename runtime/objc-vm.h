@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Apple Inc.  All Rights Reserved.
+ * Copyright (c) 2022 Apple Inc.  All Rights Reserved.
  * 
  * @APPLE_LICENSE_HEADER_START@
  * 
@@ -21,30 +21,37 @@
  * @APPLE_LICENSE_HEADER_END@
  */
 
-#ifndef _OBJC_FILE_OLD_H
-#define _OBJC_FILE_OLD_H
+#ifndef _OBJC_VM_H
+#define _OBJC_VM_H
 
-#if !__OBJC2__
+/* 
+ * WARNING  DANGER  HAZARD  BEWARE  EEK
+ * 
+ * Everything in this file is for Apple Internal use only.
+ * These will change in arbitrary OS updates and in unpredictable ways.
+ * When your program breaks, you get to keep both pieces.
+ */
 
-#include "objc-os.h"
+/*
+ * objc-vm.h: defines PAGE_SIZE, PAGE_MIN/MAX_SIZE and PAGE_MAX_SHIFT
+ */
 
-struct objc_module;
-struct old_protocol;
-struct old_class;
+// N.B. This file must be usable FROM ASSEMBLY SOURCE FILES
 
-__BEGIN_DECLS
+#include <TargetConditionals.h>
 
-extern struct objc_module *_getObjcModules(const header_info *hi, size_t *nmodules);
-extern SEL *_getObjcSelectorRefs(const header_info *hi, size_t *nmess);
-extern struct old_protocol **_getObjcProtocols(const header_info *hi, size_t *nprotos);
-extern Class *_getObjcClassRefs(const header_info *hi, size_t *nclasses);
-extern const char *_getObjcClassNames(const header_info *hi, size_t *size);
+#if __has_include(<mach/vm_param.h>)
+#  include <mach/vm_param.h>
 
-using UnsignedInitializer = void(*)(void);
-extern UnsignedInitializer* getLibobjcInitializers(const headerType *mhdr, size_t *count);
-
-__END_DECLS
-
+#  define OBJC_VM_MAX_ADDRESS    MACH_VM_MAX_ADDRESS
+#elif __arm64__
+#  define PAGE_SIZE       16384
+#  define PAGE_MIN_SIZE   16384
+#  define PAGE_MAX_SIZE   16384
+#  define PAGE_MAX_SHIFT  14
+#  define OBJC_VM_MAX_ADDRESS  0x00007ffffffffff8ULL
+#else
+#  error Unknown platform - please define PAGE_SIZE et al.
 #endif
 
-#endif
+#endif // _OBJC_VM_H

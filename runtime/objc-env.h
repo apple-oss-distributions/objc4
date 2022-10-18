@@ -52,5 +52,5 @@ OPTION( DisableAutoreleaseCoalescing, OBJC_DISABLE_AUTORELEASE_COALESCING, "disa
 OPTION( DisableAutoreleaseCoalescingLRU, OBJC_DISABLE_AUTORELEASE_COALESCING_LRU, "disable coalescing of autorelease pool pointers using look back N strategy")
 
 INTERNAL_OPTION( DisableClassRXSigningEnforcement, OBJC_DISABLE_CLASSRX_SIGNING_ENFORCEMENT, "disable class_rx_t pointer signing enforcement")
-INTERNAL_OPTION( DebugClassRXSigning,              @OBJC_DEBUG_CLASS_RX_SIGNING,     "warn about class_rx_t pointer signing mismatches")
+INTERNAL_OPTION( DebugClassRXSigning,              OBJC_DEBUG_CLASS_RX_SIGNING,     "warn about class_rx_t pointer signing mismatches")
 INTERNAL_OPTION( DisableClassROFaults,             OBJC_DISABLE_CLASS_RO_FAULTS,    "disable os faults for class_ro_t pointer signing mismatches")

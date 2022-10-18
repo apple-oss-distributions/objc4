@@ -64,8 +64,6 @@
 #include <string.h>
 #include <assert.h>
 #include <objc/objc.h>
-#include <pthread.h>
-
 
 #ifndef C_ASSERT
 	#if __has_feature(cxx_static_assert)
@@ -84,6 +82,11 @@
 #define OBJC_ASSERT(x) ASSERT(x)
 #else
 #define OBJC_ASSERT(x) assert(x)
+#endif
+
+// Make objc_thread_t work when objc-os.h hasn't been included.
+#if !OBJC_THREAD_T_DEFINED
+typedef struct objc_thread *objc_thread_t;
 #endif
 
 struct magic_t {
@@ -134,40 +137,24 @@ struct AutoreleasePoolPageData
 
         static const uintptr_t maxCount = 65535; // 2^16 - 1
     };
-    static_assert((AutoreleasePoolEntry){ .ptr = MACH_VM_MAX_ADDRESS }.ptr == MACH_VM_MAX_ADDRESS, "MACH_VM_MAX_ADDRESS doesn't fit into AutoreleasePoolEntry::ptr!");
+    static_assert((AutoreleasePoolEntry){ .ptr = OBJC_VM_MAX_ADDRESS }.ptr == OBJC_VM_MAX_ADDRESS, "OBJC_VM_MAX_ADDRESS doesn't fit into AutoreleasePoolEntry::ptr!");
 #endif
 
 	magic_t const magic;
 	__unsafe_unretained id *next;
-	pthread_t const thread;
+	objc_thread_t const thread;
 	AutoreleasePoolPage * const parent;
 	AutoreleasePoolPage *child;
 	uint32_t const depth;
 	uint32_t hiwat;
 
-	AutoreleasePoolPageData(__unsafe_unretained id* _next, pthread_t _thread, AutoreleasePoolPage* _parent, uint32_t _depth, uint32_t _hiwat)
+	AutoreleasePoolPageData(__unsafe_unretained id* _next, objc_thread_t _thread, AutoreleasePoolPage* _parent, uint32_t _depth, uint32_t _hiwat)
 		: magic(), next(_next), thread(_thread),
 		  parent(_parent), child(nil),
 		  depth(_depth), hiwat(_hiwat)
 	{
 	}
 };
-
-
-struct thread_data_t
-{
-#ifdef __LP64__
-	pthread_t const thread;
-	uint32_t const hiwat;
-	uint32_t const depth;
-#else
-	pthread_t const thread;
-	uint32_t const hiwat;
-	uint32_t const depth;
-	uint32_t padding;
-#endif
-};
-C_ASSERT(sizeof(thread_data_t) == 16);
 
 #undef C_ASSERT
 

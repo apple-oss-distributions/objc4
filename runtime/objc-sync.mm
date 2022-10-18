@@ -56,11 +56,23 @@ typedef struct SyncCache {
   SYNC_COUNT_DIRECT_KEY == SyncCacheItem.lockCount
  */
 
+// Enabled if we have direct keys or compiler thread locals
+#if SUPPORT_DIRECT_THREAD_KEYS || SUPPORT_THREAD_LOCAL
+#define ENABLE_FAST_CACHE 1
+#else
+#define ENABLE_FAST_CACHE 0
+#endif
+
+#if ENABLE_FAST_CACHE
+static tls_direct_fast(SyncData *, tls_key::sync_data) syncData;
+static tls_direct_fast(uintptr_t, tls_key::sync_count) syncLockCount;
+#endif
+
 struct SyncList {
     SyncData *data;
     spinlock_t lock;
 
-    constexpr SyncList() : data(nil), lock(fork_unsafe_lock) { }
+    SyncList() : data(nil), lock(fork_unsafe) { }
 };
 
 // Use multiple parallel lists to decrease contention among unrelated objects.
@@ -74,7 +86,7 @@ enum usage { ACQUIRE, RELEASE, CHECK };
 static SyncCache *fetch_cache(bool create)
 {
     _objc_pthread_data *data;
-    
+
     data = _objc_fetch_pthread_data(create);
     if (!data) return NULL;
 
@@ -113,37 +125,31 @@ static SyncData* id2data(id object, enum usage why)
     SyncData **listp = &LIST_FOR_OBJ(object);
     SyncData* result = NULL;
 
-#if SUPPORT_DIRECT_THREAD_KEYS
+#if ENABLE_FAST_CACHE
     // Check per-thread single-entry fast cache for matching object
     bool fastCacheOccupied = NO;
-    SyncData *data = (SyncData *)tls_get_direct(SYNC_DATA_DIRECT_KEY);
+    SyncData *data = syncData;
     if (data) {
         fastCacheOccupied = YES;
 
         if (data->object == object) {
             // Found a match in fast cache.
-            uintptr_t lockCount;
-
             result = data;
-            lockCount = (uintptr_t)tls_get_direct(SYNC_COUNT_DIRECT_KEY);
-            if (result->threadCount <= 0  ||  lockCount <= 0) {
+            if (result->threadCount <= 0  ||  syncLockCount <= 0) {
                 _objc_fatal("id2data fastcache is buggy");
             }
 
             switch(why) {
             case ACQUIRE: {
-                lockCount++;
-                tls_set_direct(SYNC_COUNT_DIRECT_KEY, (void*)lockCount);
+                ++syncLockCount;
                 break;
             }
             case RELEASE:
-                lockCount--;
-                tls_set_direct(SYNC_COUNT_DIRECT_KEY, (void*)lockCount);
-                if (lockCount == 0) {
+                if (--syncLockCount == 0) {
                     // remove from fast cache
-                    tls_set_direct(SYNC_DATA_DIRECT_KEY, NULL);
+                    syncData = nullptr;
                     // atomic because may collide with concurrent ACQUIRE
-                    OSAtomicDecrement32Barrier(&result->threadCount);
+                    AtomicDecrement(&result->threadCount);
                 }
                 break;
             case CHECK:
@@ -154,7 +160,7 @@ static SyncData* id2data(id object, enum usage why)
             return result;
         }
     }
-#endif
+#endif // ENABLE_FAST_CACHE
 
     // Check per-thread cache of already-owned locks for matching object
     SyncCache *cache = fetch_cache(NO);
@@ -180,7 +186,7 @@ static SyncData* id2data(id object, enum usage why)
                     // remove from per-thread cache
                     cache->list[i] = cache->list[--cache->used];
                     // atomic because may collide with concurrent ACQUIRE
-                    OSAtomicDecrement32Barrier(&result->threadCount);
+                    AtomicDecrement(&result->threadCount);
                 }
                 break;
             case CHECK:
@@ -208,7 +214,7 @@ static SyncData* id2data(id object, enum usage why)
             if ( p->object == object ) {
                 result = p;
                 // atomic because may collide with concurrent RELEASE
-                OSAtomicIncrement32Barrier(&result->threadCount);
+                AtomicIncrement(&result->threadCount);
                 goto done;
             }
             if ( (firstUnused == NULL) && (p->threadCount == 0) )
@@ -235,7 +241,7 @@ static SyncData* id2data(id object, enum usage why)
     posix_memalign((void **)&result, alignof(SyncData), sizeof(SyncData));
     result->object = (objc_object *)object;
     result->threadCount = 1;
-    new (&result->mutex) recursive_mutex_t(fork_unsafe_lock);
+    new (&result->mutex) recursive_mutex_t(fork_unsafe);
     result->nextData = *listp;
     *listp = result;
     
@@ -253,13 +259,13 @@ static SyncData* id2data(id object, enum usage why)
         if (why != ACQUIRE) _objc_fatal("id2data is buggy");
         if (result->object != object) _objc_fatal("id2data is buggy");
 
-#if SUPPORT_DIRECT_THREAD_KEYS
+#if ENABLE_FAST_CACHE
         if (!fastCacheOccupied) {
             // Save in fast thread cache
-            tls_set_direct(SYNC_DATA_DIRECT_KEY, result);
-            tls_set_direct(SYNC_COUNT_DIRECT_KEY, (void*)1);
-        } else 
-#endif
+            syncData = result;
+            syncLockCount = 1;
+        } else
+#endif // ENABLE_FAST_CACHE
         {
             // Save in thread cache
             if (!cache) cache = fetch_cache(YES);

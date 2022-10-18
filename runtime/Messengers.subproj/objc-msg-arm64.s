@@ -28,7 +28,6 @@
 
 #ifdef __arm64__
 
-#include <arm/arch.h>
 #include "isa.h"
 #include "objc-config.h"
 #include "arm64-asm.h"
@@ -151,6 +150,13 @@ _objc_msgSend_indirect_branch:
 .macro ENTRY /* name */
 	.text
 	.align 5
+	.globl    $0
+$0:
+.endmacro
+
+.macro MSG_ENTRY /*name*/
+	.text
+	.align 10
 	.globl    $0
 $0:
 .endmacro
@@ -503,7 +509,7 @@ LLookupPreopt\Function:
 .abort  unhandled mode \Mode
 .endif
 
-5:	ldursw	x9, [x10, #-8]			// offset -8 is the fallback offset
+5:	ldur	x9, [x10, #-16]			// offset -16 is the fallback offset
 	add	x16, x16, x9			// compute the fallback isa
 	b	LLookupStart\Function		// lookup again with a new isa
 .endif
@@ -566,7 +572,7 @@ _objc_debug_taggedpointer_classes:
 .endmacro
 #endif
 
-	ENTRY _objc_msgSend
+	MSG_ENTRY _objc_msgSend
 	UNWIND _objc_msgSend, NoFrame
 
 	cmp	p0, #0			// nil check and tagged pointer check
@@ -575,8 +581,8 @@ _objc_debug_taggedpointer_classes:
 #else
 	b.eq	LReturnZero
 #endif
-	ldr	p13, [x0]		// p13 = isa
-	GetClassFromIsa_p16 p13, 1, x0	// p16 = class
+	ldr	p14, [x0]		// p14 = raw isa
+	GetClassFromIsa_p16 p14, 1, x0	// p16 = class
 LGetIsaDone:
 	// calls imp or objc_msgSend_uncached
 	CacheLookup NORMAL, _objc_msgSend, __objc_msgSend_uncached
@@ -800,9 +806,20 @@ LGetImpMissConstant:
 	mov	w17, #METHOD_SIGNING_DISCRIMINATOR
 	autdb	p1, p17
 #endif
+
+	// Strip off the kind field in the lower two bits.
+	and    p1, p1, ~0x3
+
 	add	p16, p1, #METHOD_IMP
 	ldr	p17, [x16]
 	ldr	p1, [x1, #METHOD_NAME]
+
+#if __has_feature(ptrauth_calls)
+	// Strip the selector for big signed methods. This is unnecessary for
+	// big non-signed methods, but harmless.
+	xpacd p1
+#endif
+
 	TailCallMethodListImp x17, x16
 
 L_method_invoke_small:

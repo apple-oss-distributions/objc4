@@ -1,5 +1,5 @@
 #include <TargetConditionals.h>
-#include <mach/vm_param.h>
+#include "objc-vm.h"
 
 #if __LP64__
 #if __arm64e__

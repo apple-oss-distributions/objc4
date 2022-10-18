@@ -11,11 +11,11 @@
 #define NONPOINTER(x) (ISA(x) & 1)
 
 #if SUPPORT_NONPOINTER_ISA
+// Quiet the warning about redefining the macro from isa.h.
+# undef RC_ONE
 # if __x86_64__
 #   define RC_ONE (1ULL<<56)
 # elif __arm64__ && __LP64__
-// Quiet the warning about redefining the macro from isa.h.
-#   undef RC_ONE
 #   define RC_ONE (objc_debug_isa_magic_value == 1 ? 1ULL<<56 : 1ULL<<45)
 # elif __ARM_ARCH_7K__ >= 2  ||  (__arm64__ && !__LP64__)
 #   define RC_ONE (1ULL<<25)

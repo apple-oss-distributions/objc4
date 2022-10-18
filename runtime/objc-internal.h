@@ -40,14 +40,16 @@
 #include <objc/objc.h>
 #include <objc/runtime.h>
 #include <Availability.h>
-#include <malloc/malloc.h>
 #include <mach-o/loader.h>
-#include <dispatch/dispatch.h>
 
 // Include NSObject.h only if we're ObjC. Module imports get unhappy
 // otherwise.
 #if __OBJC__
 #include <objc/NSObject.h>
+#endif
+
+#if __has_include(<malloc/malloc.h>)
+#   include <malloc/malloc.h>
 #endif
 
 // Termination reasons in the OS_REASON_OBJC namespace.
@@ -98,13 +100,11 @@ objc_initializeClassPair(Class _Nullable superclass, const char * _Nonnull name,
 // Returns nil if the superclass is nil and the class is not marked as a root.
 // Returns nil if the superclass is under construction.
 // Do not call objc_registerClassPair().
-#if __OBJC2__
 struct objc_image_info;
 OBJC_EXPORT Class _Nullable
 objc_readClassPair(Class _Nonnull cls,
                    const struct objc_image_info * _Nonnull info)
     OBJC_AVAILABLE(10.10, 8.0, 9.0, 1.0, 2.0);
-#endif
 
 // Batch object allocation using malloc_zone_batch_malloc().
 OBJC_EXPORT unsigned
@@ -126,11 +126,7 @@ instrumentObjcMessageSends(BOOL flag)
 // Initializer called by libSystem
 OBJC_EXPORT void
 _objc_init(void)
-#if __OBJC2__
     OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
-#else
-    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
-#endif
 
 // fork() safety called by libSystem
 OBJC_EXPORT void
@@ -145,6 +141,8 @@ OBJC_EXPORT void
 _objc_atfork_child(void)
     OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
 
+#if !OBJC_NO_GC_API
+
 // Return YES if GC is on and `object` is a GC allocation.
 OBJC_EXPORT BOOL
 objc_isAuto(id _Nullable object) 
@@ -156,11 +154,12 @@ objc_dumpHeap(char * _Nonnull filename, unsigned long length)
     OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(10.4, 10.8, "it always returns NO");
 
 // GC startup callback from Foundation
-OBJC_EXPORT malloc_zone_t * _Nullable
+OBJC_EXPORT objc_zone_t _Nullable
 objc_collect_init(int (* _Nonnull callback)(void))
     OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(10.4, 10.8, "it does nothing");
 
-#if __OBJC2__
+#endif // !OBJC_NO_GC_API
+
 // Copies the list of currently realized classes
 // intended for introspection only
 // most users will want objc_copyClassList instead.
@@ -183,8 +182,6 @@ OBJC_EXPORT
 unsigned long
 sel_hash(SEL _Nullable sel)
     OBJC_AVAILABLE(10.16, 14.0, 14.0, 7.0, 6.0);
-#endif
-
 
 // Plainly-implemented GC barriers. Rosetta used to use these.
 OBJC_EXPORT id _Nullable
@@ -204,6 +201,7 @@ OBJC_EXPORT id _Nullable
 objc_assign_ivar_generic(id _Nullable value, id _Nonnull dest, ptrdiff_t offset)
     UNAVAILABLE_ATTRIBUTE;
 
+#if !OBJC_NO_GC_API
 // GC preflight for an app executable.
 // 1: some slice requires GC
 // 0: no slice requires GC
@@ -213,10 +211,9 @@ objc_appRequiresGC(int fd)
     __OSX_AVAILABLE(10.11) 
     __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
     __WATCHOS_UNAVAILABLE
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_UNAVAILABLE
-#endif
 ;
+#endif // !OBJC_NO_GC_API
 
 #if !(TARGET_OS_OSX && !TARGET_OS_MACCATALYST && __i386__)
 // Add a class copy fixup handler. The name is a misnomer, as
@@ -235,16 +232,6 @@ OBJC_EXPORT void
 _objc_setBadAllocHandler(id _Nullable (* _Nonnull newHandler)
                            (Class _Nullable isa))
     OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
-
-// Used by ExceptionHandling.framework
-#if !__OBJC2__
-OBJC_EXPORT void
-_objc_error(id _Nullable rcv, const char * _Nonnull fmt, va_list args)
-    __attribute__((noreturn, cold, format(printf, 2, 0)))
-    OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(10.0, 10.5, "use other logging facilities instead");
-
-#endif
-
 
 /**
  * Queries the Objective-C runtime for a selector matching the provided name.
@@ -287,6 +274,167 @@ objc_copyClassesForImage(const char * _Nonnull image,
                          unsigned int * _Nullable outCount)
     OBJC_AVAILABLE(10.16, 14.0, 14.0, 7.0, 4.0);
 
+/**
+ * Attempts to acquire the runtime lock, copies the list of currently realized
+ * classes into the buffer if the runtime lock can be acquired.
+ *
+ * @param buffer The buffer to copy into.
+ * @param outCount The length of the buffer. At most this many classes are returned.
+ *
+ * @return The number of currently realized classes if the lock was acquired,
+ *         or SIZE_MAX if the lock could not be acquired.
+ */
+OBJC_EXPORT size_t
+_objc_getRealizedClassList_trylock(Class _Nullable * _Nullable buffer, size_t bufferLen)
+    OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+
+/**
+ * Register images with the ObjC runtime. Normally this is handled automatically
+ * by dyld. This call exists for code creating images in memory outside of dyld.
+ *
+ * @param count The number of images.
+ * @param paths The image paths. (Currently unused. Use NULL for images with no
+ *              corresponding file on disk.)
+ * @param mhdrs The image mach headers.
+ */
+void
+_objc_map_images(unsigned count, const char * _Nullable const paths[_Nullable],
+                 const struct mach_header * _Nonnull const mhdrs[_Nullable])
+    OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+
+/**
+ * Call +load methods in the given image. Normally this is handled automatically
+ * by dyld. This call exists for code creating images in memory outside of dyld.
+ *
+ * @param paths The image path. (Currently unused. Use NULL for images with no
+ *              corresponding file on disk.)
+ * @param mhdrs The image mach header.
+ */
+void
+_objc_load_image(const char * _Nullable path, const struct mach_header * _Nonnull mh)
+    OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+
+/**
+ * Begin class enumeration.
+ *
+ * @param image The mach header for the library or framework you wish to search.
+ * @param namePrefix If non-NULL, a required prefix for the class name, which
+                     must remain valid for the duration of the enumeration.
+ * @param conformingTo If non-NULL, a protocol to which the enumerated classes
+ *                     must conform.
+ * @param subclassing If non-NULL, a class which the enumerated classes must
+ *                    subclass.
+ * @param enumerator The enumeration data structure to initialize.
+ */
+
+typedef struct objc_class_enumerator {
+    const void * _Nullable image;
+    const char * _Nullable namePrefix;
+#if __swift__
+    void       * _Nullable conformingTo;
+#else
+    Protocol   * _Nullable conformingTo;
+#endif
+    Class        _Nullable subclassing;
+
+    size_t      namePrefixLen;
+
+    const Class _Nonnull * _Nullable imageClassList;
+    size_t                           imageClassNdx;
+    size_t                           imageClassCount;
+} objc_class_enumerator_t;
+
+OBJC_EXPORT void
+_objc_beginClassEnumeration(const void * _Nullable image,
+                            const char * _Nullable namePrefix,
+                            Protocol * _Nullable conformingTo,
+                            Class _Nullable subclassing,
+                            objc_class_enumerator_t * _Nonnull enumerator)
+    OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+
+/**
+ * Retrieve the next matching class from the enumerator.
+ *
+ * @param enumerator The enumerator.
+ *
+ * @return Class A matching class, or NULL to signify end of enumeration.
+ */
+
+OBJC_EXPORT Class _Nullable
+_objc_enumerateNextClass(objc_class_enumerator_t * _Nonnull enumerator)
+    OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+
+
+/**
+ * End class enumeration.
+ *
+ * @param enumerator The enumerator to destroy.
+ */
+
+OBJC_EXPORT void
+_objc_endClassEnumeration(objc_class_enumerator_t * _Nonnull enumerator)
+    OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+
+/**
+ * Mark a class as having custom dealloc initiation.
+ *
+ * NOTE: if you adopt this function for something other than deallocating on the
+ * main thread, please let the runtime team know about it so we can be sure it
+ * will work properly for your use case.
+ *
+ * When this is set, the default NSObject implementation of `-release` will send
+ * the `_objc_initiateDealloc` message to instances of this class instead of
+ * `dealloc` when the refcount drops to zero. This gives the class the
+ * opportunity to customize how `dealloc` is invoked, for example by invoking it
+ * on the main thread instead of synchronously in the release call.
+ *
+ * A default implementation of `_objc_initiateDealloc` is not provided. Classes
+ * must implement their own.
+ *
+ * The implementation of `_objc_initiateDealloc` is expected to eventually call
+ * `[self dealloc]`. Note that once `_objc_initiateDealloc` is sent, the object
+ * is in a deallocating state. This means:
+ *
+ * 1. Retaining the object will NOT extend its lifetime.
+ * 2. Releasing the object will NOT cause another call to `dealloc` or
+ *    `_objc_initiateDealloc`.
+ * 3. Existing weak references to the object will produce `nil` when read.
+ * 4. Forming new weak references to the object is an error.
+ *
+ * Because the implementation of `_objc_initiateDealloc` will call
+ * `[self dealloc]`, it necessarily runs before any subclass overrides of
+ * `dealloc`. Overrides of `dealloc` often rely on the superclass state still
+ * being intact and usable, so ensure that `_objc_initiateDealloc` does not free
+ * resources that a subclass might still try to access. Most or all of your
+ * object teardown work should continue to be in `dealloc` to preserve the
+ * expected sequence of events.
+ *
+ * This call primarily exists to support classes which need to deallocate on the
+ * main thread. This can be accomplished by setting the class to use custom
+ * dealloc initiation, and then implementing `_objc_initiateDealloc` to call
+ * dealloc on the main thread. For example:
+ *
+ * ```
+ * _class_setCustomDeallocInitiation([MyClass class]);
+ *
+ * - (void)_objc_initiateDealloc {
+ *     if (pthread_main_np())
+ *         [self dealloc];
+ *     else
+ *         dispatch_async_f(dispatch_get_main_queue(), self,
+ *             _objc_deallocOnMainThreadHelper);
+ * }
+ * ```
+ *
+ * (We use `dispatch_async_f` to avoid an unsafe capture of `self` in a block,
+ * which could result in the object being released by Dispatch after being
+ * freed.)
+ *
+ * @param cls The class to modify.
+ */
+OBJC_EXPORT void
+_class_setCustomDeallocInitiation(_Nonnull Class cls);
+#define OBJC_SETCUSTOMDEALLOCINITIATION_DEFINED 1
 
 // Tagged pointer objects.
 
@@ -337,6 +485,10 @@ enum
     OBJC_TAG_NSIndexSet        = 19,
     OBJC_TAG_NSMethodSignature = 20,
     OBJC_TAG_UTTypeRecord      = 21,
+    OBJC_TAG_Foundation_1      = 22,
+    OBJC_TAG_Foundation_2      = 23,
+    OBJC_TAG_Foundation_3      = 24,
+    OBJC_TAG_Foundation_4      = 25,
 
     // When using the split tagged pointer representation
     // (OBJC_SPLIT_TAGGED_POINTERS), this is the first tag where
@@ -566,6 +718,7 @@ _objc_taggedPointersEnabled(void)
     return (objc_debug_taggedpointer_mask != 0);
 }
 
+__attribute__((no_sanitize("unsigned-shift-base")))
 static inline void * _Nonnull
 _objc_makeTaggedPointer_withObfuscator(objc_tag_index_t tag, uintptr_t value,
                                        uintptr_t obfuscator)
@@ -629,6 +782,7 @@ _objc_getTaggedPointerTag_withObfuscator(const void * _Nullable ptr,
     }
 }
 
+__attribute__((no_sanitize("unsigned-shift-base")))
 static inline uintptr_t
 _objc_getTaggedPointerValue_withObfuscator(const void * _Nullable ptr,
                                            uintptr_t obfuscator)
@@ -643,6 +797,7 @@ _objc_getTaggedPointerValue_withObfuscator(const void * _Nullable ptr,
     }
 }
 
+__attribute__((no_sanitize("unsigned-shift-base")))
 static inline intptr_t
 _objc_getTaggedPointerSignedValue_withObfuscator(const void * _Nullable ptr,
                                                  uintptr_t obfuscator)
@@ -736,14 +891,12 @@ object_getMethodImplementation_stret(id _Nullable obj, SEL _Nonnull name)
  * value is returned, the caller must free the array with \c free().
  *
  */
-#if __OBJC2__
 OBJC_EXPORT _Nullable SEL * _Nullable
 class_addMethodsBulk(_Nullable Class cls, _Nonnull const SEL * _Nonnull names,
                      _Nonnull const IMP * _Nonnull imps,
                      const char * _Nonnull * _Nonnull types, uint32_t count,
                      uint32_t * _Nullable outFailedCount)
         OBJC_AVAILABLE(10.14, 12.0, 12.0, 5.0, 3.0);
-#endif
 
 /**
  * Replaces multiple methods in a class in bulk. This amortizes overhead that
@@ -756,7 +909,6 @@ class_addMethodsBulk(_Nullable Class cls, _Nonnull const SEL * _Nonnull names,
  *              arguments.
  * @param count The number of items in the names, imps, and types arrays.
  */
-#if __OBJC2__
 OBJC_EXPORT void
 class_replaceMethodsBulk(_Nullable Class cls,
                          _Nonnull const SEL * _Nonnull names,
@@ -764,7 +916,6 @@ class_replaceMethodsBulk(_Nullable Class cls,
                          const char * _Nonnull * _Nonnull types,
                          uint32_t count)
         OBJC_AVAILABLE(10.14, 12.0, 12.0, 5.0, 3.0);
-#endif
 
 
 // Instance-specific instance variable layout. This is no longer implemented.
@@ -850,7 +1001,7 @@ _objc_rootInit(id _Nonnull obj)
 
 OBJC_EXPORT
 id _Nullable
-_objc_rootAllocWithZone(Class _Nonnull cls, malloc_zone_t * _Nullable zone)
+_objc_rootAllocWithZone(Class _Nonnull cls, objc_zone_t _Nullable zone)
     OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
 
 OBJC_EXPORT
@@ -869,7 +1020,7 @@ _objc_rootFinalize(id _Nonnull obj)
     OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
 
 OBJC_EXPORT
-malloc_zone_t * _Nonnull
+objc_zone_t _Nonnull
 _objc_rootZone(id _Nonnull obj)
     OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
 
@@ -955,6 +1106,11 @@ objc_retainAutoreleaseReturnValue(id _Nullable obj)
 OBJC_EXPORT id _Nullable
 objc_retainAutoreleasedReturnValue(id _Nullable obj)
     OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+// Accept a value returned through a +0 autoreleasing convention for use at +1.
+OBJC_EXPORT id _Nullable
+objc_claimAutoreleasedReturnValue(id _Nullable obj)
+    OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
 
 // Accept a value returned through a +0 autoreleasing convention for use at +0.
 OBJC_EXPORT id _Nullable
@@ -1052,11 +1208,9 @@ _objc_autoreleasePoolPop(void * _Nonnull context)
  * @param clsref The classref to load.
  * @return The loaded Class pointer.
  */
-#if __OBJC2__
 OBJC_EXPORT _Nullable Class
 objc_loadClassref(_Nullable Class * _Nonnull clsref)
     OBJC_AVAILABLE(10.15, 13.0, 13.0, 6.0, 5.0);
-#endif
 
 
 // Extra @encode data for XPC, or NULL
@@ -1094,7 +1248,7 @@ OBJC_EXPORT void _objc_addWillInitializeClassFunc(_objc_func_willInitializeClass
 
 // Replicate the conditionals in objc-config.h for packed isa, indexed isa, and preopt caches
 #if __ARM_ARCH_7K__ >= 2  ||  (__arm64__ && !__LP64__) || \
-    !(!__LP64__  ||  TARGET_OS_WIN32  ||  \
+    !(!__LP64__  ||  \
      (TARGET_OS_SIMULATOR && !TARGET_OS_MACCATALYST && !__arm64__))
 OBJC_EXPORT const uintptr_t _objc_has_weak_formation_callout;
 #define OBJC_WEAK_FORMATION_CALLOUT_DEFINED 1
@@ -1109,12 +1263,16 @@ OBJC_EXPORT const uintptr_t _objc_has_weak_formation_callout;
 #endif
 
 
-#if __OBJC2__
 // Helper function for objc4 tests only! Do not call this yourself
 // for any reason ever.
 OBJC_EXPORT void _method_setImplementationRawUnsafe(Method _Nonnull m, IMP _Nonnull imp)
     OBJC_AVAILABLE(10.16, 14.0, 14.0, 7.0, 5.0);
-#endif
+
+// Helper function for objc4 tests only! Do not call this yourself
+// for any reason ever.
+OBJC_EXPORT void
+_objc_patch_root_of_class(const struct mach_header * _Nonnull originalMH, void* _Nonnull originalClass,
+                          const struct mach_header * _Nonnull replacementMH, const void* _Nonnull replacementClass);
 
 // API to only be called by classes that provide their own reference count storage
 
@@ -1160,6 +1318,10 @@ typedef enum {
     _OBJC_DEALLOC_OBJECT_LATER = 2      /* call [self dealloc] on the main queue. */
 } _objc_object_disposition_t;
 
+// NOTE: This macro is no longer necessary merely to ensure deallocation on the
+// main thread. If that's all you're using it for, you should instead use
+// `_class_setCustomDeallocInitiation` along with an implementation of
+// `_objc_initiateDealloc` that invokes deallocation on the main thread.
 #define _OBJC_SUPPORTED_INLINE_REFCNT_LOGIC_BLOCK(_rc_ivar, _logicBlock)        \
     -(id)retain {                                                               \
         /* this will fail to compile if _rc_ivar is an unsigned type */         \

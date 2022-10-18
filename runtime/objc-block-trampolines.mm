@@ -32,6 +32,7 @@
 #include "objc-private.h"
 #include "runtime.h"
 
+
 #include <Block.h>
 #include <Block_private.h>
 #include <inttypes.h>
@@ -109,8 +110,8 @@ class TrampolinePointerWrapper {
 # endif
 #endif
 
-        uintptr_t textSegment;
-        uintptr_t textSegmentSize;
+        uintptr_t ptrauth_trampoline_textSegment textSegment;
+        uintptr_t ptrauth_trampoline_textSegment textSegmentSize;
 
         void check() {
 #if DEBUG
@@ -333,14 +334,10 @@ static TrampolineBlockPageGroup * ptrauth_trampoline_block_page_group HeadPageGr
 
 #pragma mark Utility Functions
 
-#if !__OBJC2__
-#define runtimeLock classLock
-#endif
-
 #pragma mark Trampoline Management Functions
 static TrampolineBlockPageGroup *_allocateTrampolinesAndData()
 {
-    runtimeLock.assertLocked();
+    lockdebug::assert_locked(&runtimeLock);
 
     vm_address_t dataAddress;
     
@@ -407,8 +404,8 @@ static TrampolineBlockPageGroup *_allocateTrampolinesAndData()
 static TrampolineBlockPageGroup *
 getOrAllocatePageGroupWithNextAvailable() 
 {
-    runtimeLock.assertLocked();
-    
+    lockdebug::assert_locked(&runtimeLock);
+
     if (!HeadPageGroup)
         return _allocateTrampolinesAndData();
     
@@ -425,7 +422,7 @@ getOrAllocatePageGroupWithNextAvailable()
 static TrampolineBlockPageGroup *
 pageAndIndexContainingIMP(IMP anImp, uintptr_t *outIndex) 
 {
-    runtimeLock.assertLocked();
+    lockdebug::assert_locked(&runtimeLock);
 
     // Authenticate as a function pointer, returning an un-signed address.
     uintptr_t trampAddress =
@@ -492,7 +489,7 @@ _imp_implementationWithBlock_init(void)
 IMP 
 _imp_implementationWithBlockNoCopy(id block)
 {
-    runtimeLock.assertLocked();
+    lockdebug::assert_locked(&runtimeLock);
 
     TrampolineBlockPageGroup *pageGroup = 
         getOrAllocatePageGroupWithNextAvailable();
@@ -613,3 +610,4 @@ BOOL imp_removeBlock(IMP anImp) {
     Block_release(block);
     return YES;
 }
+

@@ -1,4 +1,8 @@
+#include <ptrauth.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <sys/cdefs.h>
+#include <TargetConditionals.h>
 
 #if __LP64__
 #   define PTR " .quad " 
@@ -206,6 +210,29 @@ asm(                                               \
 extern char OBJC_CLASS_$_ ## name;                 \
 Class Raw ## name = (Class)&OBJC_CLASS_$_ ## name; \
 SWIFT_STUB_CLASSREF(name)
-    
 
-void fn(void) { }
+
+inline bool isRealized(Class cls)
+{
+    // check the is-realized bits directly
+
+// FAST_DATA_MASK taken from objc-runtime-new.h, must be updated here if it
+// ever changes there.
+#if __LP64__
+# if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#  define FAST_DATA_MASK          0x0000007ffffffff8UL
+# else
+#  define FAST_DATA_MASK          0x00007ffffffffff8UL
+# endif
+#else
+# define FAST_DATA_MASK        0xfffffffcUL
+#endif
+#define RW_REALIZED (1<<31)
+
+    uint32_t *rw = (uint32_t *)((uintptr_t *)cls)[4];  // class_t->data
+
+    rw = ptrauth_strip(rw, ptrauth_key_process_dependent_data);
+    rw = (uint32_t *)((uintptr_t)rw & FAST_DATA_MASK);
+
+    return ((uint32_t *)rw)[0] & RW_REALIZED;  // class_rw_t->flags
+}

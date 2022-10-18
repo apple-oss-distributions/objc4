@@ -130,52 +130,52 @@ extern "C" BigStruct myReplacedMethodStret(id self __unused, SEL _cmd) {
 
 extern struct ObjCMethodList Foo_methodlistSmall;
 
-asm(R"ASM(
-.section __TEXT,__cstring
-_MyMethod1Name:
-    .asciz "myMethod1"
-_MyMethod2Name:
-    .asciz "myMethod2"
-_MyMethod3Name:
-    .asciz "myMethod3"
-_BoringMethodType:
-    .asciz "v16@0:8"
-_MyMethodStretName:
-    .asciz "myMethodStret"
-_MyMethodNullTypesName:
-    .asciz "myMethodNullTypes"
-_StretType:
-    .asciz "{BigStruct=QQQQQQQ}16@0:8"
-)ASM");
+asm("\
+.section __TEXT,__cstring\n\
+_MyMethod1Name:\n\
+    .asciz \"myMethod1\"\n\
+_MyMethod2Name:\n\
+    .asciz \"myMethod2\"\n\
+_MyMethod3Name:\n\
+    .asciz \"myMethod3\"\n\
+_BoringMethodType:\n\
+    .asciz \"v16@0:8\"\n\
+_MyMethodStretName:\n\
+    .asciz \"myMethodStret\"\n\
+_MyMethodNullTypesName:\n\
+    .asciz \"myMethodNullTypes\"\n\
+_StretType:\n\
+    .asciz \"{BigStruct=QQQQQQQ}16@0:8\"\n\
+");
 
 #if __LP64__
-asm(R"ASM(
-.section __DATA,__objc_selrefs,literal_pointers,no_dead_strip
-_MyMethod1NameRef:
-    .quad _MyMethod1Name
-_MyMethod2NameRef:
-    .quad _MyMethod2Name
-_MyMethod3NameRef:
-    .quad _MyMethod3Name
-_MyMethodStretNameRef:
-    .quad _MyMethodStretName
-_MyMethodNullTypesNameRef:
-    .quad _MyMethodNullTypesName
-)ASM");
+asm("\
+.section __DATA,__objc_selrefs,literal_pointers,no_dead_strip\n\
+_MyMethod1NameRef:\n\
+    .quad _MyMethod1Name\n\
+_MyMethod2NameRef:\n\
+    .quad _MyMethod2Name\n\
+_MyMethod3NameRef:\n\
+    .quad _MyMethod3Name\n\
+_MyMethodStretNameRef:\n\
+    .quad _MyMethodStretName\n\
+_MyMethodNullTypesNameRef:\n\
+    .quad _MyMethodNullTypesName\n\
+");
 #else
-asm(R"ASM(
-.section __DATA,__objc_selrefs,literal_pointers,no_dead_strip
-_MyMethod1NameRef:
-    .long _MyMethod1Name
-_MyMethod2NameRef:
-    .long _MyMethod2Name
-_MyMethod3NameRef:
-    .long _MyMethod3Name
-_MyMethodStretNameRef:
-    .long _MyMethodStretName
-_MyMethodNullTypesNameRef:
-    .long _MyMethodNullTypesName
-)ASM");
+asm("\
+.section __DATA,__objc_selrefs,literal_pointers,no_dead_strip\n\
+_MyMethod1NameRef:\n\
+    .long _MyMethod1Name\n\
+_MyMethod2NameRef:\n\
+    .long _MyMethod2Name\n\
+_MyMethod3NameRef:\n\
+    .long _MyMethod3Name\n\
+_MyMethodStretNameRef:\n\
+    .long _MyMethodStretName\n\
+_MyMethodNullTypesNameRef:\n\
+    .long _MyMethodNullTypesName\n\
+");
 #endif
 
 #if MUTABLE_METHOD_LIST
@@ -184,32 +184,32 @@ asm(".section __DATA,__objc_methlist\n");
 asm(".section __TEXT,__objc_methlist\n");
 #endif
 
-asm(R"ASM(
-    .p2align 2
-_Foo_methodlistSmall:
-    .long 12 | 0x80000000
-    .long 5
-    
-    .long _MyMethod1NameRef - .
-    .long _BoringMethodType - .
-    .long _myMethod1 - .
-    
-    .long _MyMethod2NameRef - .
-    .long _BoringMethodType - .
-    .long _myMethod2 - .
-    
-    .long _MyMethod3NameRef - .
-    .long _BoringMethodType - .
-    .long _myMethod3 - .
-    
-    .long _MyMethodStretNameRef - .
-    .long _StretType - .
-    .long _myMethodStret - .
-
-    .long _MyMethodNullTypesNameRef - .
-    .long 0
-    .long _myMethod1 - .
-)ASM");
+asm("\
+    .p2align 2\n\
+_Foo_methodlistSmall:\n\
+    .long 12 | 0x80000000\n\
+    .long 5\n\
+    \n\
+    .long _MyMethod1NameRef - .\n\
+    .long _BoringMethodType - .\n\
+    .long _myMethod1 - .\n\
+    \n\
+    .long _MyMethod2NameRef - .\n\
+    .long _BoringMethodType - .\n\
+    .long _myMethod2 - .\n\
+    \n\
+    .long _MyMethod3NameRef - .\n\
+    .long _BoringMethodType - .\n\
+    .long _myMethod3 - .\n\
+    \n\
+    .long _MyMethodStretNameRef - .\n\
+    .long _StretType - .\n\
+    .long _myMethodStret - .\n\
+\n\
+    .long _MyMethodNullTypesNameRef - .\n\
+    .long 0\n\
+    .long _myMethod1 - .\n\
+");
 
 struct ObjCClass_ro Foo_ro = {
     .instanceStart = 8,

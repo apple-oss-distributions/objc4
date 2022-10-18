@@ -6,6 +6,7 @@
 
 #include <Foundation/Foundation.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <objc/objc-internal.h>
 
 @interface Simple : TestRoot @end
 @implementation Simple @end
@@ -88,16 +89,21 @@ int main()
   testassertequal([crc rcCalls], baseRcCalls + 4);
 
   // Next, a type that uses the tagged representation rather than a pointer
-  NSNumber *num = [NSNumber numberWithInt:42];
+#if OBJC_HAVE_TAGGED_POINTERS
+  if (_objc_taggedPointersEnabled()) {
+    NSNumber *num = [NSNumber numberWithInt:42];
 
-  testassert(!objc_isUniquelyReferenced(num));
-  [num retain];
-  testassert(!objc_isUniquelyReferenced(num));
-  [num release];
-  testassert(!objc_isUniquelyReferenced(num));
+    testassert(!objc_isUniquelyReferenced(num));
+    [num retain];
+    testassert(!objc_isUniquelyReferenced(num));
+    [num release];
+    testassert(!objc_isUniquelyReferenced(num));
+  }
+#endif
 
   // Finally, some Core Foundation types
-  CFStringRef str = CFSTR("Test string");
+  CFMutableStringRef str = CFStringCreateMutable(kCFAllocatorDefault, 0);
+  CFStringAppendCString(str, "Test string", kCFStringEncodingASCII);
   id strObj = (__bridge id)str;
 
   testassert(objc_isUniquelyReferenced(strObj));
@@ -105,16 +111,6 @@ int main()
   testassert(!objc_isUniquelyReferenced(strObj));
   [strObj release];
   testassert(objc_isUniquelyReferenced(strObj));
-
-  CFMutableStringRef mstr = CFStringCreateMutableCopy(kCFAllocatorDefault,
-						      0, str);
-  id mstrObj = (__bridge id)mstr;
-
-  testassert(objc_isUniquelyReferenced(mstrObj));
-  [mstrObj retain];
-  testassert(!objc_isUniquelyReferenced(mstrObj));
-  [mstrObj release];
-  testassert(objc_isUniquelyReferenced(mstrObj));
 
 #pragma clang diagnostic pop
 

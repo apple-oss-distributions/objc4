@@ -138,6 +138,13 @@ int main()
     testassert(list[count0-1] == NULL);
     testassert(count == count0);
 
+    size_t trylockCount;
+    do {
+        trylockCount = _objc_getRealizedClassList_trylock(list, count0-1);
+    } while (trylockCount == SIZE_MAX);
+    testassert(list[trylockCount-1] == NULL);
+    testassert(count == trylockCount);
+
     // So that demangling works, fake what would have happened with Swift
     // and force the "Swift" bit on the class
     setSwiftFlag(objc_getClass(SwiftV1MangledName));

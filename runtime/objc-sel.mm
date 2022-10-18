@@ -21,8 +21,6 @@
  * @APPLE_LICENSE_HEADER_END@
  */
 
-#if __OBJC2__
-
 #include "objc-private.h"
 #include "DenseMapExtras.h"
 
@@ -55,8 +53,8 @@ void sel_init(size_t selrefCount)
 
 static SEL sel_alloc(const char *name, bool copy)
 {
-    selLock.assertLocked();
-    return (SEL)(copy ? strdupIfMutable(name) : name);    
+    lockdebug::assert_locked(&selLock);
+    return (SEL)(copy ? strdupIfMutable(name) : name);
 }
 
 
@@ -105,8 +103,8 @@ static SEL __sel_registerName(const char *name, bool shouldLock, bool copy)
 {
     SEL result = 0;
 
-    if (shouldLock) selLock.assertUnlocked();
-    else selLock.assertLocked();
+    if (shouldLock) lockdebug::assert_unlocked(&selLock);
+    else            lockdebug::assert_locked(&selLock);
 
     if (!name) return (SEL)0;
 
@@ -158,6 +156,3 @@ BOOL sel_isEqual(SEL lhs, SEL rhs)
 {
     return bool(lhs == rhs);
 }
-
-
-#endif

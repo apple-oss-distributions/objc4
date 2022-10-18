@@ -28,7 +28,7 @@
 
 #include "objc-private.h"
 
-#if LOCKDEBUG  &&  !TARGET_OS_WIN32
+#if LOCKDEBUG
 
 #include <unordered_map>
 
@@ -38,20 +38,18 @@
 * That function is allowed to break some lock ordering rules.
 **********************************************************************/
 
-static tls_key_t fork_prepare_tls;
+static tls_fast(bool) in_fork_prepare;
 
 void
-lockdebug_setInForkPrepare(bool inForkPrepare)
+lockdebug::set_in_fork_prepare(bool inForkPrepare)
 {
-    INIT_ONCE_PTR(fork_prepare_tls, tls_create(nil), (void)0);
-    tls_set(fork_prepare_tls, (void*)inForkPrepare);
+    in_fork_prepare = inForkPrepare;
 }
 
 static bool
 inForkPrepare()
 {
-    INIT_ONCE_PTR(fork_prepare_tls, tls_create(nil), (void)0);
-    return (bool)tls_get(fork_prepare_tls);
+    return in_fork_prepare;
 }
 
 
@@ -72,8 +70,8 @@ struct lockorder {
 };
 
 static std::unordered_map<const void*, lockorder *> lockOrderList;
-// not mutex_t because we don't want lock debugging on this lock
-static mutex_tt<false> lockOrderLock;
+
+static objc_nodebug_lock_t lockOrderLock;
 
 static bool 
 lockPrecedesLock(const lockorder *oldlock, const lockorder *newlock)
@@ -98,7 +96,7 @@ lockPrecedesLock(const lockorder *oldlock, const lockorder *newlock)
 static bool 
 lockPrecedesLock(const void *oldlock, const void *newlock)
 {
-    mutex_tt<false>::locker lock(lockOrderLock);
+    objc_nodebug_lock_t::locker lock(lockOrderLock);
 
     auto oldorder = lockOrderList.find(oldlock);
     auto neworder = lockOrderList.find(newlock);
@@ -111,7 +109,7 @@ lockPrecedesLock(const void *oldlock, const void *newlock)
 static bool
 lockUnorderedWithLock(const void *oldlock, const void *newlock)
 {
-    mutex_tt<false>::locker lock(lockOrderLock);
+    objc_nodebug_lock_t::locker lock(lockOrderLock);
     
     auto oldorder = lockOrderList.find(oldlock);
     auto neworder = lockOrderList.find(newlock);
@@ -128,13 +126,13 @@ lockUnorderedWithLock(const void *oldlock, const void *newlock)
     return true;
 }
 
-void lockdebug_lock_precedes_lock(const void *oldlock, const void *newlock)
+void lockdebug::lock_precedes_lock(const void *oldlock, const void *newlock)
 {
     if (lockPrecedesLock(newlock, oldlock)) {
         _objc_fatal("contradiction in lock order declaration");
     }
 
-    mutex_tt<false>::locker lock(lockOrderLock);
+    objc_nodebug_lock_t::locker lock(lockOrderLock);
 
     auto oldorder = lockOrderList.find(oldlock);
     auto neworder = lockOrderList.find(newlock);
@@ -175,7 +173,7 @@ using objc_lock_list = std::unordered_map<const void *, lockcount>;
 
 // Thread-local list of locks owned by a thread.
 // Used by lock ownership checks.
-static tls_key_t lock_tls;
+static tls_autoptr(objc_lock_list) thread_locks;
 
 // Global list of all locks.
 // Used by fork() safety check.
@@ -185,7 +183,6 @@ static objc_lock_list& AllLocks() {
     INIT_ONCE_PTR(locks, new objc_lock_list, (void)0);
     return *locks;
 }
-
 
 static void
 destroyLocks(void *value)
@@ -198,17 +195,7 @@ destroyLocks(void *value)
 static objc_lock_list&
 ownedLocks()
 {
-    // Use a dedicated tls key to prevent differences vs non-debug in 
-    // usage of objc's other tls keys (required for some unit tests).
-    INIT_ONCE_PTR(lock_tls, tls_create(&destroyLocks), (void)0);
-
-    auto locks = (objc_lock_list *)tls_get(lock_tls);
-    if (!locks) {
-        locks = new objc_lock_list;
-        tls_set(lock_tls, locks);
-    }
-
-    return *locks;
+    return *thread_locks;
 }
 
 static bool 
@@ -289,25 +276,25 @@ clearLock(objc_lock_list& locks, const void *lock, lockkind kind)
 **********************************************************************/
 
 void
-lockdebug_remember_mutex(mutex_t *lock)
+lockdebug::notify::remember(objc_lock_base_t *lock)
 {
     setLock(AllLocks(), lock, MUTEX);
 }
 
 void
-lockdebug_remember_recursive_mutex(recursive_mutex_t *lock)
+lockdebug::notify::remember(objc_recursive_lock_base_t *lock)
 {
     setLock(AllLocks(), lock, RECURSIVE);
 }
 
 void
-lockdebug_remember_monitor(monitor_t *lock)
+lockdebug::notify::remember(objc_monitor_base_t *lock)
 {
     setLock(AllLocks(), lock, MONITOR);
 }
 
 void
-lockdebug_assert_all_locks_locked()
+lockdebug::assert_all_locks_locked()
 {
     auto& owned = ownedLocks();
 
@@ -320,12 +307,13 @@ lockdebug_assert_all_locks_locked()
 }
 
 void
-lockdebug_assert_no_locks_locked()
+lockdebug::assert_no_locks_locked()
 {
-    lockdebug_assert_no_locks_locked_except({});
+    lockdebug::assert_no_locks_locked_except({});
 }
 
-void lockdebug_assert_no_locks_locked_except(std::initializer_list<void *> canBeLocked)
+void
+lockdebug::assert_no_locks_locked_except(std::initializer_list<void *> canBeLocked)
 {
     auto& owned = ownedLocks();
 
@@ -344,29 +332,19 @@ void lockdebug_assert_no_locks_locked_except(std::initializer_list<void *> canBe
 * Mutex checking
 **********************************************************************/
 
-void 
-lockdebug_mutex_lock(mutex_t *lock)
+void
+lockdebug::notify::lock(objc_lock_base_t *lock)
 {
     auto& locks = ownedLocks();
-    
+
     if (hasLock(locks, lock, MUTEX)) {
         _objc_fatal("deadlock: relocking mutex");
     }
     setLock(locks, lock, MUTEX);
 }
 
-// try-lock success is the only case with lockdebug effects.
-// try-lock when already locked is OK (will fail)
-// try-lock failure does nothing.
-void 
-lockdebug_mutex_try_lock_success(mutex_t *lock)
-{
-    auto& locks = ownedLocks();
-    setLock(locks, lock, MUTEX);
-}
-
-void 
-lockdebug_mutex_unlock(mutex_t *lock)
+void
+lockdebug::notify::unlock(objc_lock_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -377,8 +355,8 @@ lockdebug_mutex_unlock(mutex_t *lock)
 }
 
 
-void 
-lockdebug_mutex_assert_locked(mutex_t *lock)
+void
+lockdebug::assert_locked(objc_lock_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -387,8 +365,8 @@ lockdebug_mutex_assert_locked(mutex_t *lock)
     }
 }
 
-void 
-lockdebug_mutex_assert_unlocked(mutex_t *lock)
+void
+lockdebug::assert_unlocked(objc_lock_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -402,15 +380,15 @@ lockdebug_mutex_assert_unlocked(mutex_t *lock)
 * Recursive mutex checking
 **********************************************************************/
 
-void 
-lockdebug_recursive_mutex_lock(recursive_mutex_t *lock)
+void
+lockdebug::notify::lock(objc_recursive_lock_base_t *lock)
 {
     auto& locks = ownedLocks();
     setLock(locks, lock, RECURSIVE);
 }
 
-void 
-lockdebug_recursive_mutex_unlock(recursive_mutex_t *lock)
+void
+lockdebug::notify::unlock(objc_recursive_lock_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -421,8 +399,8 @@ lockdebug_recursive_mutex_unlock(recursive_mutex_t *lock)
 }
 
 
-void 
-lockdebug_recursive_mutex_assert_locked(recursive_mutex_t *lock)
+void
+lockdebug::assert_locked(objc_recursive_lock_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -431,8 +409,8 @@ lockdebug_recursive_mutex_assert_locked(recursive_mutex_t *lock)
     }
 }
 
-void 
-lockdebug_recursive_mutex_assert_unlocked(recursive_mutex_t *lock)
+void
+lockdebug::assert_unlocked(objc_recursive_lock_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -446,8 +424,8 @@ lockdebug_recursive_mutex_assert_unlocked(recursive_mutex_t *lock)
 * Monitor checking
 **********************************************************************/
 
-void 
-lockdebug_monitor_enter(monitor_t *lock)
+void
+lockdebug::notify::enter(objc_monitor_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -457,8 +435,8 @@ lockdebug_monitor_enter(monitor_t *lock)
     setLock(locks, lock, MONITOR);
 }
 
-void 
-lockdebug_monitor_leave(monitor_t *lock)
+void
+lockdebug::notify::leave(objc_monitor_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -468,8 +446,8 @@ lockdebug_monitor_leave(monitor_t *lock)
     clearLock(locks, lock, MONITOR);
 }
 
-void 
-lockdebug_monitor_wait(monitor_t *lock)
+void
+lockdebug::notify::wait(objc_monitor_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -479,8 +457,8 @@ lockdebug_monitor_wait(monitor_t *lock)
 }
 
 
-void 
-lockdebug_monitor_assert_locked(monitor_t *lock)
+void
+lockdebug::assert_locked(objc_monitor_base_t *lock)
 {
     auto& locks = ownedLocks();
 
@@ -489,8 +467,8 @@ lockdebug_monitor_assert_locked(monitor_t *lock)
     }
 }
 
-void 
-lockdebug_monitor_assert_unlocked(monitor_t *lock)
+void
+lockdebug::assert_unlocked(objc_monitor_base_t *lock)
 {
     auto& locks = ownedLocks();
 

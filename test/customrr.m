@@ -44,6 +44,8 @@ static id imp_fn(id self, SEL _cmd __unused, ...)
 }
 
 static void zero(void) {
+    // Flush any stale autorelease TLS entries before zeroing everything.
+    objc_autoreleasePoolPop(objc_autoreleasePoolPush());
     Retains = 0;
     Releases = 0;
     Autoreleases = 0;
@@ -194,7 +196,7 @@ int main(int argc __unused, char **argv)
         Class cls = [NSObject class];
         IMP imp = class_getMethodImplementation(cls, @selector(retain));
         Method m = class_getInstanceMethod(cls, @selector(retain));
-        testassert(method_getImplementation(m) == imp);  // verify Method struct is as we expect
+        testassertequal(method_getImplementation(m), imp);  // verify Method struct is as we expect
 
         m = class_getInstanceMethod(cls, @selector(retain));
         _method_setImplementationRawUnsafe(m, (IMP)HackRetain);
@@ -220,7 +222,7 @@ int main(int argc __unused, char **argv)
         _objc_flush_caches(cls);
 
         imp = class_getMethodImplementation(cls, @selector(retain));
-        testassert(imp == (IMP)HackRetain);  // verify hack worked
+        testassertequal(imp, (IMP)HackRetain);  // verify hack worked
     }
 
     Class cls = [NSObject class];
@@ -250,53 +252,53 @@ int main(int argc __unused, char **argv)
     zero();
     
     [obj retain];
-    testassert(Retains == 1);
+    testassertequal(Retains, 1);
     [obj release];
-    testassert(Releases == 1);
+    testassertequal(Releases, 1);
     [obj autorelease];
-    testassert(Autoreleases == 1);
+    testassertequal(Autoreleases, 1);
 
     [cls retain];
-    testassert(PlusRetains == 1);
+    testassertequal(PlusRetains, 1);
     [cls release];
-    testassert(PlusReleases == 1);
+    testassertequal(PlusReleases, 1);
     [cls autorelease];
-    testassert(PlusAutoreleases == 1);
+    testassertequal(PlusAutoreleases, 1);
 
     [inh retain];
-    testassert(Retains == 2);
+    testassertequal(Retains, 2);
     [inh release];
-    testassert(Releases == 2);
+    testassertequal(Releases, 2);
     [inh autorelease];
-    testassert(Autoreleases == 2);
+    testassertequal(Autoreleases, 2);
 
     [icl retain];
-    testassert(PlusRetains == 2);
+    testassertequal(PlusRetains, 2);
     [icl release];
-    testassert(PlusReleases == 2);
+    testassertequal(PlusReleases, 2);
     [icl autorelease];
-    testassert(PlusAutoreleases == 2);
+    testassertequal(PlusAutoreleases, 2);
     
     [ovr retain];
-    testassert(SubRetains == 1);
+    testassertequal(SubRetains, 1);
     [ovr release];
-    testassert(SubReleases == 1);
+    testassertequal(SubReleases, 1);
     [ovr autorelease];
-    testassert(SubAutoreleases == 1);
+    testassertequal(SubAutoreleases, 1);
 
     [ocl retain];
-    testassert(SubPlusRetains == 1);
+    testassertequal(SubPlusRetains, 1);
     [ocl release];
-    testassert(SubPlusReleases == 1);
+    testassertequal(SubPlusReleases, 1);
     [ocl autorelease];
-    testassert(SubPlusAutoreleases == 1);
+    testassertequal(SubPlusAutoreleases, 1);
 
     [UnrealizedSubA1 retain];
-    testassert(PlusRetains == 3);
+    testassertequal(PlusRetains, 3);
     [UnrealizedSubA2 release];
-    testassert(PlusReleases == 3);
+    testassertequal(PlusReleases, 3);
     [UnrealizedSubA3 autorelease];
-    testassert(PlusAutoreleases == 3);
+    testassertequal(PlusAutoreleases, 3);
 #endif
 
 
@@ -308,132 +310,132 @@ int main(int argc __unused, char **argv)
     id (*autorelease_fn)(id, SEL) = (id(*)(id, SEL))objc_msgSend;
 
     retain_fn(obj, @selector(retain));
-    testassert(Retains == 1);
+    testassertequal(Retains, 1);
     release_fn(obj, @selector(release));
-    testassert(Releases == 1);
+    testassertequal(Releases, 1);
     autorelease_fn(obj, @selector(autorelease));
-    testassert(Autoreleases == 1);
+    testassertequal(Autoreleases, 1);
 
     retain_fn(cls, @selector(retain));
-    testassert(PlusRetains == 1);
+    testassertequal(PlusRetains, 1);
     release_fn(cls, @selector(release));
-    testassert(PlusReleases == 1);
+    testassertequal(PlusReleases, 1);
     autorelease_fn(cls, @selector(autorelease));
-    testassert(PlusAutoreleases == 1);
+    testassertequal(PlusAutoreleases, 1);
 
     retain_fn(inh, @selector(retain));
-    testassert(Retains == 2);
+    testassertequal(Retains, 2);
     release_fn(inh, @selector(release));
-    testassert(Releases == 2);
+    testassertequal(Releases, 2);
     autorelease_fn(inh, @selector(autorelease));
-    testassert(Autoreleases == 2);
+    testassertequal(Autoreleases, 2);
 
     retain_fn(icl, @selector(retain));
-    testassert(PlusRetains == 2);
+    testassertequal(PlusRetains, 2);
     release_fn(icl, @selector(release));
-    testassert(PlusReleases == 2);
+    testassertequal(PlusReleases, 2);
     autorelease_fn(icl, @selector(autorelease));
-    testassert(PlusAutoreleases == 2);
+    testassertequal(PlusAutoreleases, 2);
     
     retain_fn(ovr, @selector(retain));
-    testassert(SubRetains == 1);
+    testassertequal(SubRetains, 1);
     release_fn(ovr, @selector(release));
-    testassert(SubReleases == 1);
+    testassertequal(SubReleases, 1);
     autorelease_fn(ovr, @selector(autorelease));
-    testassert(SubAutoreleases == 1);
+    testassertequal(SubAutoreleases, 1);
 
     retain_fn(ocl, @selector(retain));
-    testassert(SubPlusRetains == 1);
+    testassertequal(SubPlusRetains, 1);
     release_fn(ocl, @selector(release));
-    testassert(SubPlusReleases == 1);
+    testassertequal(SubPlusReleases, 1);
     autorelease_fn(ocl, @selector(autorelease));
-    testassert(SubPlusAutoreleases == 1);
+    testassertequal(SubPlusAutoreleases, 1);
 
     retain_fn((Class)&OBJC_CLASS_$_UnrealizedSubB1, @selector(retain));
-    testassert(PlusRetains == 3);
+    testassertequal(PlusRetains, 3);
     release_fn((Class)&OBJC_CLASS_$_UnrealizedSubB2, @selector(release));
-    testassert(PlusReleases == 3);
+    testassertequal(PlusReleases, 3);
     autorelease_fn((Class)&OBJC_CLASS_$_UnrealizedSubB3, @selector(autorelease));
-    testassert(PlusAutoreleases == 3);
+    testassertequal(PlusAutoreleases, 3);
 
 
     testprintf("arc function bypasses instance but not class or override\n");
     zero();
     
     objc_retain(obj);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(obj);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(obj);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
 #if SUPPORT_NONPOINTER_ISA
     objc_retain(cls);
-    testassert(PlusRetains == 0);
+    testassertequal(PlusRetains, 0);
     objc_release(cls);
-    testassert(PlusReleases == 0);
+    testassertequal(PlusReleases, 0);
     objc_autorelease(cls);
-    testassert(PlusAutoreleases == 0);
+    testassertequal(PlusAutoreleases, 0);
 #else
     objc_retain(cls);
-    testassert(PlusRetains == 1);
+    testassertequal(PlusRetains, 1);
     objc_release(cls);
-    testassert(PlusReleases == 1);
+    testassertequal(PlusReleases, 1);
     objc_autorelease(cls);
-    testassert(PlusAutoreleases == 1);
+    testassertequal(PlusAutoreleases, 1);
 #endif
 
     objc_retain(inh);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(inh);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(inh);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
 #if SUPPORT_NONPOINTER_ISA
     objc_retain(icl);
-    testassert(PlusRetains == 0);
+    testassertequal(PlusRetains, 0);
     objc_release(icl);
-    testassert(PlusReleases == 0);
+    testassertequal(PlusReleases, 0);
     objc_autorelease(icl);
-    testassert(PlusAutoreleases == 0);
+    testassertequal(PlusAutoreleases, 0);
 #else
     objc_retain(icl);
-    testassert(PlusRetains == 2);
+    testassertequal(PlusRetains, 2);
     objc_release(icl);
-    testassert(PlusReleases == 2);
+    testassertequal(PlusReleases, 2);
     objc_autorelease(icl);
-    testassert(PlusAutoreleases == 2);
+    testassertequal(PlusAutoreleases, 2);
 #endif
     
     objc_retain(ovr);
-    testassert(SubRetains == 1);
+    testassertequal(SubRetains, 1);
     objc_release(ovr);
-    testassert(SubReleases == 1);
+    testassertequal(SubReleases, 1);
     objc_autorelease(ovr);
-    testassert(SubAutoreleases == 1);
+    testassertequal(SubAutoreleases, 1);
 
     objc_retain(ocl);
-    testassert(SubPlusRetains == 1);
+    testassertequal(SubPlusRetains, 1);
     objc_release(ocl);
-    testassert(SubPlusReleases == 1);
+    testassertequal(SubPlusReleases, 1);
     objc_autorelease(ocl);
-    testassert(SubPlusAutoreleases == 1);
+    testassertequal(SubPlusAutoreleases, 1);
 
 #if SUPPORT_NONPOINTER_ISA
     objc_retain((Class)&OBJC_CLASS_$_UnrealizedSubC1);
-    testassert(PlusRetains == 1);
+    testassertequal(PlusRetains, 1);
     objc_release((Class)&OBJC_CLASS_$_UnrealizedSubC2);
-    testassert(PlusReleases == 1);
+    testassertequal(PlusReleases, 1);
     objc_autorelease((Class)&OBJC_CLASS_$_UnrealizedSubC3);
-    testassert(PlusAutoreleases == 1);
+    testassertequal(PlusAutoreleases, 1);
 #else
     objc_retain((Class)&OBJC_CLASS_$_UnrealizedSubC1);
-    testassert(PlusRetains == 3);
+    testassertequal(PlusRetains, 3);
     objc_release((Class)&OBJC_CLASS_$_UnrealizedSubC2);
-    testassert(PlusReleases == 3);
+    testassertequal(PlusReleases, 3);
     objc_autorelease((Class)&OBJC_CLASS_$_UnrealizedSubC3);
-    testassert(PlusAutoreleases == 3);
+    testassertequal(PlusAutoreleases, 3);
 #endif
 
     testprintf("unrelated addMethod does not clobber\n");
@@ -442,31 +444,31 @@ int main(int argc __unused, char **argv)
     class_addMethod(cls, @selector(unrelatedMethod), (IMP)imp_fn, "");
     
     objc_retain(obj);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(obj);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(obj);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
 
     testprintf("add class method does not clobber\n");
     zero();
     
     objc_retain(obj);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(obj);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(obj);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     class_addMethod(object_getClass(cls), @selector(retain), (IMP)imp_fn, "");
     
     objc_retain(obj);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(obj);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(obj);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
 
     testprintf("addMethod clobbers (InheritingSub2, retain)\n");
@@ -478,36 +480,36 @@ int main(int argc __unused, char **argv)
     oo2 = [cc2 new];
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     class_addMethod(ccc, @selector(retain), (IMP)imp_fn, "");
 
     objc_retain(ooo);
-    testassert(Retains == 0);
-    testassert(Imps == 1);
+    testassertequal(Retains, 0);
+    testassertequal(Imps, 1);
     objc_release(ooo);
-    testassert(Releases == 1);
+    testassertequal(Releases, 1);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 1);
+    testassertequal(Autoreleases, 1);
 
     objc_retain(oo2);
-    testassert(Retains == 0);
-    testassert(Imps == 2);
+    testassertequal(Retains, 0);
+    testassertequal(Imps, 2);
     objc_release(oo2);
-    testassert(Releases == 2);
+    testassertequal(Releases, 2);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 2);
+    testassertequal(Autoreleases, 2);
 
 
     testprintf("addMethod clobbers (InheritingSub3, release)\n");
@@ -519,36 +521,36 @@ int main(int argc __unused, char **argv)
     oo2 = [cc2 new];
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
     
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     class_addMethod(ccc, @selector(release), (IMP)imp_fn, "");
 
     objc_retain(ooo);
-    testassert(Retains == 1);
+    testassertequal(Retains, 1);
     objc_release(ooo);
-    testassert(Releases == 0);
-    testassert(Imps == 1);
+    testassertequal(Releases, 0);
+    testassertequal(Imps, 1);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 1);
+    testassertequal(Autoreleases, 1);
 
     objc_retain(oo2);
-    testassert(Retains == 2);
+    testassertequal(Retains, 2);
     objc_release(oo2);
-    testassert(Releases == 0);
-    testassert(Imps == 2);
+    testassertequal(Releases, 0);
+    testassertequal(Imps, 2);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 2);
+    testassertequal(Autoreleases, 2);
 
 
     testprintf("addMethod clobbers (InheritingSub4, autorelease)\n");
@@ -560,36 +562,36 @@ int main(int argc __unused, char **argv)
     oo2 = [cc2 new];
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
     
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     class_addMethod(ccc, @selector(autorelease), (IMP)imp_fn, "");
 
     objc_retain(ooo);
-    testassert(Retains == 1);
+    testassertequal(Retains, 1);
     objc_release(ooo);
-    testassert(Releases == 1);
+    testassertequal(Releases, 1);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
-    testassert(Imps == 1);
+    testassertequal(Autoreleases, 0);
+    testassertequal(Imps, 1);
 
     objc_retain(oo2);
-    testassert(Retains == 2);
+    testassertequal(Retains, 2);
     objc_release(oo2);
-    testassert(Releases == 2);
+    testassertequal(Releases, 2);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
-    testassert(Imps == 2);
+    testassertequal(Autoreleases, 0);
+    testassertequal(Imps, 2);
 
 
     testprintf("addMethod clobbers (InheritingSub5, retainCount)\n");
@@ -601,35 +603,35 @@ int main(int argc __unused, char **argv)
     oo2 = [cc2 new];
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     class_addMethod(ccc, @selector(retainCount), (IMP)imp_fn, "");
 
     objc_retain(ooo);
-    testassert(Retains == 1);
+    testassertequal(Retains, 1);
     objc_release(ooo);
-    testassert(Releases == 1);
+    testassertequal(Releases, 1);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 1);
+    testassertequal(Autoreleases, 1);
     // no bypassing call for -retainCount
 
     objc_retain(oo2);
-    testassert(Retains == 2);
+    testassertequal(Retains, 2);
     objc_release(oo2);
-    testassert(Releases == 2);
+    testassertequal(Releases, 2);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 2);
+    testassertequal(Autoreleases, 2);
     // no bypassing call for -retainCount
 
 
@@ -642,34 +644,34 @@ int main(int argc __unused, char **argv)
     oo2 = [cc2 new];
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     class_setSuperclass(ccc, [InheritingSub class]);
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
     
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
 
     testprintf("setSuperclass to dirty super clobbers (InheritingSub7)\n");
@@ -681,34 +683,34 @@ int main(int argc __unused, char **argv)
     oo2 = [cc2 new];
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
     
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     class_setSuperclass(ccc, [OverridingSub class]);
 
     objc_retain(ooo);
-    testassert(SubRetains == 1);
+    testassertequal(SubRetains, 1);
     objc_release(ooo);
-    testassert(SubReleases == 1);
+    testassertequal(SubReleases, 1);
     objc_autorelease(ooo);
-    testassert(SubAutoreleases == 1);
+    testassertequal(SubAutoreleases, 1);
 
     objc_retain(oo2);
-    testassert(SubRetains == 2);
+    testassertequal(SubRetains, 2);
     objc_release(oo2);
-    testassert(SubReleases == 2);
+    testassertequal(SubReleases, 2);
     objc_autorelease(oo2);
-    testassert(SubAutoreleases == 2);
+    testassertequal(SubAutoreleases, 2);
 
 
     testprintf("category replacement of unrelated method does not clobber (InheritingSubCat)\n");
@@ -720,35 +722,35 @@ int main(int argc __unused, char **argv)
     oo2 = [cc2 new];
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     dlh = dlopen("customrr-cat1.bundle", RTLD_LAZY);
     testassert(dlh);
 
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
 
     testprintf("category replacement clobbers (InheritingSubCat)\n");
@@ -760,64 +762,64 @@ int main(int argc __unused, char **argv)
     oo2 = [cc2 new];
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     objc_retain(oo2);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(oo2);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     dlh = dlopen("customrr-cat2.bundle", RTLD_LAZY);
     testassert(dlh);
 
     objc_retain(ooo);
-    testassert(Retains == 1);
+    testassertequal(Retains, 1);
     objc_release(ooo);
-    testassert(Releases == 1);
+    testassertequal(Releases, 1);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 1);
+    testassertequal(Autoreleases, 1);
 
     objc_retain(oo2);
-    testassert(Retains == 2);
+    testassertequal(Retains, 2);
     objc_release(oo2);
-    testassert(Releases == 2);
+    testassertequal(Releases, 2);
     objc_autorelease(oo2);
-    testassert(Autoreleases == 2);
+    testassertequal(Autoreleases, 2);
 
 
     testprintf("allocateClassPair with clean super does not clobber\n");
     zero();
 
     objc_retain(inh);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(inh);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(inh);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     ccc = objc_allocateClassPair([InheritingSub class], "CleanClassPair", 0);
     objc_registerClassPair(ccc);
     ooo = [ccc new];
 
     objc_retain(inh);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(inh);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(inh);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
     
     objc_retain(ooo);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(ooo);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
 
     testprintf("allocateClassPair with clobbered super clobbers\n");
@@ -828,11 +830,11 @@ int main(int argc __unused, char **argv)
     ooo = [ccc new];
     
     objc_retain(ooo);
-    testassert(SubRetains == 1);
+    testassertequal(SubRetains, 1);
     objc_release(ooo);
-    testassert(SubReleases == 1);
+    testassertequal(SubReleases, 1);
     objc_autorelease(ooo);
-    testassert(SubAutoreleases == 1);
+    testassertequal(SubAutoreleases, 1);
 
 
     testprintf("allocateClassPair with clean super and override clobbers\n");
@@ -844,12 +846,12 @@ int main(int argc __unused, char **argv)
     ooo = [ccc new];
     
     objc_retain(ooo);
-    testassert(Retains == 1);
+    testassertequal(Retains, 1);
     objc_release(ooo);
-    testassert(Releases == 1);
+    testassertequal(Releases, 1);
     objc_autorelease(ooo);
-    testassert(Autoreleases == 0);
-    testassert(Imps == 1);
+    testassertequal(Autoreleases, 0);
+    testassertequal(Imps, 1);
 
 
     // method_setImplementation and method_exchangeImplementations only 
@@ -866,18 +868,18 @@ int main(int argc __unused, char **argv)
     zero();
 
     objc_retain(obj);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(obj);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(obj);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     objc_retain(inh);
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
     objc_release(inh);
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
     objc_autorelease(inh);
-    testassert(Autoreleases == 0);
+    testassertequal(Autoreleases, 0);
 
     Method meth = class_getInstanceMethod(cls, @selector(retainCount));
     testassert(meth);
@@ -888,18 +890,18 @@ int main(int argc __unused, char **argv)
 #endif
     
     objc_retain(obj);
-    testassert(Retains == 1);
+    testassertequal(Retains, 1);
     objc_release(obj);
-    testassert(Releases == 1);
+    testassertequal(Releases, 1);
     objc_autorelease(obj);
-    testassert(Autoreleases == 1);
+    testassertequal(Autoreleases, 1);
 
     objc_retain(inh);
-    testassert(Retains == 2);
+    testassertequal(Retains, 2);
     objc_release(inh);
-    testassert(Releases == 2);
+    testassertequal(Releases, 2);
     objc_autorelease(inh);
-    testassert(Autoreleases == 2);
+    testassertequal(Autoreleases, 2);
 
     
     // do not add more tests here - the recursive test must be LAST

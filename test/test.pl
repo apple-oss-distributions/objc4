@@ -465,6 +465,9 @@ sub check_output {
     # because it is distracting.
     filter_malloc(\@output);
 
+    # Also strip esctool output
+    filter_esctool(\@output);
+
     my @original_output = @output;
 
     # Run result-checking passes, reducing @output each time
@@ -475,6 +478,7 @@ sub check_output {
     filter_hax(\@output);
     filter_verbose(\@output);
     filter_simulator(\@output);
+    filter_class_ro_warnings(\@output);
     $warn = filter_warn(\@output);
     $bad |= filter_guardmalloc(\@output) if ($C{GUARDMALLOC});
     $bad |= filter_valgrind(\@output) if ($C{VALGRIND});
@@ -587,6 +591,21 @@ sub filter_simulator
         {
 	    push @new_output, $line;
 	}
+    }
+
+    @$outputref = @new_output;
+}
+
+sub filter_class_ro_warnings
+{
+    my $outputref = shift;
+
+    my @new_output;
+    for my $line (@$outputref) {
+    	if ($line !~ /has un-signed class_ro_t pointers, but the main executable was compiled with class_ro_t pointer signing enabled/)
+        {
+	        push @new_output, $line;
+    	}
     }
 
     @$outputref = @new_output;
@@ -709,6 +728,23 @@ sub filter_guardmalloc
     return $bad;
 }
 
+sub filter_esctool
+{
+    my $outputref = shift;
+    my @new_output;
+    for my $line (@$outputref) {
+        # Ignore esctool output.
+        if ($line =~ /\* esctool info:/) {
+            next;
+        }
+
+        # not esctool output
+        push @new_output, $line;
+    }
+
+    @$outputref = @new_output;
+}
+
 # TEST_SOMETHING
 # text
 # text
@@ -811,26 +847,39 @@ sub gather_simple {
         next if !defined($testvalue);
         # testvalue is the configuration being run now
         # condvalues are the allowed values for this test
-        
-        my $ok = 0;
+
+        my $ands = 1;
+        my $ors = 0;
+        my $hasAnds = 0;
+        my $hasOrs = 0;
         for my $condvalue (@condvalues) {
 
             # special case: objc and objc++
             if ($condkey eq "LANGUAGE") {
                 $condvalue = "objective-c" if $condvalue eq "objc";
                 $condvalue = "objective-c++" if $condvalue eq "objc++";
+                $condvalue = "!objective-c" if $condvalue eq "!objc";
+                $condvalue = "!objective-c++" if $condvalue eq "!objc++";
             }
 
-            $ok = 1  if ($testvalue eq $condvalue);
+            my ($negated) = ($condvalue =~ /!(.*)/);
+            if (defined $negated) {
+                $ands = 0 if ($testvalue eq $negated);
+                $hasAnds = 1;
+            } else {
+                $ors = 1 if ($testvalue eq $condvalue);
+                $hasOrs = 1;
 
-            # special case: CC and CXX allow substring matches
-            if ($condkey eq "CC"  ||  $condkey eq "CXX") {
-                $ok = 1  if ($testvalue =~ /$condvalue/);
+                # special case: CC and CXX allow substring matches
+                if ($condkey eq "CC"  ||  $condkey eq "CXX") {
+                    $ors = 1  if ($testvalue =~ /$condvalue/);
+                }
             }
 
-            last if $ok;
+            last if !$ands;
         }
 
+        my $ok = ($ors || !$hasOrs) && ($ands || !$hasAnds);
         if (!$ok) {
             my $plural = (@condvalues > 1) ? "one of: " : "";
             print "SKIP: $name    ($condkey=$testvalue, but test requires $plural", join(' ', @condvalues), ")\n";
@@ -1396,12 +1445,10 @@ sub make_one_config {
 
     # Populate cflags
 
-    my $cflags = "-I$DIR -W -Wall -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -Os -arch $C{ARCH} ";
+    my $cflags = "-I$DIR -W -Wall -Wno-unknown-warning-option -Wno-objc-load-method -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -Os -arch $C{ARCH} ";
     if (!$BATS) {
-        # save-temps so dsymutil works so debug info works.
-        # Disabled in BATS to save disk space.
-        # rdar://45656803 -save-temps causes bad -Wstdlibcxx-not-found warnings
-        $cflags .= "-g -save-temps -Wno-stdlibcxx-not-found";
+        # Debug info disabled in BATS to save disk space.
+        $cflags .= "-g ";
     }
     my $objcflags = "";
     my $swiftflags = "-g ";
@@ -1469,7 +1516,7 @@ sub make_one_config {
     
     # Populate objcflags
     
-    $objcflags .= " -lobjc";
+    $objcflags .= " -lobjc.A";
     if ($C{MEM} eq "arc") {
         $objcflags .= " -fobjc-arc";
     }

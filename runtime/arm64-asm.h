@@ -138,11 +138,13 @@ LTailCallCachedImpIndirectBranch:
 .macro AuthAndResignAsIMP
 	// $0 = cached imp, $1 = address of cached imp, $2 = SEL, $3 = isa
 	// note: assumes the imp is not nil
-	eor	$1, $1, $2	// mix SEL into ptrauth modifier
-	eor	$1, $1, $3  // mix isa into ptrauth modifier
-	autib	$0, $1	// authenticate cached imp
-	ldr	xzr, [$0]	// crash if authentication failed
-	paciza	$0		// resign cached imp as IMP
+    eor $1, $1, $2          // mix SEL into ptrauth modifier
+    eor $1, $1, $3          // mix isa into ptrauth modifier
+    autib   $0, $1          // authenticate cached imp
+    eor $1, $0, $0, lsl #1  // mix together the two failure bits
+    tbz $1, #62, 0f         // if the result is zero, we authenticated
+    brk #0xc471             // crash if authentication failed
+0:  paciza  $0              // resign cached imp as IMP
 .endmacro
 
 .macro ExtractISA

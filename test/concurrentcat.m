@@ -114,10 +114,10 @@ int main()
     for(i=1; i<16; i++) {
 	pthread_t t;
 	char dlName[100];
-	sprintf(dlName, "cc%d.bundle", i);
+	snprintf(dlName, sizeof(dlName), "cc%d.bundle", i);
 	dylib = dlopen(dlName, RTLD_LAZY);
 	char className[100];
-	sprintf(className, "cc%d", i);
+	snprintf(className, sizeof(className), "cc%d", i);
 	pthread_create(&t, NULL, threadFun, strdup(className));
 	testassert(dylib);
     }

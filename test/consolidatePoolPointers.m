@@ -77,6 +77,8 @@ void test(int objCount, int autoreleaseCount, int expectedGap) {
     // handle pool boundaries.
     for (int i = 0; i < objCount; i++)
         [[objs[i] retain] autorelease];
+    // Flush any stale autorelease TLS entries.
+    objc_autoreleasePoolPop(objc_autoreleasePoolPush());
     for (int i = 0; i < objCount; i++) {
         testassertequal(objs[i]->retains, autoreleaseCount + 1);
         testassertequal(objs[i]->releases, 0);

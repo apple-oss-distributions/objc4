@@ -33,7 +33,7 @@
 #define UNUSED_WITHOUT_PTRAUTH
 #else
 #define UNUSED_WITHOUT_PTRAUTH __unused
-#define __ptrauth(keey, address, discriminator)
+#define __ptrauth(key, address, discriminator)
 #endif
 
 #if __has_feature(ptrauth_calls)
@@ -42,19 +42,19 @@
 
 
 #if __has_feature(ptrauth_calls)
-
-#define ptrauth_trampoline_block_page_group \
-    __ptrauth(ptrauth_key_process_dependent_data, 1, \
-    ptrauth_string_discriminator("TrampolineBlockPageGroup"))
 
 // ptrauth modifier for tagged pointer class tables.
 #define ptrauth_taggedpointer_table_entry \
     __ptrauth(ptrauth_key_process_dependent_data, 1, TAGGED_POINTER_TABLE_ENTRY_DISCRIMINATOR)
 
+#define ptrauth_method_list_types \
+    __ptrauth(ptrauth_key_process_dependent_data, 1, \
+    ptrauth_string_discriminator("method_t::bigSigned::types"))
+
 #else
 
-#define ptrauth_trampoline_block_page_group
 #define ptrauth_taggedpointer_table_entry
+#define ptrauth_method_list_types
 
 #endif
 
@@ -213,10 +213,36 @@ template <typename T> using RawPtr = WrappedPtr<T, PtrauthRaw>;
 // These are used to protect the class_rx_t pointer enforcement flag
 #if __has_feature(ptrauth_calls)
 #define ptrauth_class_rx_enforce \
-    __ptrauth_restricted_intptr(ptrauth_key_process_dependent_data, 0, 0x47f5)
+    __ptrauth_restricted_intptr(ptrauth_key_process_dependent_data, 1, 0x47f5)
 #else
 #define ptrauth_class_rx_enforce
 #endif
+
+// These protect various things in objc-block-trampolines.
+#if __has_feature(ptrauth_calls)
+
+#define ptrauth_trampoline_block_page_group \
+    __ptrauth(ptrauth_key_process_dependent_data, 1, \
+        ptrauth_string_discriminator("TrampolineBlockPageGroup"))
+#define ptrauth_trampoline_textSegment \
+    __ptrauth_restricted_intptr(ptrauth_key_process_dependent_data, 1, \
+        ptrauth_string_discriminator("TrampolinePointerWrapper::TrampolinePointers::textSegment"))
+
+#else
+
+#define ptrauth_trampoline_block_page_group
+#define ptrauth_trampoline_textSegment
+
+#endif
+
+
+// An enum for indicating whether to authenticate or strip. Use it as a template
+// parameter for getters that usually need to authenticate but sometimes strip
+// in very specific circumstances where that's not insecure.
+enum class Authentication {
+    Authenticate,
+    Strip
+};
 
 // _OBJC_PTRAUTH_H_
 #endif

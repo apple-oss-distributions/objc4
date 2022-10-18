@@ -100,7 +100,7 @@ static inline char *hexstring(uint8_t *data, size_t size)
     default:
         str = (char *)malloc(size * 2 + 1);
         for (size_t i = 0; i < size; i++) {
-            sprintf(str + i, "%02x", data[i]);
+            snprintf(str + 2 * i, 3, "%02x", data[i]);
         }
     }
     return str;
@@ -116,6 +116,13 @@ static inline void failnotequal(uint8_t *lhs, size_t lhsSize, uint8_t *rhs, size
     __typeof__(0 ? lhs : rhs) __lhs = lhs; \
     __typeof__(0 ? lhs : rhs) __rhs = rhs; \
     if ((__lhs) != (__rhs)) failnotequal((uint8_t *)&__lhs, sizeof(__lhs), (uint8_t *)&__rhs, sizeof(__rhs), #lhs, #rhs, __FILE__, __LINE__); \
+} while(0)
+
+#define testassertequalstr(lhs, rhs) do { \
+    __typeof__(lhs) __lhs = lhs; \
+    __typeof__(rhs) __rhs = rhs; \
+    if (strcmp(__lhs, __rhs) != 0) \
+        fail("failed assertion %s (\"%s\") != %s (\"%s\") at %s:%u", #lhs, __lhs, #rhs, __rhs, __FILE__, __LINE__); \
 } while(0)
 
 /* time-sensitive assertion, disabled under valgrind */
@@ -308,7 +315,7 @@ static inline void leak_dump_heap(const char *msg)
     pid_t pid = getpid();
     char cmd[256];
     // environment variables reset for iOS simulator use
-    sprintf(cmd, "DYLD_LIBRARY_PATH= DYLD_ROOT_PATH= /usr/bin/heap -addresses all %d", (int)pid);
+    snprintf(cmd, sizeof(cmd), "DYLD_LIBRARY_PATH= DYLD_ROOT_PATH= /usr/bin/heap -addresses all %d", (int)pid);
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"

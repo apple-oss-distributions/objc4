@@ -4,7 +4,7 @@ TEST_CONFIG OS=iphoneos MEM=mrc
 TEST_BUILD
     mkdir -p $T{OBJDIR}
     /usr/sbin/dtrace -h -s $DIR/../runtime/objc-probes.d -o $T{OBJDIR}/objc-probes.h
-    $C{COMPILE} $DIR/preopt-caches.mm -std=gnu++17 -isystem $C{SDK_PATH}/System/Library/Frameworks/System.framework/PrivateHeaders -I$T{OBJDIR} -ldsc -o preopt-caches.exe
+    $C{COMPILE} $DIR/preopt-caches.mm -std=gnu++17 -isystem $C{SDK_PATH}/System/Library/Frameworks/System.framework/PrivateHeaders -I$T{OBJDIR} -I$DIR/../runtime/ -ldsc -o preopt-caches.exe
 END
 */
 //
@@ -17,7 +17,7 @@ END
 #define TEST_CALLS_OPERATOR_NEW
 
 #include "test-defines.h"
-#include "../runtime/objc-private.h"
+#include "objc-private.h"
 #include <objc/objc-internal.h>
 
 #include <dlfcn.h>
@@ -194,7 +194,7 @@ bool check_class(Class cls, unsigned & cacheCount) {
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-of-sel-type"
-        const uint8_t *selOffsetsBase = (const uint8_t*)@selector(🤯);
+        const uint8_t *selOffsetsBase = (const uint8_t*)sel_getUid("🤯");
 #pragma clang diagnostic pop
         for (unsigned i = 0 ; i < capacity ; i++) {
             uint32_t selOffset = buckets[i].sel_offs;

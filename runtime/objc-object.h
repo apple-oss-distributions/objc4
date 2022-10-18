@@ -37,7 +37,7 @@ enum ReturnDisposition : bool {
 };
 
 static ALWAYS_INLINE 
-bool prepareOptimizedReturn(ReturnDisposition disposition);
+bool prepareOptimizedReturn(id obj, bool cameFromRootAutorelease, ReturnDisposition disposition);
 
 
 #if SUPPORT_TAGGED_POINTERS
@@ -363,7 +363,6 @@ objc_object::initIsa(Class cls, bool nonpointer, UNUSED_WITHOUT_INDEXED_ISA_AND_
     // ...but not too atomic because we don't want to hurt instantiation
     isa() = newisa;
 }
-
 
 inline Class 
 objc_object::changeIsa(Class newCls)
@@ -896,7 +895,7 @@ deallocate:
     __c11_atomic_thread_fence(__ATOMIC_ACQUIRE);
 
     if (performDealloc) {
-        ((void(*)(objc_object *, SEL))objc_msgSend)(this, @selector(dealloc));
+        this->performDealloc();
     }
     return true;
 }
@@ -920,7 +919,23 @@ inline id
 objc_object::rootAutorelease()
 {
     if (isTaggedPointer()) return (id)this;
-    if (prepareOptimizedReturn(ReturnAtPlus1)) return (id)this;
+    bool nonpointerIsa = false;
+#if ISA_HAS_INLINE_RC
+    nonpointerIsa = isa().nonpointer;
+
+    // When we can cheaply determine if the object is deallocating, avoid
+    // putting it in the pool. Refcounting doesn't work on a deallocating object
+    // so it's pointless to put it in the pool, and potentially dangerous.
+    if (nonpointerIsa && isa().isDeallocating()) return (id)this;
+#endif
+
+    // If the class has custom dealloc initiation, we also want to avoid putting
+    // deallocating instances in the pool even if it's expensive to check. (UIView
+    // and UIViewController need this. rdar://97186669)
+    if (!nonpointerIsa && ISA()->hasCustomDeallocInitiation() && rootIsDeallocating())
+        return (id)this;
+
+    if (prepareOptimizedReturn((id)this, true, ReturnAtPlus1)) return (id)this;
     if (slowpath(isClass())) return (id)this;
     
     return rootAutorelease2();
@@ -1199,7 +1214,14 @@ inline id
 objc_object::rootAutorelease()
 {
     if (isTaggedPointer()) return (id)this;
-    if (prepareOptimizedReturn(ReturnAtPlus1)) return (id)this;
+
+    // If the class has custom dealloc initiation, we also want to avoid putting
+    // deallocating instances in the pool even if it's expensive to check. (UIView
+    // and UIViewController need this. rdar://97186669)
+    if (ISA()->hasCustomDeallocInitiation() && rootIsDeallocating())
+        return (id)this;
+
+    if (prepareOptimizedReturn((id)this, true, ReturnAtPlus1)) return (id)this;
 
     return rootAutorelease2();
 }
@@ -1398,35 +1420,189 @@ callerAcceptsOptimizedReturn(const void *ra)
 // unknown architecture
 # endif
 
+struct ReturnAutoreleaseInfo {
+    constexpr static int objectShift = 2;
+#if __LP64__
+    constexpr static int objectBits = 64 - objectShift;
+#else
+    constexpr static int objectBits = 32 - objectShift;
+#endif
+    union {
+        struct {
+            uintptr_t returnDisposition: 1;
+            uintptr_t cameFromRootAutorelease: 1;
+            uintptr_t returnedObject: objectBits;
+        };
+        uintptr_t firstWord;
+    };
 
-static ALWAYS_INLINE ReturnDisposition 
-getReturnDisposition()
+    const void *returnAddress;
+
+    ReturnAutoreleaseInfo() :
+    returnDisposition(0), cameFromRootAutorelease(0),
+    returnedObject(0), returnAddress(nullptr) {}
+
+    ReturnAutoreleaseInfo(id obj, bool cameFromRootAutorelease, ReturnDisposition disposition, const void *returnAddress) :
+    returnDisposition(disposition), cameFromRootAutorelease(cameFromRootAutorelease),
+    returnedObject((uintptr_t)obj >> objectShift), returnAddress(returnAddress) {
+        ASSERT(!_objc_isTaggedPointerOrNil(obj));
+        ASSERT(getReturnedObject() == obj);
+    }
+
+    // Indicates that autorelease elision is temporarily disabled.
+    static ReturnAutoreleaseInfo blockedInfo() {
+        ReturnAutoreleaseInfo info;
+        info.firstWord = ~(uintptr_t)0;
+        return info;
+    }
+
+#if !HAS_RETURNADDR_AUTORELEASE_ELISION
+    ReturnAutoreleaseInfo(ReturnDisposition disposition)
+    : returnDisposition(disposition), returnAddress(nullptr) {}
+#endif
+
+    id getReturnedObject() const {
+        return (id)(returnedObject << objectShift);
+    }
+
+    ReturnDisposition getReturnDisposition() const {
+        return ReturnDisposition(returnDisposition);
+    }
+
+    const void *getReturnAddress() const {
+        return returnAddress;
+    }
+
+    bool isEmpty() const {
+        return isBlocked() || (returnedObject == 0 && returnAddress == nullptr);
+    }
+
+    bool isBlocked() const {
+        return firstWord == ~(uintptr_t)0;
+    }
+
+    struct TlsDealloc {
+        void operator()(uintptr_t firstWord);
+    };
+
+    // The actual TLS storage
+    static tls_direct(uintptr_t, tls_key::return_autorelease_object, TlsDealloc) tlsFirstWord;
+    static tls_direct(const void *, tls_key::return_autorelease_address) tlsReturnAddress;
+};
+
+static ALWAYS_INLINE ReturnAutoreleaseInfo
+getReturnAutoreleaseInfo()
 {
-    return (ReturnDisposition)(uintptr_t)tls_get_direct(RETURN_DISPOSITION_KEY);
+    ReturnAutoreleaseInfo info;
+    info.firstWord = ReturnAutoreleaseInfo::tlsFirstWord;
+    info.returnAddress = ReturnAutoreleaseInfo::tlsReturnAddress;
+    return info;
 }
 
 
 static ALWAYS_INLINE void 
-setReturnDisposition(ReturnDisposition disposition)
+setReturnAutoreleaseInfo(ReturnAutoreleaseInfo info)
 {
-    tls_set_direct(RETURN_DISPOSITION_KEY, (void*)(uintptr_t)disposition);
+    ReturnAutoreleaseInfo::tlsFirstWord = info.firstWord;
+    ReturnAutoreleaseInfo::tlsReturnAddress = info.returnAddress;
 }
 
+// If there's an object in the return autorelease TLS, move it into the current
+// autorelease pool.
+void moveTLSAutoreleaseToPool(ReturnAutoreleaseInfo info);
+
+// Get the return address in the client code. In release builds, this just uses
+// __builtin_return_address(0). In debug builds, it will dig a few levels down
+// looking for an address outside libobjc, to see through non-inlined non-tail
+// calls. This is ugly and slow but debug builds are slow anyway, and this
+// keeps autorelease elision consistent between the two.
+static ALWAYS_INLINE void *
+clientReturnAddress(void) {
+#if DEBUG
+    const struct mach_header *libobjcHeader = dyld_image_header_containing_address((void *)objc_retain);
+
+    // Ignore warnings about non-zero arguments to __builtin_return_address. We
+    // will only use it on libobjc frames, which should be safe, and we only do
+    // this in debug builds anyway.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wframe-address"
+    void *prev = nullptr;
+#define FRAME(n) do { \
+    void *candidate = __builtin_return_address(n); \
+    if (!candidate) return prev; \
+    if (dyld_image_header_containing_address(candidate) != libobjcHeader) \
+        return candidate; \
+    prev = candidate; \
+} while(0)
+    // Six levels deep is enough to see through all the intervening stack frames
+    // we currently have.
+    FRAME(0);
+    FRAME(1);
+    FRAME(2);
+    FRAME(3);
+    FRAME(4);
+    FRAME(5);
+#undef FRAME
+    // We didn't find anything outside of libobjc, return the last thing we
+    // checked so we at least have something.
+    return prev;
+#pragma clang diagnostic pop
+#else
+    return __builtin_return_address(0);
+#endif
+}
 
 // Try to prepare for optimized return with the given disposition (+0 or +1).
 // Returns true if the optimized path is successful.
 // Otherwise the return value must be retained and/or autoreleased as usual.
 static ALWAYS_INLINE bool 
-prepareOptimizedReturn(ReturnDisposition disposition)
+prepareOptimizedReturn(id obj, bool cameFromRootAutorelease, ReturnDisposition disposition)
 {
-    ASSERT(getReturnDisposition() == ReturnAtPlus0);
+#if HAS_RETURNADDR_AUTORELEASE_ELISION
+    ReturnAutoreleaseInfo info = getReturnAutoreleaseInfo();
 
-    if (callerAcceptsOptimizedReturn(__builtin_return_address(0))) {
-        if (disposition) setReturnDisposition(disposition);
+    // If we're blocking elision, return right away.
+    if (info.isBlocked())
+        return false;
+
+    // Move a leftover TLS entry, if any, to the actual autorelease pool.
+    moveTLSAutoreleaseToPool(info);
+
+    if (_objc_isTaggedPointerOrNil(obj)) {
+        setReturnAutoreleaseInfo({});
+        return true;
+    }
+
+    // If the object's class isn't initialized, make that happen now.
+    // Initializing later can cause +initialize to run in unexpected lock
+    // contexts. rdar://88956559
+    if (slowpath(!obj->ISA()->isInitialized())) {
+        class_initialize(obj->ISA(true /*authenticated*/), obj);
+    }
+
+    // If the object has custom RR overrides and this is an explicit return
+    // optimization call, then check the caller's code, since we want to send a
+    // real autorelease message if the caller isn't going to claim. If the
+    // caller claims without a NOP then we'll still optimize the return in the
+    // autorelease call.
+    if (!cameFromRootAutorelease && obj->ISA()->hasCustomRR())
+        if (!callerAcceptsOptimizedReturn(clientReturnAddress()))
+            return false;
+
+
+    setReturnAutoreleaseInfo({obj, cameFromRootAutorelease, disposition, clientReturnAddress()});
+    return true;
+#else
+    ASSERT(getReturnAutoreleaseInfo().getReturnDisposition() == ReturnAtPlus0);
+
+    if (callerAcceptsOptimizedReturn(clientReturnAddress())) {
+        if (disposition)
+            setReturnAutoreleaseInfo({disposition});
         return true;
     }
 
     return false;
+#endif
 }
 
 
@@ -1434,11 +1610,50 @@ prepareOptimizedReturn(ReturnDisposition disposition)
 // Returns the disposition of the returned object (+0 or +1).
 // An un-optimized return is +0.
 static ALWAYS_INLINE ReturnDisposition 
-acceptOptimizedReturn()
+acceptOptimizedReturn(bool expectsNOP)
 {
-    ReturnDisposition disposition = getReturnDisposition();
-    setReturnDisposition(ReturnAtPlus0);  // reset to the unoptimized state
-    return disposition;
+#if HAS_RETURNADDR_AUTORELEASE_ELISION
+#   if __arm64__
+    // Expected deltas are 1 instruction with no NOP, 2 instructions with a NOP.
+    const uintptr_t expectedDeltaWithNOP = 8;
+    const uintptr_t expectedDeltaNoNOP = 4;
+#   else
+#       error Unsupported architecture for return-address autorelease elision.
+#   endif
+    ReturnAutoreleaseInfo info = getReturnAutoreleaseInfo();
+    if (info.isEmpty())
+        return ReturnAtPlus0;
+
+    setReturnAutoreleaseInfo({});  // reset to the unoptimized state
+
+    uintptr_t previousReturnAddress = (uintptr_t)info.getReturnAddress();
+    uintptr_t currentReturnAddress = (uintptr_t)clientReturnAddress();
+
+    uintptr_t delta = currentReturnAddress - previousReturnAddress;
+
+    uintptr_t expectedDelta = expectsNOP ? expectedDeltaWithNOP : expectedDeltaNoNOP;
+
+    if (delta == expectedDelta)
+        return info.getReturnDisposition();
+
+    // If the delta is wrong, we may be in a situation like call, nop, add, claim.
+    // Check the caller's code for the NOP as a fallback.
+    if (expectsNOP) {
+        if (callerAcceptsOptimizedReturn(info.getReturnAddress()))
+            return info.getReturnDisposition();
+    }
+
+    // Handoff failed. If we're at +1, we need to move the value out of TLS and
+    // into the main pool.
+    if (info.getReturnDisposition() == ReturnAtPlus1)
+        moveTLSAutoreleaseToPool(info);
+
+    return ReturnAtPlus0;
+#else
+    ReturnAutoreleaseInfo info = getReturnAutoreleaseInfo();
+    setReturnAutoreleaseInfo({});
+    return info.getReturnDisposition();
+#endif
 }
 
 
@@ -1448,14 +1663,14 @@ acceptOptimizedReturn()
 
 
 static ALWAYS_INLINE bool
-prepareOptimizedReturn(ReturnDisposition disposition __unused)
+prepareOptimizedReturn(id obj __unused, bool cameFromRootAutorelease __unused, ReturnDisposition disposition __unused)
 {
     return false;
 }
 
 
 static ALWAYS_INLINE ReturnDisposition 
-acceptOptimizedReturn()
+acceptOptimizedReturn(bool expectsNOP __unused)
 {
     return ReturnAtPlus0;
 }

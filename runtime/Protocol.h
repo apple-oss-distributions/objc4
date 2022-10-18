@@ -34,7 +34,7 @@
 #include <objc/runtime.h>
 
 
-#elif __OBJC2__
+#else
 
 #include <objc/NSObject.h>
 

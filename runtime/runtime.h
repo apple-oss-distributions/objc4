@@ -32,7 +32,7 @@
 #include <TargetConditionals.h>
 
 #if TARGET_OS_MAC
-#include <sys/types.h>
+#include <stdlib.h>
 #endif
 
 
@@ -259,13 +259,8 @@ object_getInstanceVariable(id _Nullable obj, const char * _Nonnull name,
  * @return The Class object for the named class, or \c nil
  *  if the class is not registered with the Objective-C runtime.
  * 
- * @note \c objc_getClass is different from \c objc_lookUpClass in that if the class
- *  is not registered, \c objc_getClass calls the class handler callback and then checks
- *  a second time to see whether the class is registered. \c objc_lookUpClass does 
- *  not call the class handler callback.
- * 
- * @warning Earlier implementations of this function (prior to OS X v10.0)
- *  terminate the program if the class does not exist.
+ * @note The implementation of \c objc_getClass is identical to the implementation
+ *  of \c objc_lookUpClass.
  */
 OBJC_EXPORT Class _Nullable
 objc_getClass(const char * _Nonnull name)
@@ -296,9 +291,8 @@ objc_getMetaClass(const char * _Nonnull name)
  * @return The Class object for the named class, or \c nil if the class
  *  is not registered with the Objective-C runtime.
  * 
- * @note \c objc_getClass is different from this function in that if the class is not
- *  registered, \c objc_getClass calls the class handler callback and then checks a second
- *  time to see whether the class is registered. This function does not call the class handler callback.
+ * @note The implementation of \c objc_lookUpClass is identical to the implementation
+ *  of \c objc_getClass.
  */
 OBJC_EXPORT Class _Nullable
 objc_lookUpClass(const char * _Nonnull name)
@@ -312,7 +306,6 @@ objc_lookUpClass(const char * _Nonnull name)
  * @return The Class object for the named class.
  * 
  * @note This function is the same as \c objc_getClass, but kills the process if the class is not found.
- * @note This function is used by ZeroLink, where failing to find a class would be a compile-time link error without ZeroLink.
  */
 OBJC_EXPORT Class _Nonnull
 objc_getRequiredClass(const char * _Nonnull name)
@@ -355,6 +348,32 @@ OBJC_EXPORT Class _Nonnull * _Nullable
 objc_copyClassList(unsigned int * _Nullable outCount)
     OBJC_AVAILABLE(10.7, 3.1, 9.0, 1.0, 2.0);
 
+/**
+ * Enumerates classes, filtering by image, name, protocol conformance and superclass.
+ *
+ * @param image The image to search.  Can be NULL (search the caller's image),
+ *              OBJC_DYNAMIC_CLASSES (search dynamically registered classes),
+ *              a handle returned by dlopen(3), or the Mach header of an image
+ *              loaded into the current process.
+ * @param namePrefix If non-NULL, a required prefix for the class name.
+ * @param conformingTo If non-NULL, a protocol to which the enumerated classes
+ *                     must conform.
+ * @param subclassing If non-NULL, a class which the enumerated classes must
+ *                    subclass.
+ * @param block A block that is called for each matching class.  Can abort
+ *              enumeration by setting *stop to YES.
+ *
+ */
+#define OBJC_DYNAMIC_CLASSES ((const void *)-1)
+OBJC_EXPORT void
+objc_enumerateClasses(const void * _Nullable image,
+                      const char * _Nullable namePrefix,
+                      Protocol * _Nullable conformingTo,
+                      Class _Nullable subclassing,
+                      void (^ _Nonnull block)(Class _Nonnull aClass, BOOL * _Nonnull stop)
+                      OBJC_NOESCAPE)
+    OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0)
+    OBJC_REFINED_FOR_SWIFT;
 
 /* Working with Classes */
 
@@ -411,9 +430,7 @@ class_setSuperclass(Class _Nonnull cls, Class _Nonnull newSuper)
     __IOS_DEPRECATED(2.0, 2.0, "not recommended")
     __TVOS_DEPRECATED(9.0, 9.0, "not recommended")
     __WATCHOS_DEPRECATED(1.0, 1.0, "not recommended")
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_DEPRECATED(2.0, 2.0, "not recommended")
-#endif
 ;
 
 /** 
@@ -1047,7 +1064,7 @@ method_getDescription(Method _Nonnull m)
  * Sets the implementation of a method.
  * 
  * @param m The method for which to set an implementation.
- * @param imp The implemention to set to this method.
+ * @param imp The implementation to set to this method.
  * 
  * @return The previous implementation of the method.
  */
@@ -1540,6 +1557,7 @@ OBJC_EXPORT void
 objc_setForwardHandler(void * _Nonnull fwd, void * _Nonnull fwd_stret) 
     OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
 
+
 /** 
  * Creates a pointer to a function that will call the block
  * when the method is called.
@@ -1581,6 +1599,7 @@ imp_getBlock(IMP _Nonnull anImp)
 OBJC_EXPORT BOOL
 imp_removeBlock(IMP _Nonnull anImp)
     OBJC_AVAILABLE(10.7, 4.3, 9.0, 1.0, 2.0);
+
 
 /** 
  * This loads the object referenced by a weak pointer and returns it, after
@@ -1879,15 +1898,14 @@ struct objc_method_list;
 
 /* Obsolete functions */
 
+
 OBJC_EXPORT IMP _Nullable
 class_lookupMethod(Class _Nullable cls, SEL _Nonnull sel) 
     __OSX_DEPRECATED(10.0, 10.5, "use class_getMethodImplementation instead")
     __IOS_DEPRECATED(2.0, 2.0, "use class_getMethodImplementation instead")
     __TVOS_DEPRECATED(9.0, 9.0, "use class_getMethodImplementation instead")
     __WATCHOS_DEPRECATED(1.0, 1.0, "use class_getMethodImplementation instead")
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_DEPRECATED(2.0, 2.0, "use class_getMethodImplementation instead")
-#endif
 ;
 OBJC_EXPORT BOOL
 class_respondsToMethod(Class _Nullable cls, SEL _Nonnull sel)
@@ -1895,9 +1913,7 @@ class_respondsToMethod(Class _Nullable cls, SEL _Nonnull sel)
     __IOS_DEPRECATED(2.0, 2.0, "use class_respondsToSelector instead")
     __TVOS_DEPRECATED(9.0, 9.0, "use class_respondsToSelector instead")
     __WATCHOS_DEPRECATED(1.0, 1.0, "use class_respondsToSelector instead")
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_DEPRECATED(2.0, 2.0, "use class_respondsToSelector instead")
-#endif
 ;
 
 OBJC_EXPORT void
@@ -1906,9 +1922,7 @@ _objc_flush_caches(Class _Nullable cls)
     __IOS_DEPRECATED(2.0, 2.0, "not recommended")
     __TVOS_DEPRECATED(9.0, 9.0, "not recommended")
     __WATCHOS_DEPRECATED(1.0, 1.0, "not recommended")
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_DEPRECATED(2.0, 2.0, "not recommended")
-#endif
 ;
 
 OBJC_EXPORT id _Nullable
@@ -1919,5 +1933,6 @@ OBJC_EXPORT id _Nullable
 class_createInstanceFromZone(Class _Nullable, size_t idxIvars,
                              void * _Nullable z)
     OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(10.0, 10.5, "use class_createInstance instead");
+
 
 #endif

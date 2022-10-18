@@ -41,7 +41,7 @@ int main()
 {
     for (int n = 0; n < 128; ++n) {
         char name[32];
-        sprintf(name, "PtrAuthTest%d", n);
+        snprintf(name, sizeof(name), "PtrAuthTest%d", n);
 
         Class testClass = objc_allocateClassPair([ParentClass class], name, 0);
 

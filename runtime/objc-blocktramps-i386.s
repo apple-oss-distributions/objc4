@@ -23,8 +23,8 @@
 
 #ifdef __i386__
 
-#include <mach/vm_param.h>
-	
+#include "objc-vm.h"
+
 .text
 .globl __objc_blockTrampolineImpl
 .globl __objc_blockTrampolineStart

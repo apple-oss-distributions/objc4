@@ -24,8 +24,6 @@
 #ifndef _OBJC_FILE_NEW_H
 #define _OBJC_FILE_NEW_H
 
-#if __OBJC2__
-
 #include "objc-runtime-new.h"
 
 // classref_t is not fixed up at launch; use remapClass() to convert
@@ -38,6 +36,7 @@ extern message_ref_t *_getObjc2MessageRefs(const header_info *hi, size_t *count)
 extern Class*_getObjc2ClassRefs(const header_info *hi, size_t *count);
 extern Class*_getObjc2SuperRefs(const header_info *hi, size_t *count);
 extern classref_t const *_getObjc2ClassList(const header_info *hi, size_t *count);
+extern classref_t const *_getObjc2ClassList(const headerType *mhdr, size_t *count);
 extern stub_class_t * const *_getObjc2StubList(const header_info *hi, size_t *count);
 // Use hi->nlclslist() instead
 // extern classref_t const *_getObjc2NonlazyClassList(const header_info *hi, size_t *count);
@@ -107,7 +106,5 @@ foreach_data_segment(const headerType *mhdr,
         seg = (const segmentType *)((char *)seg + seg->cmdsize);
     }
 }
-
-#endif
 
 #endif

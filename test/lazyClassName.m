@@ -35,7 +35,7 @@ struct ObjCClass_ro {
         const uint8_t * ivarLayout;
         struct ObjCClass * nonMetaClass;
     };
-    
+
     const char * name;
     struct ObjCMethodList * __ptrauth_objc_method_list_pointer baseMethodList;
     struct protocol_list_t * baseProtocols;
@@ -130,7 +130,11 @@ int main() {
     objc_setHook_lazyClassNamer(ClassNamer, &OrigNamer);
     objc_setHook_lazyClassNamer(ClassNamer2, &OrigNamer2);
 #pragma clang diagnostic pop
-  
+
     printf("%s\n", class_getName([(__bridge id)&LazyClassName class]));
     printf("%s\n", class_getName([(__bridge id)&LazyClassName2 class]));
+    testassertequal((__bridge void *)[(__bridge id)&LazyClassName class],
+                    (__bridge void *)objc_getClass(class_getName([(__bridge id)&LazyClassName class])));
+    testassertequal((__bridge void *)[(__bridge id)&LazyClassName2 class],
+                    (__bridge void *)objc_getClass(class_getName([(__bridge id)&LazyClassName2 class])));
 }

@@ -2,19 +2,13 @@
 // TEST_ENV XPC_SERVICES_UNAVAILABLE=1
 /*
 TEST_BUILD
+    $C{COMPILE}   $DIR/unload5.m -o libunload5.dylib -dynamiclib -install_name /usr/lib/libz.1.dylib
     $C{COMPILE}   $DIR/unload4.m -o unload4.dylib -dynamiclib
     $C{COMPILE_C} $DIR/unload3.c -o unload3.dylib -dynamiclib
-    $C{COMPILE}   $DIR/unload2.m -o unload2.bundle -bundle $C{FORCE_LOAD_ARCLITE} -Xlinker -undefined -Xlinker dynamic_lookup
+    $C{COMPILE}   $DIR/unload2.m -o unload2.bundle -bundle $C{FORCE_LOAD_ARCLITE} -L. -lunload5
     $C{COMPILE}   $DIR/unload.m -o unload.exe -framework Foundation
 END
 */
-
-/*
-TEST_BUILD_OUTPUT
-ld: warning: -undefined dynamic_lookup is deprecated on .*
-OR
-END
- */
 
 #include "test.h"
 #include <objc/runtime.h>
@@ -91,14 +85,14 @@ void cycle(void)
     // give BigClass and BigClass->isa large method caches (4692641)
     // Flush caches part way through to test large empty caches.
     for (i = 0; i < 3000; i++) {
-        sprintf(buf, "method_%d", i);
+        snprintf(buf, sizeof(buf), "method_%d", i);
         SEL sel = sel_registerName(buf);
         ((void(*)(id, SEL))objc_msgSend)(o2, sel);
         ((void(*)(id, SEL))objc_msgSend)(object_getClass(o2), sel);
     }
     _objc_flush_caches(object_getClass(o2));
     for (i = 0; i < 17000; i++) {
-        sprintf(buf, "method_%d", i);
+        snprintf(buf, sizeof(buf), "method_%d", i);
         SEL sel = sel_registerName(buf);
         ((void(*)(id, SEL))objc_msgSend)(o2, sel);
         ((void(*)(id, SEL))objc_msgSend)(object_getClass(o2), sel);

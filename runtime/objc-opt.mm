@@ -34,6 +34,26 @@
 #if !SUPPORT_PREOPT
 // Preoptimization not supported on this platform.
 
+const classref_t *header_info::nlclslist(size_t *outCount) const
+{
+    return _getObjc2NonlazyClassList(mhdr(), outCount);
+}
+
+category_t * const *header_info::nlcatlist(size_t *outCount) const
+{
+    return _getObjc2NonlazyCategoryList(mhdr(), outCount);
+}
+
+category_t * const *header_info::catlist(size_t *outCount) const
+{
+    return _getObjc2CategoryList(mhdr(), outCount);
+}
+
+category_t * const *header_info::catlist2(size_t *outCount) const
+{
+    return _getObjc2CategoryList2(mhdr(), outCount);
+}
+
 bool isPreoptimized(void) 
 {
     return false;
@@ -251,7 +271,6 @@ bool header_info::hasPreoptimizedSectionLookups() const
 
 const classref_t *header_info::nlclslist(size_t *outCount) const
 {
-#if __OBJC2__
     // This field is new, so temporarily be resilient to the shared cache
     // not generating it
     if (isPreoptimized() && hasPreoptimizedSectionLookups()) {
@@ -264,14 +283,10 @@ const classref_t *header_info::nlclslist(size_t *outCount) const
           return list;
     }
     return _getObjc2NonlazyClassList(mhdr(), outCount);
-#else
-    return NULL;
-#endif
 }
 
 category_t * const *header_info::nlcatlist(size_t *outCount) const
 {
-#if __OBJC2__
     // This field is new, so temporarily be resilient to the shared cache
     // not generating it
     if (isPreoptimized() && hasPreoptimizedSectionLookups()) {
@@ -284,14 +299,10 @@ category_t * const *header_info::nlcatlist(size_t *outCount) const
         return list;
     }
     return _getObjc2NonlazyCategoryList(mhdr(), outCount);
-#else
-    return NULL;
-#endif
 }
 
 category_t * const *header_info::catlist(size_t *outCount) const
 {
-#if __OBJC2__
     // This field is new, so temporarily be resilient to the shared cache
     // not generating it
     if (isPreoptimized() && hasPreoptimizedSectionLookups()) {
@@ -304,14 +315,10 @@ category_t * const *header_info::catlist(size_t *outCount) const
       return list;
     }
     return _getObjc2CategoryList(mhdr(), outCount);
-#else
-    return NULL;
-#endif
 }
 
 category_t * const *header_info::catlist2(size_t *outCount) const
 {
-#if __OBJC2__
     // This field is new, so temporarily be resilient to the shared cache
     // not generating it
     if (isPreoptimized() && hasPreoptimizedSectionLookups()) {
@@ -324,9 +331,6 @@ category_t * const *header_info::catlist2(size_t *outCount) const
       return list;
     }
     return _getObjc2CategoryList2(mhdr(), outCount);
-#else
-    return NULL;
-#endif
 }
 
 
@@ -443,11 +447,6 @@ Class getPreoptimizedClassesWithMetaClass(Class metacls)
 
 header_info *preoptimizedHinfoForHeader(const headerType *mhdr)
 {
-#if !__OBJC2__
-    // fixme old ABI shared cache doesn't prepare these properly
-    return nil;
-#endif
-
     objc_headeropt_ro_t *hinfos = opt ? opt->headeropt_ro() : nil;
     if (hinfos) return hinfos->get(mhdr);
     else return nil;
@@ -456,11 +455,6 @@ header_info *preoptimizedHinfoForHeader(const headerType *mhdr)
 
 header_info_rw *getPreoptimizedHeaderRW(const struct header_info *const hdr)
 {
-#if !__OBJC2__
-    // fixme old ABI shared cache doesn't prepare these properly
-    return nil;
-#endif
-    
     objc_headeropt_ro_t *hinfoRO = opt ? opt->headeropt_ro() : nil;
     objc_headeropt_rw_t *hinfoRW = opt ? opt->headeropt_rw() : nil;
     if (!hinfoRO || !hinfoRW) {

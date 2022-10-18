@@ -33,8 +33,12 @@
 * Imports.
 **********************************************************************/
 
+#include <TargetConditionals.h>
+
 #include <os/feature_private.h> // os_feature_enabled_simple()
 #include <os/variant_private.h> // os_variant_allows_internal_security_policies()
+
+#include "llvm-MathExtras.h"
 #include "objc-private.h"
 #include "objc-loadmethod.h"
 #include "objc-file.h"
@@ -48,8 +52,6 @@
 
 // NSObject was in Foundation/CF on macOS < 10.8.
 #if TARGET_OS_OSX
-#if __OBJC2__
-
 const char __objc_nsobject_class_10_5 = 0;
 const char __objc_nsobject_class_10_6 = 0;
 const char __objc_nsobject_class_10_7 = 0;
@@ -61,14 +63,6 @@ const char __objc_nsobject_metaclass_10_7 = 0;
 const char __objc_nsobject_isa_10_5 = 0;
 const char __objc_nsobject_isa_10_6 = 0;
 const char __objc_nsobject_isa_10_7 = 0;
-
-#else
-
-const char __objc_nsobject_class_10_5 = 0;
-const char __objc_nsobject_class_10_6 = 0;
-const char __objc_nsobject_class_10_7 = 0;
-
-#endif
 #endif
 
 // Settings from environment variables
@@ -99,12 +93,8 @@ namespace objc {
     int PageCountWarning = 50;  // Default value if the environment variable is not set
 }
 
-// objc's key for pthread_getspecific
-#if SUPPORT_DIRECT_THREAD_KEYS
-#define _objc_pthread_key TLS_DIRECT_KEY
-#else
-static tls_key_t _objc_pthread_key;
-#endif
+// objc's TLS
+static tls_autoptr_direct(_objc_pthread_data, tls_key::main) _objc_tls;
 
 // Selectors
 SEL SEL_cxx_construct = NULL;
@@ -144,10 +134,7 @@ void _objc_isDebugBuild(void) { }
 
 
 /***********************************************************************
-* objc_getClass.  Return the id of the named class.  If the class does
-* not exist, call _objc_classLoader and then objc_classHandler, either of 
-* which may create a new class.
-* Warning: doesn't work if aClassName is the name of a posed-for class's isa!
+* objc_getClass.  Return the id of the named class.
 **********************************************************************/
 Class objc_getClass(const char *aClassName)
 {
@@ -174,8 +161,6 @@ Class objc_getRequiredClass(const char *aClassName)
 
 /***********************************************************************
 * objc_lookUpClass.  Return the id of the named class.
-* If the class does not exist, call _objc_classLoader, which may create 
-* a new class.
 *
 * Formerly objc_getClassWithoutWarning ()
 **********************************************************************/
@@ -251,7 +236,7 @@ objc::SafeRanges::add(uintptr_t start, uintptr_t end)
         // - size <= 64:  grow by  8
         // - size <= 128: grow by 16
         // ... etc
-        size += size < 16 ? 4 : 1 << (fls(size) - 3);
+        size += size < 16 ? 4 : 1 << (Log2_32(size) - 2);
         ranges = (Range *)realloc(ranges, sizeof(Range) * size);
     }
     ranges[count++] = Range{ start, end };
@@ -297,14 +282,12 @@ void appendHeader(header_info *hi)
         LastHeader = hi;
     }
 
-#if __OBJC2__
     if ((hi->mhdr()->flags & MH_DYLIB_IN_CACHE) == 0) {
         foreach_data_segment(hi->mhdr(), [](const segmentType *seg, intptr_t slide) {
             uintptr_t start = (uintptr_t)seg->vmaddr + slide;
             objc::dataSegmentsRanges.add(start, start + seg->vmsize);
         });
     }
-#endif
 }
 
 
@@ -339,14 +322,12 @@ void removeHeader(header_info *hi)
         prev = current;
     }
 
-#if __OBJC2__
     if ((hi->mhdr()->flags & MH_DYLIB_IN_CACHE) == 0) {
         foreach_data_segment(hi->mhdr(), [](const segmentType *seg, intptr_t slide) {
             uintptr_t start = (uintptr_t)seg->vmaddr + slide;
             objc::dataSegmentsRanges.remove(start, start + seg->vmsize);
         });
     }
-#endif
 }
 
 /***********************************************************************
@@ -507,14 +488,10 @@ logReplacedMethod(const char *className, SEL s,
     // Silently ignore +load replacement because category +load is special
     if (s == @selector(load)) return;
 
-#if TARGET_OS_WIN32
-    // don't know dladdr()/dli_fname equivalent
-#else
     Dl_info dl;
 
     if (dladdr(oldImp, &dl)  &&  dl.dli_fname) oldImage = dl.dli_fname;
     if (dladdr(newImp, &dl)  &&  dl.dli_fname) newImage = dl.dli_fname;
-#endif
     
     _objc_inform("REPLACED: %c[%s %s]  %s%s  (IMP was %p (%s), now %p (%s))",
                  isMeta ? '+' : '-', className, sel_getName(s), 
@@ -531,54 +508,31 @@ logReplacedMethod(const char *className, SEL s,
 **********************************************************************/
 _objc_pthread_data *_objc_fetch_pthread_data(bool create)
 {
-    _objc_pthread_data *data;
-
-    data = (_objc_pthread_data *)tls_get(_objc_pthread_key);
-    if (!data  &&  create) {
-        data = (_objc_pthread_data *)
-            calloc(1, sizeof(_objc_pthread_data));
-        tls_set(_objc_pthread_key, data);
-    }
-
-    return data;
+    return _objc_tls.get(create);
 }
 
 
 /***********************************************************************
-* _objc_pthread_destroyspecific
+* _objc_pthread_data::~_objc_pthread_data()
 * Destructor for objc's per-thread data.
 * arg shouldn't be NULL, but we check anyway.
 **********************************************************************/
 extern void _destroyInitializingClassList(struct _objc_initializing_classes *list);
-void _objc_pthread_destroyspecific(void *arg)
-{
-    _objc_pthread_data *data = (_objc_pthread_data *)arg;
-    if (data != NULL) {
-        _destroyInitializingClassList(data->initializingClasses);
-        _destroySyncCache(data->syncCache);
-        _destroyAltHandlerList(data->handlerList);
-        for (int i = 0; i < (int)countof(data->printableNames); i++) {
-            if (data->printableNames[i]) {
-                free(data->printableNames[i]);  
-            }
+
+_objc_pthread_data::~_objc_pthread_data() {
+    _destroyInitializingClassList(initializingClasses);
+    _destroySyncCache(syncCache);
+    _destroyAltHandlerList(handlerList);
+    for (int i = 0; i < (int)countof(printableNames); i++) {
+        if (printableNames[i]) {
+            free(printableNames[i]);  
         }
-        free(data->classNameLookups);
-
-        // add further cleanup here...
-
-        free(data);
     }
+    free(classNameLookups);
+
+    // add further cleanup here...
 }
 
-
-void tls_init(void)
-{
-#if SUPPORT_DIRECT_THREAD_KEYS
-    pthread_key_init_np(TLS_DIRECT_KEY, &_objc_pthread_destroyspecific);
-#else
-    _objc_pthread_key = tls_create(&_objc_pthread_destroyspecific);
-#endif
-}
 
 
 /***********************************************************************
@@ -596,14 +550,6 @@ void _objcInit(void)
 /***********************************************************************
 * objc_setForwardHandler
 **********************************************************************/
-
-#if !__OBJC2__
-
-// Default forward handler (nil) goes to forward:: dispatch.
-void *_objc_forward_handler = nil;
-void *_objc_forward_stret_handler = nil;
-
-#else
 
 // Default forward handler halts the process.
 __attribute__((noreturn, cold)) void
@@ -626,8 +572,6 @@ objc_defaultForwardStretHandler(id self, SEL sel)
 void *_objc_forward_stret_handler = (void*)objc_defaultForwardStretHandler;
 #endif
 
-#endif
-
 void objc_setForwardHandler(void *fwd, void *fwd_stret)
 {
     _objc_forward_handler = fwd;
@@ -637,16 +581,8 @@ void objc_setForwardHandler(void *fwd, void *fwd_stret)
 }
 
 
-#if !__OBJC2__
-// GrP fixme
-extern "C" Class _objc_getOrigClass(const char *name);
-#endif
-
 static BOOL internal_class_getImageName(Class cls, const char **outName)
 {
-#if !__OBJC2__
-    cls = _objc_getOrigClass(cls->demangledName());
-#endif
     auto result = dyld_image_path_containing_address(cls);
     *outName = result;
     return (result != nil);

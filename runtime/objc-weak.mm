@@ -28,7 +28,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/types.h>
-#include <libkern/OSAtomic.h>
 
 #define TABLE_SIZE(entry) (entry->mask ? entry->mask + 1 : 0)
 
@@ -287,7 +286,7 @@ static void weak_entry_remove(weak_table_t *weak_table, weak_entry_t *entry)
 {
     // remove entry
     if (entry->out_of_line()) free(entry->referrers);
-    bzero(entry, sizeof(*entry));
+    memset(entry, 0, sizeof(*entry));
 
     weak_table->num_entries--;
 

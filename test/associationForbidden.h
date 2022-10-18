@@ -33,7 +33,7 @@ static void test(void);
 int main()
 {
     struct minimal_unrealized_class *localForbidden = &OBJC_CLASS_$_Forbidden;
-    localForbidden->ro->flags |= RO_FORBIDS_ASSOCIATED_OBJECTS;
+    ptrauth_strip(localForbidden->ro, ptrauth_key_process_independent_data)->flags |= RO_FORBIDS_ASSOCIATED_OBJECTS;
     test();
 }
 

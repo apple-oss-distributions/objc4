@@ -34,7 +34,7 @@ extract_defines() {
 }
 
 get_new_lines() {
-    diff --old-line-format= --unchanged-line-format= --new-line-format=%L -b $1 $2 || true
+    diff -u -U 0 $1 $2 | grep -v "^+++" | grep "^+" | cut -c2- || true
 }
 
 run_test() {

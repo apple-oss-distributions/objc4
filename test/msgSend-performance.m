@@ -1,9 +1,18 @@
-// TEST_CONFIG
+// TEST_CONFIG OS=!macosx
 
 #include "test.h"
 #include "testroot.i"
 #include <simd/simd.h>
- 
+
+#if TARGET_OS_OSX
+#include <Cambria/Traps.h>
+#include <Cambria/Cambria.h>
+#endif
+
+#ifndef TEST_NAME
+#define TEST_NAME __FILE__
+#endif
+
 #if defined(__arm__) 
 // rdar://8331406
 #   define ALIGN_() 
@@ -162,8 +171,13 @@ int main()
     CHECK(llret_nop);
     CHECK(stret_nop);
     CHECK(fpret_nop);
-    CHECK(lfpret_nop);
     CHECK(vecret_nop);
+#if TARGET_OS_OSX
+    // lpfret is ~10x slower than other msgSends on Rosetta due to using the
+    // x87 stack for returning the value, so don't test it there.
+    if (!oah_is_current_process_translated())
+#endif
+        CHECK(lfpret_nop);
 
-    succeed(__FILE__);
+    succeed(TEST_NAME);
 }
