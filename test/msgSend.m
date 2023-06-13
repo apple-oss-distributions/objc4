@@ -12,16 +12,19 @@ END
 
 #include "../runtime/objc-config.h"
 
+#if !TARGET_OS_EXCLAVEKIT
+#include <mach-o/loader.h>
 #include <libkern/OSCacheControl.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
+#include <fcntl.h>
+#endif
+
 #include <objc/objc.h>
 #include <objc/runtime.h>
 #include <objc/objc-internal.h>
 #include <objc/objc-abi.h>
 #include <simd/simd.h>
-#include <mach-o/loader.h>
-#include <fcntl.h>
 
 // rdar://21694990 simd.h should have a vector_equal(a, b) function
 static bool vector_equal(vector_ulong2 lhs, vector_ulong2 rhs) {
@@ -75,7 +78,7 @@ vector_ulong2 (*vecmsg0)(id, SEL) __attribute__((unused));
 #define VEC7 ((vector_ulong2){7, 7})
 #define VEC8 ((vector_ulong2){8, 8})
 
-#define CHECK_ARGS(sel) \
+#define CHECK_ARGS(sel)                         \
 do { \
     testassert(self == SELF); \
     testassert(_cmd == sel_registerName(#sel "::::::::::::::::::::::::::::::::::::"));\
@@ -529,7 +532,7 @@ asm("\n .text"
 +(struct stret_##n)stret_##n##_zero             \
 {                                               \
     struct stret_##n ret;                       \
-    bzero(&ret, sizeof(ret));                   \
+    memset(&ret, 0, sizeof(ret));               \
     return ret;                                 \
 }                                               \
 +(struct stret_##n)stret_##n##_nonzero          \
@@ -819,7 +822,10 @@ STRET_IMP(d9)
 
 // DWARF checking machinery
 
-#if TARGET_OS_WATCH
+#if TARGET_OS_EXCLAVEKIT
+// fixme unimplemented - ucontext not passed to signal handlers
+#define NO_DWARF_REASON "(exclaveKit)"
+#elif TARGET_OS_WATCH
 // fixme unimplemented - ucontext not passed to signal handlers
 #define NO_DWARF_REASON "(watchOS)"
 
@@ -842,8 +848,10 @@ STRET_IMP(d9)
 @implementation SubDW @end
 
 #include <dlfcn.h>
+#if !TARGET_OS_EXCLAVEKIT
 #include <signal.h>
 #include <sys/mman.h>
+#endif
 #include <libunwind.h>
 
 bool caught = false;
@@ -2384,7 +2392,7 @@ int main()
 #define TEST_NIL_STRUCT(i,n)                                            \
     do {                                                                \
         struct stret_##i##n z;                                          \
-        bzero(&z, sizeof(z));                                           \
+        memset(&z, 0, sizeof(z));                                       \
         [Super stret_i##n##_nonzero];                                   \
         [Super stret_d##n##_nonzero];                                   \
         struct stret_##i##n val = [(id)NIL_RECEIVER stret_##i##n##_zero]; \

@@ -21,7 +21,7 @@ int main()
     testassert(object_setClass(nil, [TestRoot class]) == nil);
 
     testassert(malloc_size(buf) >= sizeof(id));
-    bzero(buf, malloc_size(buf));
+    memset(buf, 0, malloc_size(buf));
     testassert(object_setClass(obj, [TestRoot class]) == nil);
 
     testassert(object_getClass(obj) == [TestRoot class]);

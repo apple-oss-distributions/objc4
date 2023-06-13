@@ -55,6 +55,9 @@ private:
     uintptr_t storage;
 public:
     UnsignedInitializer(uint32_t offset) {
+#if TARGET_OS_EXCLAVEKIT
+        extern const struct mach_header_64 _mh_dylib_header;
+#endif
         storage = (uintptr_t)&_mh_dylib_header + offset;
     }
 

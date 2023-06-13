@@ -388,12 +388,13 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
 #endif
 
 #if TARGET_OS_OSX
+#   if !TARGET_OS_EXCLAVEKIT
         // Disable +initialize fork safety if the app is too old (< 10.13).
         // Disable +initialize fork safety if the app has a
         //   __DATA,__objc_fork_ok section.
 
         if (!dyld_program_sdk_at_least(dyld_platform_version_macOS_10_13)) {
-            DisableInitializeForkSafety = true;
+            DisableInitializeForkSafety = On;
             if (PrintInitializing) {
                 _objc_inform("INITIALIZE: disabling +initialize fork "
                              "safety enforcement because the app is "
@@ -407,7 +408,7 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
             if (mh->filetype != MH_EXECUTE) continue;
             unsigned long size;
             if (getsectiondata(hi->mhdr(), "__DATA", "__objc_fork_ok", &size)) {
-                DisableInitializeForkSafety = true;
+                DisableInitializeForkSafety = On;
                 if (PrintInitializing) {
                     _objc_inform("INITIALIZE: disabling +initialize fork "
                                  "safety enforcement because the app has "
@@ -416,6 +417,7 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
             }
             break;  // assume only one MH_EXECUTE image
         }
+#   endif // !TARGET_OS_EXCLAVEKIT
 #endif // TARGET_OS_OSX
 
         // Check the main executable for ARM64e-ness. Note, we cannot
@@ -582,6 +584,9 @@ _objc_patch_root_of_class(const struct mach_header *originalMH, void* originalCl
 **********************************************************************/
 static void static_init()
 {
+#if TARGET_OS_EXCLAVEKIT
+    extern const struct mach_header_64 _mh_dylib_header;
+#endif
     size_t count1;
     auto inits = getLibobjcInitializers(&_mh_dylib_header, &count1);
     for (size_t i = 0; i < count1; i++) {
@@ -803,7 +808,9 @@ void _objc_init(void)
     exception_init();
     cache_t::init();
 
+#if !TARGET_OS_EXCLAVEKIT
     _imp_implementationWithBlock_init();
+#endif
 
     _dyld_objc_callbacks_v1 callbacks = {
         1, // version

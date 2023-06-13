@@ -64,7 +64,7 @@ classForIndex(uintptr_t index) {
 
 
 inline bool
-objc_object::isClass()
+objc_object::isClass() const
 {
     if (isTaggedPointer()) return false;
     return ISA()->isMetaClass();
@@ -74,7 +74,7 @@ objc_object::isClass()
 #if SUPPORT_TAGGED_POINTERS
 
 inline Class
-objc_object::getIsa() 
+objc_object::getIsa() const
 {
     if (fastpath(!isTaggedPointer())) return ISA(/*authenticated*/true);
 
@@ -98,19 +98,19 @@ objc_object::isaBits() const
 }
 
 inline bool 
-objc_object::isTaggedPointer() 
+objc_object::isTaggedPointer() const
 {
     return _objc_isTaggedPointer(this);
 }
 
 inline bool 
-objc_object::isBasicTaggedPointer() 
+objc_object::isBasicTaggedPointer() const
 {
     return isTaggedPointer()  &&  !isExtTaggedPointer();
 }
 
 inline bool 
-objc_object::isExtTaggedPointer() 
+objc_object::isExtTaggedPointer() const
 {
     uintptr_t ptr = _objc_decodeTaggedPointer(this);
     return (ptr & _OBJC_TAG_EXT_MASK) == _OBJC_TAG_EXT_MASK;
@@ -122,7 +122,7 @@ objc_object::isExtTaggedPointer()
 // not SUPPORT_TAGGED_POINTERS
 
 inline Class
-objc_object::getIsa() 
+objc_object::getIsa() const
 {
     return ISA();
 }
@@ -135,19 +135,19 @@ objc_object::isaBits() const
 
 
 inline bool 
-objc_object::isTaggedPointer() 
+objc_object::isTaggedPointer() const
 {
     return false;
 }
 
 inline bool 
-objc_object::isBasicTaggedPointer() 
+objc_object::isBasicTaggedPointer() const
 {
     return false;
 }
 
 inline bool 
-objc_object::isExtTaggedPointer() 
+objc_object::isExtTaggedPointer() const
 {
     return false;
 }
@@ -217,7 +217,7 @@ isa_t::setClass(Class newCls, UNUSED_WITHOUT_PTRAUTH objc_object *obj)
 #endif
 
 inline Class
-isa_t::getClass(MAYBE_UNUSED_AUTHENTICATED_PARAM bool authenticated) {
+isa_t::getClass(MAYBE_UNUSED_AUTHENTICATED_PARAM bool authenticated) const {
 #if SUPPORT_INDEXED_ISA
     return cls;
 #else
@@ -253,7 +253,7 @@ isa_t::getClass(MAYBE_UNUSED_AUTHENTICATED_PARAM bool authenticated) {
 }
 
 inline Class
-isa_t::getDecodedClass(bool authenticated) {
+isa_t::getDecodedClass(bool authenticated) const {
 #if SUPPORT_INDEXED_ISA
     if (nonpointer) {
         return classForIndex(indexcls);
@@ -265,21 +265,21 @@ isa_t::getDecodedClass(bool authenticated) {
 }
 
 inline Class
-objc_object::ISA(bool authenticated)
+objc_object::ISA(bool authenticated) const
 {
     ASSERT(!isTaggedPointer());
     return isa().getDecodedClass(authenticated);
 }
 
 inline Class
-objc_object::rawISA()
+objc_object::rawISA() const
 {
     ASSERT(!isTaggedPointer() && !isa().nonpointer);
     return (Class)isa().bits;
 }
 
 inline bool 
-objc_object::hasNonpointerIsa()
+objc_object::hasNonpointerIsa() const
 {
     return isa().nonpointer;
 }
@@ -352,7 +352,9 @@ objc_object::initIsa(Class cls, bool nonpointer, UNUSED_WITHOUT_INDEXED_ISA_AND_
 #   endif
         newisa.setClass(cls, this);
 #endif
+#if ISA_HAS_INLINE_RC
         newisa.extra_rc = 1;
+#endif
     }
 
     // This write must be performed in a single store in some cases
@@ -377,13 +379,17 @@ objc_object::changeIsa(Class newCls)
     isa_t oldisa;
     isa_t newisa(0);
 
+#if ISA_HAS_INLINE_RC
     bool sideTableLocked = false;
     bool transcribeToSideTable = false;
+#endif
 
     oldisa = LoadExclusive(&isa().bits);
 
     do {
+#if ISA_HAS_INLINE_RC
         transcribeToSideTable = false;
+#endif
         if ((oldisa.bits == 0  ||  oldisa.nonpointer)  &&
             !newCls->isFuture()  &&  newCls->canAllocNonpointer())
         {
@@ -392,7 +398,9 @@ objc_object::changeIsa(Class newCls)
 #if SUPPORT_INDEXED_ISA
             if (oldisa.bits == 0) {
                 newisa.bits = ISA_INDEX_MAGIC_VALUE;
+#if ISA_HAS_INLINE_RC
                 newisa.extra_rc = 1;
+#endif
             } else {
                 newisa = oldisa;
             }
@@ -404,7 +412,9 @@ objc_object::changeIsa(Class newCls)
 #else
             if (oldisa.bits == 0) {
                 newisa.bits = ISA_MAGIC_VALUE;
+#if ISA_HAS_INLINE_RC
                 newisa.extra_rc = 1;
+#endif
             }
             else {
                 newisa = oldisa;
@@ -417,6 +427,7 @@ objc_object::changeIsa(Class newCls)
             newisa.setClass(newCls, this);
 #endif
         }
+#if ISA_HAS_INLINE_RC
         else if (oldisa.nonpointer) {
             // nonpointer -> raw pointer
             // Need to copy retain count et al to side table.
@@ -427,12 +438,14 @@ objc_object::changeIsa(Class newCls)
             transcribeToSideTable = true;
             newisa.setClass(newCls, this);
         }
+#endif
         else {
             // raw pointer -> raw pointer
             newisa.setClass(newCls, this);
         }
     } while (slowpath(!StoreExclusive(&isa().bits, &oldisa.bits, newisa.bits)));
 
+#if ISA_HAS_INLINE_RC
     if (transcribeToSideTable) {
         // Copy oldisa's retain count et al to side table.
         // oldisa.has_assoc: nothing to do
@@ -443,12 +456,13 @@ objc_object::changeIsa(Class newCls)
     }
 
     if (sideTableLocked) sidetable_unlock();
+#endif
 
     return oldisa.getDecodedClass(false);
 }
 
 inline bool
-objc_object::hasAssociatedObjects()
+objc_object::hasAssociatedObjects() const
 {
     if (isTaggedPointer()) return true;
     if (isa().nonpointer) return isa().has_assoc;
@@ -481,7 +495,7 @@ objc_object::setHasAssociatedObjects()
 
 
 inline bool
-objc_object::isWeaklyReferenced()
+objc_object::isWeaklyReferenced() const
 {
     ASSERT(!isTaggedPointer());
     if (isa().nonpointer) return isa().weakly_referenced;
@@ -510,18 +524,18 @@ objc_object::setWeaklyReferenced_nolock()
 
 
 inline bool
-objc_object::isUniquelyReferenced()
+objc_object::isUniquelyReferenced() const
 {
     ASSERT(!isTaggedPointer());
     if (fastpath(!ISA()->hasCustomRR())) {
         return rootRetainCount() == 1;
     }
-    return ((NSUInteger(*)(objc_object *, SEL))objc_msgSend)(this, @selector(retainCount)) == 1;
+    return ((NSUInteger(*)(objc_object *, SEL))objc_msgSend)((objc_object *)this, @selector(retainCount)) == 1;
 }
 
 
 inline bool
-objc_object::hasCxxDtor()
+objc_object::hasCxxDtor() const
 {
     ASSERT(!isTaggedPointer());
 #if ISA_HAS_CXX_DTOR_BIT
@@ -535,10 +549,12 @@ objc_object::hasCxxDtor()
 
 
 inline bool 
-objc_object::rootIsDeallocating()
+objc_object::rootIsDeallocating() const
 {
     if (isTaggedPointer()) return false;
+#if ISA_HAS_INLINE_RC
     if (isa().nonpointer) return isa().isDeallocating();
+#endif
     return sidetable_isDeallocating();
 }
 
@@ -549,8 +565,11 @@ objc_object::clearDeallocating()
     if (slowpath(!isa().nonpointer)) {
         // Slow path for raw pointer isa.
         sidetable_clearDeallocating();
-    }
-    else if (slowpath(isa().weakly_referenced  ||  isa().has_sidetable_rc)) {
+#if ISA_HAS_INLINE_RC
+    } else if (slowpath(isa().weakly_referenced || isa().has_sidetable_rc)) {
+#else
+    } else {
+#endif
         // Slow path for non-pointer isa with weak refs and/or side table data.
         clearDeallocating_slow();
     }
@@ -564,6 +583,9 @@ objc_object::rootDealloc()
 {
     if (isTaggedPointer()) return;  // fixme necessary?
 
+#if !ISA_HAS_INLINE_RC
+    object_dispose((id)this);
+#else
     if (fastpath(isa().nonpointer                     &&
                  !isa().weakly_referenced             &&
                  !isa().has_assoc                     &&
@@ -580,6 +602,7 @@ objc_object::rootDealloc()
     else {
         object_dispose((id)this);
     }
+#endif // ISA_HAS_INLINE_RC
 }
 
 extern explicit_atomic<id(*)(id)> swiftRetain;
@@ -649,6 +672,12 @@ objc_object::rootRetain(bool tryRetain, objc_object::RRVariant variant)
         }
     }
 
+#if !ISA_HAS_INLINE_RC
+    // No need for a CAS loop in this case; we aren't changing the ISA pointer
+    ClearExclusive(&isa().bits);
+    if (tryRetain) return sidetable_tryRetain() ? (id)this : nil;
+    else return sidetable_retain(sideTableLocked);
+#else
     do {
         transcribeToSideTable = false;
         newisa = oldisa;
@@ -700,6 +729,7 @@ objc_object::rootRetain(bool tryRetain, objc_object::RRVariant variant)
         ASSERT(!transcribeToSideTable);
         ASSERT(!sideTableLocked);
     }
+#endif
 
     return (id)this;
 }
@@ -771,6 +801,11 @@ objc_object::rootRelease(bool performDealloc, objc_object::RRVariant variant)
         }
     }
 
+#if !ISA_HAS_INLINE_RC
+    // Without inline ref counts, we always use sidetables
+    ClearExclusive(&isa().bits);
+    return sidetable_release(sideTableLocked, performDealloc);
+#else
 retry:
     do {
         newisa = oldisa;
@@ -898,6 +933,7 @@ deallocate:
         this->performDealloc();
     }
     return true;
+#endif // ISA_HAS_INLINE_RC
 }
 
 
@@ -943,10 +979,11 @@ objc_object::rootAutorelease()
 
 
 inline uintptr_t 
-objc_object::rootRetainCount()
+objc_object::rootRetainCount() const
 {
     if (isTaggedPointer()) return (uintptr_t)this;
 
+#if ISA_HAS_INLINE_RC
     sidetable_lock();
     isa_t bits = __c11_atomic_load((_Atomic uintptr_t *)&isa().bits, __ATOMIC_RELAXED);
     if (bits.nonpointer) {
@@ -959,6 +996,8 @@ objc_object::rootRetainCount()
     }
 
     sidetable_unlock();
+#endif
+
     return sidetable_retainCount();
 }
 
@@ -974,32 +1013,32 @@ isa_t::setClass(Class cls, objc_object *obj)
 }
 
 inline Class
-isa_t::getClass(bool authenticated __unused)
+isa_t::getClass(bool authenticated __unused) const
 {
     return cls;
 }
 
 inline Class
-isa_t::getDecodedClass(bool authenticated)
+isa_t::getDecodedClass(bool authenticated) const
 {
     return getClass(authenticated);
 }
 
 inline Class 
-objc_object::ISA(bool authenticated __unused)
+objc_object::ISA(bool authenticated __unused) const
 {
     ASSERT(!isTaggedPointer()); 
     return isa().getClass(/*authenticated*/false);
 }
 
 inline Class
-objc_object::rawISA()
+objc_object::rawISA() const
 {
     return ISA();
 }
 
 inline bool 
-objc_object::hasNonpointerIsa()
+objc_object::hasNonpointerIsa() const
 {
     return false;
 }
@@ -1065,7 +1104,7 @@ objc_object::changeIsa(Class cls)
 
 
 inline bool
-objc_object::hasAssociatedObjects()
+objc_object::hasAssociatedObjects() const
 {
     return getIsa()->instancesHaveAssociatedObjects();
 }
@@ -1079,7 +1118,7 @@ objc_object::setHasAssociatedObjects()
 
 
 inline bool
-objc_object::isWeaklyReferenced()
+objc_object::isWeaklyReferenced() const
 {
     ASSERT(!isTaggedPointer());
 
@@ -1097,18 +1136,18 @@ objc_object::setWeaklyReferenced_nolock()
 
 
 inline bool
-objc_object::isUniquelyReferenced()
+objc_object::isUniquelyReferenced() const
 {
     ASSERT(!isTaggedPointer());
     if (fastpath(!ISA()->hasCustomRR())) {
         return rootRetainCount() == 1;
     }
-    return ((NSUInteger(*)(objc_object *, SEL))objc_msgSend)(this, @selector(retainCount)) == 1;
+    return ((NSUInteger(*)(objc_object *, SEL))objc_msgSend)((objc_object *)this, @selector(retainCount)) == 1;
 }
 
 
 inline bool
-objc_object::hasCxxDtor()
+objc_object::hasCxxDtor() const
 {
     ASSERT(!isTaggedPointer());
     return isa().getClass(/*authenticated*/false)->hasCxxDtor();
@@ -1116,7 +1155,7 @@ objc_object::hasCxxDtor()
 
 
 inline bool 
-objc_object::rootIsDeallocating()
+objc_object::rootIsDeallocating() const
 {
     if (isTaggedPointer()) return false;
     return sidetable_isDeallocating();
@@ -1239,7 +1278,7 @@ objc_object::rootTryRetain()
 
 
 inline uintptr_t 
-objc_object::rootRetainCount()
+objc_object::rootRetainCount() const
 {
     if (isTaggedPointer()) return (uintptr_t)this;
     return sidetable_retainCount();

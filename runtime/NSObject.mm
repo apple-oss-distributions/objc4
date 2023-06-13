@@ -38,6 +38,7 @@
 #include "NSObject-internal.h"
 #include "NSObject-private.h"
 
+#if !TARGET_OS_EXCLAVEKIT
 #include <mach/mach.h>
 #include <sys/mman.h>
 #include <execinfo.h>
@@ -48,6 +49,7 @@ extern "C" {
 #include <os/reason_private.h>
 #include <os/variant_private.h>
 }
+#endif
 
 @interface NSInvocation
 - (SEL)selector;
@@ -1089,6 +1091,10 @@ private:
                          "objc_autoreleaseNoPool() to debug", 
                          objc_thread_self(), (void*)obj, object_getClassName(obj));
             objc_autoreleaseNoPool(obj);
+
+            if (DebugMissingPools == Fatal)
+                _objc_fatal("Missing pools are a fatal error");
+
             return nil;
         }
         else if (obj == POOL_BOUNDARY  &&  !DebugPoolAllocation) {
@@ -1172,27 +1178,27 @@ public:
     __attribute__((noinline, cold))
     static void badPop(void *token)
     {
-        // Error. For bincompat purposes this is not 
-        // fatal in executables built with old SDKs.
-
-        if (DebugPoolAllocation || sdkIsAtLeast(10_12, 10_0, 10_0, 3_0, 2_0)) {
-            // OBJC_DEBUG_POOL_ALLOCATION or new SDK. Bad pop is fatal.
-            _objc_fatal
-                ("Invalid or prematurely-freed autorelease pool %p.", token);
-        }
-
-        // Old SDK. Bad pop is warned once.
         static bool complained = false;
+#if TARGET_OS_EXCLAVEKIT
+        bool willTerminate = true;
+#else
+        bool willTerminate = (DebugPoolAllocation == Fatal
+                              || sdkIsAtLeast(10_12, 10_0, 10_0, 3_0, 2_0));
+#endif
+
         if (!complained) {
             complained = true;
             _objc_inform_now_and_on_crash
                 ("Invalid or prematurely-freed autorelease pool %p. "
-                 "Set a breakpoint on objc_autoreleasePoolInvalid to debug. "
-                 "Proceeding anyway because the app is old. Memory errors "
-                 "are likely.",
-                     token);
+                 "Set a breakpoint on objc_autoreleasePoolInvalid to debug. ",
+                 token);
+            if (!willTerminate)
+                _objc_inform("Proceeding anyway.  Memory errors are likely.");
         }
         objc_autoreleasePoolInvalid(token);
+
+        if (willTerminate)
+            _objc_fatal("Invalid autorelease pools are a fatal error");
     }
 
     template<bool allowDebug>
@@ -1381,6 +1387,7 @@ public:
             }
 #endif
 
+#if !TARGET_OS_EXCLAVEKIT
             void *stack[128];
             int count = backtrace(stack, sizeof(stack)/sizeof(stack[0]));
             char **sym = backtrace_symbols(stack, count);
@@ -1388,6 +1395,7 @@ public:
                 _objc_inform("POOL HIGHWATER:     %s", sym[i]);
             }
             free(sym);
+#endif
         }
     }
 
@@ -1475,16 +1483,24 @@ objc_object::rootRelease_underflow(bool performDealloc)
 NEVER_INLINE void
 objc_object::clearDeallocating_slow()
 {
-    ASSERT(isa().nonpointer  &&  (isa().weakly_referenced || isa().has_sidetable_rc));
+    ASSERT(isa().nonpointer  &&  (isa().weakly_referenced
+#if ISA_HAS_INLINE_RC
+                                  || isa().has_sidetable_rc
+#endif
+                                  ));
 
     SideTable& table = SideTables()[this];
     table.lock();
     if (isa().weakly_referenced) {
         weak_clear_no_lock(&table.weak_table, (id)this);
     }
+#if ISA_HAS_INLINE_RC
     if (isa().has_sidetable_rc) {
+#endif
         table.refcnts.erase(this);
+#if ISA_HAS_INLINE_RC
     }
+#endif
     table.unlock();
 }
 
@@ -1511,7 +1527,7 @@ objc_object::rootAutorelease2()
 #if DEBUG
 // Used to assert that an object is not present in the side table.
 bool
-objc_object::sidetable_present()
+objc_object::sidetable_present() const
 {
     bool result = false;
     SideTable& table = SideTables()[this];
@@ -1542,14 +1558,14 @@ objc_object::performDealloc()
 #if SUPPORT_NONPOINTER_ISA
 
 void 
-objc_object::sidetable_lock()
+objc_object::sidetable_lock() const
 {
     SideTable& table = SideTables()[this];
     table.lock();
 }
 
 void 
-objc_object::sidetable_unlock()
+objc_object::sidetable_unlock() const
 {
     SideTable& table = SideTables()[this];
     table.unlock();
@@ -1640,7 +1656,7 @@ objc_object::sidetable_subExtraRC_nolock(size_t delta_rc)
 
 
 size_t 
-objc_object::sidetable_getExtraRC_nolock()
+objc_object::sidetable_getExtraRC_nolock() const
 {
     ASSERT(isa().nonpointer);
     SideTable& table = SideTables()[this];
@@ -1716,7 +1732,7 @@ objc_object::sidetable_tryRetain()
 
 
 uintptr_t
-objc_object::sidetable_retainCount()
+objc_object::sidetable_retainCount() const
 {
     SideTable& table = SideTables()[this];
 
@@ -1734,7 +1750,7 @@ objc_object::sidetable_retainCount()
 
 
 bool 
-objc_object::sidetable_isDeallocating()
+objc_object::sidetable_isDeallocating() const
 {
     SideTable& table = SideTables()[this];
 
@@ -1754,7 +1770,7 @@ objc_object::sidetable_isDeallocating()
 
 
 bool 
-objc_object::sidetable_isWeaklyReferenced()
+objc_object::sidetable_isWeaklyReferenced() const
 {
     bool result = false;
 
@@ -1850,7 +1866,7 @@ objc_object::sidetable_clearDeallocating()
 * Optimized retain/release/autorelease entrypoints
 **********************************************************************/
 
-#if SUPPORT_NONPOINTER_ISA && __arm64__ && __LP64__
+#if ISA_HAS_INLINE_RC && !SUPPORT_INDEXED_ISA && __arm64__
 // On ARM64 with nonpointer isa, objc_retain/release are provided by
 // retain-release-helpers-arm64.s. We still need the C implementation for
 // various slow paths. Expose those with _full suffixes.
@@ -1871,34 +1887,43 @@ extern "C" void objc_release_full(id obj)
 
 #else
 
-__attribute__((aligned(16), flatten, noinline))
-id 
-objc_retain(id obj)
-{
+__attribute__((always_inline))
+static id _Nullable _objc_retain(id _Nullable obj) {
     if (_objc_isTaggedPointerOrNil(obj)) return obj;
     return obj->retain();
 }
 
-
 __attribute__((aligned(16), flatten, noinline))
-void 
-objc_release(id obj)
+id
+objc_retain(id obj)
 {
+    return _objc_retain(obj);
+}
+
+__attribute__((always_inline))
+static void _objc_release(id _Nullable obj) {
     if (_objc_isTaggedPointerOrNil(obj)) return;
     return obj->release();
+}
+
+__attribute__((aligned(16), flatten, noinline))
+void
+objc_release(id obj)
+{
+    return _objc_release(obj);
 }
 
 #if __arm64__
 void
 objc_release_x0(id obj)
 {
-    return objc_release(obj);
+    return _objc_release(obj);
 }
 
 id
 objc_retain_x0(id obj)
 {
-    return objc_retain(obj);
+    return _objc_retain(obj);
 }
 #endif
 
@@ -2279,6 +2304,7 @@ id objc_unretainedObject(objc_objectptr_t pointer) { return (id)pointer; }
 // convert id to objc_objectptr_t, no ownership transfer.
 objc_objectptr_t objc_unretainedPointer(id object) { return object; }
 
+#if !TARGET_OS_EXCLAVEKIT
 static void *weakTableScan(void *) {
     pthread_setname_np("ObjC weak reference scanner");
 
@@ -2329,14 +2355,17 @@ static void startWeakTableScan() {
         _objc_fatal("pthread_create failed with error %d (%s)", ret, strerror(ret));
     pthread_detach(thread);
 }
+#endif
 
 void arr_init(void) 
 {
     SideTablesMap.init();
     _objc_associations_init();
 
+#if !TARGET_OS_EXCLAVEKIT
     if (DebugScanWeakTables)
         startWeakTableScan();
+#endif
 }
 
 

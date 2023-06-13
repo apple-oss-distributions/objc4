@@ -1,8 +1,11 @@
 // TEST_CFLAGS -Wno-deprecated-declarations
 
+#define __APPLE_API_PRIVATE 1
+
 #include "test.h"
 #include "testroot.i"
 #include <objc/objc-gdb.h>
+#include <objc/maptable.h>
 #include <objc/runtime.h>
 
 #define SwiftV1MangledName4 "_TtC6Swiftt13SwiftV1Class4"

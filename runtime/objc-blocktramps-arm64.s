@@ -1,5 +1,6 @@
 #include <TargetConditionals.h>
 
+#if !TARGET_OS_EXCLAVEKIT
 #if __arm64__
 
 #include "objc-vm.h"
@@ -142,3 +143,4 @@ __objc_blockTrampolineLast:
 	// TrampolineEntry
 
 #endif
+#endif // !TARGET_OS_EXCLAVEKIT

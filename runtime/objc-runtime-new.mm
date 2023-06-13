@@ -36,6 +36,7 @@
 #include <Block.h>
 #include <objc/message.h>
 
+#if !TARGET_OS_EXCLAVEKIT
 #include <mach/shared_region.h>
 
 extern "C" {
@@ -43,6 +44,7 @@ extern "C" {
 #include <os/reason_private.h>
 #include <os/variant_private.h>
 }
+#endif // !TARGET_OS_EXCLAVEKIT
 
 #define newprotocol(p) ((protocol_t *)p)
 
@@ -453,14 +455,6 @@ alloc_class_for_subclass(Class supercls, size_t extraBytes)
         handler(supercls, (Class)swcls);
     }
 
-    // Mark this class as Swift-enhanced.
-    if (supercls->isSwiftStable()) {
-        swcls->bits.setIsSwiftStable();
-    }
-    if (supercls->isSwiftLegacy()) {
-        swcls->bits.setIsSwiftLegacy();
-    }
-
     return (Class)swcls;
 }
 
@@ -814,7 +808,7 @@ printCustom(Class cls, SelectorBundle bundle, bool inherited)
 
 enum class Scope { Instances, Classes, Both };
 
-template <typename Traits, SelectorBundle Bundle, bool &ShouldPrint, Scope Domain = Scope::Both>
+template <typename Traits, SelectorBundle Bundle, option_value_t &ShouldPrint, Scope Domain = Scope::Both>
 class Mixin {
 
     // work around compiler being broken with templates using Class/objc_class,
@@ -2671,12 +2665,15 @@ static Class realizeClassWithoutSwift(Class cls, Class previously)
         bool instancesRequireRawIsa = cls->instancesRequireRawIsa();
         bool rawIsaIsInherited = false;
         static bool hackedDispatch = false;
+        const char *name;
 
         if (DisableNonpointerIsa) {
             // Non-pointer isa disabled by environment or app SDK version
             instancesRequireRawIsa = true;
         }
-        else if (!hackedDispatch  &&  0 == strcmp(ro->getName(), "OS_object"))
+        else if (!hackedDispatch
+                 && (name = ro->getName()) // Yes, we mean to assign here
+                 && 0 == strcmp(name, "OS_object"))
         {
             // hack for libdispatch et al - isa also acts as vtable pointer
             hackedDispatch = true;
@@ -3156,6 +3153,9 @@ map_images(unsigned count, const char * const paths[],
     }
 
     if (takeEnforcementDisableFault) {
+        if (DebugClassRXSigning == Fatal)
+            _objc_fatal("class_rx signing mismatch");
+
 #if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
         bool objcModeNoFaults = DisableFaults
             || DisableClassROFaults
@@ -3591,7 +3591,7 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
             if (hi->info()->containsSwift()  &&
                 hi->info()->swiftUnstableVersion() < objc_image_info::SwiftVersion3)
             {
-                DisableNonpointerIsa = true;
+                DisableNonpointerIsa = On;
                 if (PrintRawIsa) {
                     _objc_inform("RAW ISA: disabling non-pointer isa because "
                                  "the app or a framework contains Swift code "
@@ -3603,17 +3603,19 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
 # endif
 
 # if TARGET_OS_OSX
+#   if !TARGET_OS_EXCLAVEKIT
         // Disable non-pointer isa if the app is too old
         // (linked before OS X 10.11)
         // Note: we must check for macOS, because Catalyst and Almond apps
         // return false for a Mac SDK check! rdar://78225780
         if (dyld_get_active_platform() == PLATFORM_MACOS && !dyld_program_sdk_at_least(dyld_platform_version_macOS_10_11)) {
-            DisableNonpointerIsa = true;
+            DisableNonpointerIsa = On;
             if (PrintRawIsa) {
                 _objc_inform("RAW ISA: disabling non-pointer isa because "
                              "the app is too old.");
             }
         }
+#   endif
 
         // Disable non-pointer isa if the app has a __DATA,__objc_rawisa section
         // New apps that load old extensions may need this.
@@ -3621,7 +3623,7 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
             if (hi->mhdr()->filetype != MH_EXECUTE) continue;
             unsigned long size;
             if (getsectiondata(hi->mhdr(), "__DATA", "__objc_rawisa", &size)) {
-                DisableNonpointerIsa = true;
+                DisableNonpointerIsa = On;
                 if (PrintRawIsa) {
                     _objc_inform("RAW ISA: disabling non-pointer isa because "
                                  "the app has a __DATA,__objc_rawisa section");
@@ -4897,6 +4899,30 @@ objc_allocateProtocol(const char *name)
 
 
 /***********************************************************************
+ * signProtocolMethodList
+ * Sign a method list for a protocol.
+ **********************************************************************/
+static void
+signProtocolMethodList(method_list_t *list)
+{
+    if (!list)
+        return;
+
+    size_t count = list->count;
+    for (size_t n = 0; n < count; ++n) {
+        struct method_t::big old = list->get(n).big();
+#if TARGET_OS_EXCLAVEKIT
+        auto &meth = list->get(n).bigStripped();
+#else
+        auto &meth = list->get(n).bigSigned();
+#endif
+        meth.name = old.name;
+        meth.types = old.types;
+        meth.imp = nil;
+    }
+}
+
+/***********************************************************************
 * objc_registerProtocol
 * Registers a newly-constructed protocol. The protocol is now
 * ready for use and immutable.
@@ -4923,6 +4949,14 @@ void objc_registerProtocol(Protocol *proto_gen)
                      "with objc_allocateProtocol!", proto->nameForLogging());
         return;
     }
+
+#if TARGET_OS_EXCLAVEKIT
+    // Sign all of the method lists
+    signProtocolMethodList(proto->instanceMethods);
+    signProtocolMethodList(proto->classMethods);
+    signProtocolMethodList(proto->optionalInstanceMethods);
+    signProtocolMethodList(proto->optionalClassMethods);
+#endif
 
     // NOT initProtocolIsa(). The protocol object may already
     // have been retained and we must preserve that count.
@@ -5783,7 +5817,7 @@ _category_getClass(Category cat)
 * hi is the image containing the category.
 **********************************************************************/
 property_list_t *
-category_t::propertiesForMeta(bool isMeta, struct header_info *hi)
+category_t::propertiesForMeta(bool isMeta, struct header_info *hi) const
 {
     if (!isMeta) return instanceProperties;
     else if (hi->info()->hasCategoryClassProperties()) return _classProperties;
@@ -6344,6 +6378,10 @@ findMethodInSortedMethodList(SEL key, const method_list_t *list)
             return findMethodInSortedMethodList(key, list, [](method_t &m) { return m.big().name; });
         case method_t::Kind::bigSigned:
             return findMethodInSortedMethodList(key, list, [](method_t &m) { return m.bigSigned().name; });
+#if TARGET_OS_EXCLAVEKIT
+        case method_t::Kind::bigStripped:
+            return findMethodInSortedMethodList(key, list, [](method_t &m) { return m.bigStripped().name; });
+#endif
     }
 }
 
@@ -6371,6 +6409,10 @@ findMethodInUnsortedMethodList(SEL key, const method_list_t *list)
             return findMethodInUnsortedMethodList(key, list, [](method_t &m) { return m.big().name; });
         case method_t::Kind::bigSigned:
             return findMethodInUnsortedMethodList(key, list, [](method_t &m) { return m.bigSigned().name; });
+#if TARGET_OS_EXCLAVEKIT
+        case method_t::Kind::bigStripped:
+            return findMethodInUnsortedMethodList(key, list, [](method_t &m) { return m.bigStripped().name; });
+#endif
     }
 }
 
@@ -7509,7 +7551,11 @@ addMethod(Class cls, SEL name, IMP imp, const char *types, bool replace)
         // fixme optimize
         method_list_t *newlist = method_list_t::allocateMethodList(1, fixed_up_method_list);
 
+#if TARGET_OS_EXCLAVEKIT
+        auto &first = newlist->begin()->bigStripped();
+#else
         auto &first = newlist->begin()->bigSigned();
+#endif
         first.name = name;
         first.types = strdupIfMutable(types);
         first.imp = imp;
@@ -7564,7 +7610,11 @@ addMethods(Class cls, const SEL *names, const IMP *imps, const char **types,
                 _method_setImplementation(cls, m, imps[i]);
             }
         } else {
+#if TARGET_OS_EXCLAVEKIT
+            auto &newmethod = newlist->end()->bigStripped();
+#else
             auto &newmethod = newlist->end()->bigSigned();
+#endif
             newmethod.name = names[i];
             newmethod.types = strdupIfMutable(types[i]);
             newmethod.imp = imps[i];
@@ -8004,6 +8054,16 @@ static void objc_initializeClassPair_internal(Class superclass, const char *name
         meta_ro_w->instanceStart = superclass->ISA()->unalignedInstanceSize();
         cls->setInstanceSize(cls_ro_w->instanceStart);
         meta->setInstanceSize(meta_ro_w->instanceStart);
+
+        // Mark this class as Swift-enhanced.
+        if (superclass->isSwiftStable()) {
+            cls->bits.setIsSwiftStable();
+            meta->bits.setIsSwiftStable();
+        }
+        if (superclass->isSwiftLegacy()) {
+            cls->bits.setIsSwiftLegacy();
+            meta->bits.setIsSwiftLegacy();
+        }
     } else {
         cls_ro_w->flags |= RO_ROOT;
         meta_ro_w->flags |= RO_ROOT;
@@ -8753,6 +8813,34 @@ classSlotForTagIndex(objc_tag_index_t tag)
 }
 
 /***********************************************************************
+ * uniformRandom
+ * Return a random number uniformly distributed between 0 and N.
+ **********************************************************************/
+static uint32_t
+uniformRandom(uint32_t n)
+{
+#if !TARGET_OS_EXCLAVEKIT
+    return arc4random_uniform(n);
+#else
+    // This is Lemire's nearly divisionless algorithm
+    // See https://lemire.me/blog/2019/06/06/nearly-divisionless-random-integer-generation-on-various-systems/
+    uint32_t x;
+    arc4random_buf(&x, sizeof(x));
+    uint64_t m = ((uint64_t)x) * n;
+    uint32_t l = (uint32_t)m;
+    if (l < n) {
+        uint32_t t = -n % n;
+        while (l < t) {
+            arc4random_buf(&x, sizeof(x));
+            m = ((uint64_t)x) * n;
+            l = (uint32_t)m;
+        }
+    }
+    return m >> 32;
+#endif
+}
+
+/***********************************************************************
 * initializeTaggedPointerObfuscator
 * Initialize objc_debug_taggedpointer_obfuscator with randomness.
 *
@@ -8766,7 +8854,11 @@ classSlotForTagIndex(objc_tag_index_t tag)
 static void
 initializeTaggedPointerObfuscator(void)
 {
-    if (!DisableTaggedPointerObfuscation && dyld_program_sdk_at_least(dyld_fall_2018_os_versions)) {
+    if (!DisableTaggedPointerObfuscation
+#if !TARGET_OS_EXCLAVEKIT
+        && dyld_program_sdk_at_least(dyld_fall_2018_os_versions)
+#endif
+        ) {
         // Pull random data into the variable, then shift away all non-payload bits.
         arc4random_buf(&objc_debug_taggedpointer_obfuscator,
                        sizeof(objc_debug_taggedpointer_obfuscator));
@@ -8779,7 +8871,7 @@ initializeTaggedPointerObfuscator(void)
         // Shuffle the first seven entries of the tag permutator.
         int max = 7;
         for (int i = max - 1; i >= 0; i--) {
-            int target = arc4random_uniform(i + 1);
+            int target = uniformRandom(i + 1);
             swap(objc_debug_tag60_permutations[i],
                  objc_debug_tag60_permutations[target]);
         }

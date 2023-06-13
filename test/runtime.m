@@ -20,7 +20,13 @@ END
 #include "testroot.i"
 #include <string.h>
 #include <dlfcn.h>
+
+#if TARGET_OS_EXCLAVEKIT
+extern const struct mach_header_64 _mh_execute_header;
+#else
 #include <mach-o/ldsyms.h>
+#endif
+
 #include <objc/objc-runtime.h>
 
 #if __has_feature(objc_arc)

@@ -3,11 +3,15 @@
 #include "test.h"
 #include "testroot.i"
 #include <simd/simd.h>
+#include <time.h>
+#include <stdint.h>
 
+#if !TARGET_OS_EXCLAVEKIT
 #if TARGET_OS_OSX
 #include <Cambria/Traps.h>
 #include <Cambria/Cambria.h>
 #endif
+#endif // !TARGET_OS_EXCLAVEKIT
 
 #ifndef TEST_NAME
 #define TEST_NAME __FILE__
@@ -72,6 +76,12 @@
 
 @implementation Sub @end
 
+static uint64_t hires_time()
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+    return ((uint64_t)(1000000000)) * ts.tv_sec + ts.tv_nsec;
+}
 
 int main()
 {
@@ -142,11 +152,11 @@ int main()
     do {                                                           \
         minTime = UINT64_MAX;                                      \
         for (int i = 0; i < TRIALS; i++) {                         \
-            uint64_t startTime = mach_absolute_time();             \
+            uint64_t startTime = hires_time();                     \
             ALIGN_();                                              \
             for (int i = 0; i < MESSAGES; i++)                     \
                 [sub message];                                     \
-            uint64_t totalTime = mach_absolute_time() - startTime; \
+            uint64_t totalTime = hires_time() - startTime;         \
             testprintf("trial: " #message "  %llu\n", totalTime);  \
             if (totalTime < minTime)                               \
                 minTime = totalTime;                               \
@@ -172,10 +182,13 @@ int main()
     CHECK(stret_nop);
     CHECK(fpret_nop);
     CHECK(vecret_nop);
+
+#if !TARGET_OS_EXCLAVEKIT
 #if TARGET_OS_OSX
     // lpfret is ~10x slower than other msgSends on Rosetta due to using the
     // x87 stack for returning the value, so don't test it there.
     if (!oah_is_current_process_translated())
+#endif
 #endif
         CHECK(lfpret_nop);
 

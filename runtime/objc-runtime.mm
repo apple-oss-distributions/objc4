@@ -35,8 +35,14 @@
 
 #include <TargetConditionals.h>
 
+#if !TARGET_OS_EXCLAVEKIT
 #include <os/feature_private.h> // os_feature_enabled_simple()
 #include <os/variant_private.h> // os_variant_allows_internal_security_policies()
+#endif
+
+#if TARGET_OS_EXCLAVEKIT
+#include "objc-test-env.h"
+#endif
 
 #include "llvm-MathExtras.h"
 #include "objc-private.h"
@@ -52,6 +58,7 @@
 
 // NSObject was in Foundation/CF on macOS < 10.8.
 #if TARGET_OS_OSX
+#   if !TARGET_OS_EXCLAVEKIT
 const char __objc_nsobject_class_10_5 = 0;
 const char __objc_nsobject_class_10_6 = 0;
 const char __objc_nsobject_class_10_7 = 0;
@@ -63,17 +70,18 @@ const char __objc_nsobject_metaclass_10_7 = 0;
 const char __objc_nsobject_isa_10_5 = 0;
 const char __objc_nsobject_isa_10_6 = 0;
 const char __objc_nsobject_isa_10_7 = 0;
+#   endif // !TARGET_OS_EXCLAVEKIT
 #endif
 
 // Settings from environment variables
-#define OPTION(var, env, help) bool var = false;
-#define INTERNAL_OPTION(var, env, help) bool var = false;
+#define OPTION(var, def, env, help) option_value_t var = def;
+#define INTERNAL_OPTION(var, def, env, help) option_value_t var = def;
 #include "objc-env.h"
 #undef OPTION
 #undef INTERNAL_OPTION
 
 struct option_t {
-    bool* var;
+    option_value_t *var;
     const char *env;
     const char *help;
     size_t envlen;
@@ -81,8 +89,9 @@ struct option_t {
 };
 
 const option_t Settings[] = {
-#define OPTION(var, env, help) option_t{&var, #env, help, strlen(#env), false},
-#define INTERNAL_OPTION(var, env, help) \
+#define OPTION(var, def, env, help) \
+    option_t{&var, #env, help, strlen(#env), false},
+#define INTERNAL_OPTION(var, def, env, help)         \
     option_t{&var, #env, help, strlen(#env), true},
 #include "objc-env.h"
 #undef OPTION
@@ -108,6 +117,21 @@ header_info *LastHeader  = 0;  // NULL means invalid; recompute it
 // if the parent process was multithreaded when fork() was called.
 bool MultithreadedForkChild = false;
 
+#if TARGET_OS_EXCLAVEKIT
+#include <ctype.h>
+
+/* This doesn't have to be fast - it's only used to check the environment
+   variables. */
+int strcasecmp(const char *s1, const char *s2) {
+    int c1, c2;
+    while ((c1 = *s1++) || (c2 = *s2++)) {
+        int diff = toupper(c1) - toupper(c2);
+        if (diff)
+            return diff;
+    }
+    return 0;
+}
+#endif
 
 /***********************************************************************
 * objc_noop_imp. Used when we need to install a do-nothing method somewhere.
@@ -354,6 +378,7 @@ void SetPageCountWarning(const char* envvar) {
 **********************************************************************/
 void environ_init(void) 
 {
+#if !TARGET_OS_EXCLAVEKIT
     if (issetugid()) {
         // All environment variables are silently ignored when setuid or setgid
         // This includes OBJC_HELP and OBJC_PRINT_OPTIONS themselves.
@@ -365,18 +390,19 @@ void environ_init(void)
     // are accidentally relying on the ordering.
     // rdar://problem/63886091
     if (!dyld_program_sdk_at_least(dyld_fall_2020_os_versions))
-        DisableAutoreleaseCoalescingLRU = true;
+        DisableAutoreleaseCoalescingLRU = On;
 
     // class_rx_t pointer signing enforcement is *disabled* by default unless
     // this OS feature is enabled, but it can be explicitly enabled by setting
     // the environment variable, for testing.
     if (!os_feature_enabled_simple(objc4, classRxSigning, false))
-        DisableClassRXSigningEnforcement = true;
+        DisableClassRXSigningEnforcement = On;
 
     // Faults for class_ro_t pointer signing enforcement are disabled by
     // default unless this OS feature is enabled.
     if (!os_feature_enabled_simple(objc4, classRoSigningFaults, false))
-        DisableClassROFaults = true;
+        DisableClassROFaults = On;
+#endif // !TARGET_OS_EXCLAVEKIT
 
     bool PrintHelp = false;
     bool PrintOptions = false;
@@ -384,7 +410,17 @@ void environ_init(void)
 
     // Scan environ[] directly instead of calling getenv() a lot.
     // This optimizes the case where none are set.
-    for (char **p = *_NSGetEnviron(); *p != nil; p++) {
+    char **envp = NULL;
+#if TARGET_OS_EXCLAVEKIT
+    if (_objc_test_get_environ)
+        envp = _objc_test_get_environ();
+#else
+    envp = *_NSGetEnviron();
+#endif
+    if (!envp)
+        return;
+
+    for (char **p = envp; *p != nil; p++) {
         if (0 == strncmp(*p, "Malloc", 6)  ||  0 == strncmp(*p, "DYLD", 4)  ||  
             0 == strncmp(*p, "NSZombiesEnabled", 16))
         {
@@ -413,18 +449,32 @@ void environ_init(void)
         
         for (size_t i = 0; i < sizeof(Settings)/sizeof(Settings[0]); i++) {
             const option_t *opt = &Settings[i];
+#if !TARGET_OS_EXCLAVEKIT
             if (opt->internal
                 && !os_variant_allows_internal_security_policies("com.apple.obj-c"))
                 continue;
+#endif // !TARGET_OS_EXCLAVEKIT
             if ((size_t)(value - *p) == 1+opt->envlen  &&  
                 0 == strncmp(*p, opt->env, opt->envlen))
             {
-                *opt->var = (0 == strcmp(value, "YES"));
+                if (strcasecmp(value, "fatal") == 0
+                    || strcasecmp(value, "halt") == 0)
+                    *opt->var = Fatal;
+                else if (strcasecmp(value, "yes") == 0
+                         || strcasecmp(value, "warn") == 0
+                         || strcasecmp(value, "true") == 0
+                         || strcasecmp(value, "on") == 0
+                         || strcasecmp(value, "y") == 0
+                         || strcmp(value, "1") == 0)
+                    *opt->var = On;
+                else
+                    *opt->var = Off;
                 break;
             }
         }
     }
 
+#if !TARGET_OS_EXCLAVEKIT
     // Special case: enable some autorelease pool debugging
     // when some malloc debugging is enabled 
     // and OBJC_DEBUG_POOL_ALLOCATION is not set to something other than NO.
@@ -436,16 +486,15 @@ void environ_init(void)
              || getenv("MallocStackLoggingNoCompact")
              || (zombie && (*zombie == 'Y' || *zombie == 'y'))
              || (insert && strstr(insert, "libgmalloc")))
-            &&
-            (!pooldebug || 0 == strcmp(pooldebug, "YES")))
-        {
-            DebugPoolAllocation = true;
+            && !pooldebug) {
+            DebugPoolAllocation = On;
         }
     }
 
     if (!os_feature_enabled_simple(objc4, preoptimizedCaches, true)) {
-        DisablePreoptCaches = true;
+        DisablePreoptCaches = On;
     }
+#endif // !TARGET_OS_EXCLAVEKIT
 
     // Print OBJC_HELP and OBJC_PRINT_OPTIONS output.
     if (PrintHelp  ||  PrintOptions) {
@@ -463,11 +512,24 @@ void environ_init(void)
 
         for (size_t i = 0; i < sizeof(Settings)/sizeof(Settings[0]); i++) {
             const option_t *opt = &Settings[i];
+#if !TARGET_OS_EXCLAVEKIT
             if (opt->internal
                 && !os_variant_allows_internal_security_policies("com.apple.obj-c"))
                 continue;
+#endif // !TARGET_OS_EXCLAVEKIT
             if (PrintHelp) _objc_inform("%s: %s", opt->env, opt->help);
-            if (PrintOptions && *opt->var) _objc_inform("%s is set", opt->env);
+            if (PrintOptions) {
+                switch (*opt->var) {
+                case Off:
+                    break;
+                case On:
+                    _objc_inform("%s is set", opt->env);
+                    break;
+                case Fatal:
+                    _objc_inform("%s is fatal", opt->env);
+                    break;
+                }
+            }
         }
     }
 }

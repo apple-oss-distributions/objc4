@@ -211,7 +211,9 @@ objc_appRequiresGC(int fd)
     __OSX_AVAILABLE(10.11) 
     __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
     __WATCHOS_UNAVAILABLE
+#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_UNAVAILABLE
+#endif
 ;
 #endif // !OBJC_NO_GC_API
 

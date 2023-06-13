@@ -24,6 +24,15 @@
 #   define SIGNED_RO
 #endif
 
+#if TARGET_OS_EXCLAVEKIT
+#   define SIGNED_OBJC_SEL "@AUTH(da, 0x57c2, addr) "
+#   define SIGNED_METHOD_TYPES "@AUTH(da,0xdec6,addr) "
+#else
+#   define SIGNED_OBJC_SEL
+#   define SIGNED_METHOD_TYPES
+#endif
+
+
 #define str(x) #x
 #define str2(x) str(x)
 
@@ -258,19 +267,19 @@ asm(
     "L_evil_methods: \n"
     ".long 3*" PTRSIZE " \n"
     ".long 1 \n"
-    PTR "L_load \n"
-    PTR "L_load \n"
+    PTR "L_load" SIGNED_OBJC_SEL " \n"
+    PTR "L_load" SIGNED_METHOD_TYPES " \n"
     PTR "_abort" SIGNED_METHOD_LIST_IMP "\n"
     // assumes that abort is inside the dyld shared cache
 
     "L_good_methods: \n"
     ".long 3*" PTRSIZE " \n"
     ".long 2 \n"
-    PTR "L_load \n"
-    PTR "L_load \n"
+    PTR "L_load" SIGNED_OBJC_SEL " \n"
+    PTR "L_load" SIGNED_METHOD_TYPES " \n"
     PTR "_nop" SIGNED_METHOD_LIST_IMP "\n"
-    PTR "L_self \n"
-    PTR "L_self \n"
+    PTR "L_self" SIGNED_OBJC_SEL " \n"
+    PTR "L_self" SIGNED_METHOD_TYPES " \n"
     PTR "_nop" SIGNED_METHOD_LIST_IMP "\n"
 
     "L_super_ivars: \n"

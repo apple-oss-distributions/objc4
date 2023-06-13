@@ -21,7 +21,8 @@ fi
 FILES="$TESTINCLUDEDIR/objc/*.h $TESTLOCALINCLUDEDIR/objc/*.h"
 CFLAGS='-fsyntax-only -Wno-unused-function -D_OBJC_PRIVATE_H_'
 
-INCLUDES=$(grep -h '#include' $FILES | grep -v '<objc/')
+INCLUDES=$(grep -h '#include' $FILES | grep -v '<objc/' \
+    | sed 's/^#include \(.*\)$/#if __has_include(\1)\n#include \1\n#endif/g')
 
 sort $(dirname $0)/defines.expected > defines.expected
 

@@ -110,6 +110,7 @@ my %ALL_TESTS;
 # RUN=0|1
 # VERBOSE=0|1|2
 # BATS=0|1
+# RUNSCRIPT=/path/to/runscript
 
 # environment variables from the command line
 # DSTROOT
@@ -125,6 +126,7 @@ my $BUILD;
 my $RUN;
 my $VERBOSE;
 my $BATS;
+my $RUNSCRIPT;
 
 my $HOST;
 my $PORT;
@@ -826,6 +828,14 @@ sub gather_simple {
         return 0;
     }
 
+    ### BEGIN APPLE INTERNAL
+    # crashing tests can't work on ExclaveKit
+    if ($crashes && $C{OS} eq "exclavekit") {
+        print "SKIP: $name    (can't intercept crashes on ExclaveKit)\n";
+        return 0;
+    }
+    ### END APPLE INTERNAL
+
     # check test conditions
 
     my $run = 1;
@@ -887,6 +897,21 @@ sub gather_simple {
         }
     }
 
+    my $execdir = "$C{DSTDIR}/$name.build";
+
+    if ($HOST) {
+        # We are running remotely
+        $execdir = "$REMOTEBASE/" . basename($C{DSTDIR}) . "/$name.build";
+    }
+
+    my $dylibdir = $execdir;
+
+    ### BEGIN APPLE INTERNAL
+    if ("$C{OS}" eq "exclavekit") {
+        $dylibdir = "/System/ExclaveKit/usr/local/lib";
+    }
+    ### END APPLE INTERNAL
+
     # save some results for build and run phases
     $$CREF{"TEST_$name"} = {
         TEST_BUILD => $buildcmd, 
@@ -899,6 +924,8 @@ sub gather_simple {
         TEST_NO_MALLOC_SCRIBBLE => $disableMallocScribble,
         DSTDIR => "$C{DSTDIR}/$name.build",
         OBJDIR => "$C{OBJDIR}/$name.build",
+        EXECDIR => $execdir,
+        DYLIBDIR => $dylibdir,
         ENTITLEMENTS => $entitlements,
     };
 
@@ -961,6 +988,12 @@ sub build_simple {
     my $file = "$DIR/$name.$ext";
 
     if ($T{TEST_CRASHES}) {
+        ### BEGIN APPLE INTERNAL
+        if ($C{OS} eq "exclavekit") {
+            return 1;
+        }
+        ### END APPLE INTERNAL
+
         `echo '$crashcatch' > $dstdir/crashcatch.c`;
         my $output = make("$C{COMPILE_C} -dynamiclib -o libcrashcatch.dylib -x c crashcatch.c", $dstdir);
         if ($?) {
@@ -1095,10 +1128,10 @@ sub run_simple {
 
     my $output;
 
-    if ($C{ARCH} =~ /^arm/ && `uname -p` !~ /^arm/) {
+    if ($HOST) {
         # run on iOS or watchos or tvos device
         # fixme device selection and verification
-        my $remotedir = "$REMOTEBASE/" . basename($C{DSTDIR}) . "/$name.build";
+        my $remotedir = $T{EXECDIR};
 
         # Add test dir and libobjc's dir to DYLD_LIBRARY_PATH.
         # Insert libcrashcatch.dylib if necessary.
@@ -1139,8 +1172,16 @@ sub run_simple {
         if ($T{TEST_CRASHES}) {
             $env .= " DYLD_INSERT_LIBRARIES=$testdir/libcrashcatch.dylib";
         }
+        $env .= " LIBOBJC=$C{TESTLIB}";
 
-        $output = make("sh -c '$env ./$name.exe'");
+        my $runscript = $RUNSCRIPT;
+        ### BEGIN APPLE INTERNAL
+        if (!$runscript && $C{OS} =~ /exclave/) {
+            $runscript = "$DIR/../scripts/exclave-run";
+        }
+        ### END APPLE INTERNAL
+
+        $output = make("$runscript $env ./$name.exe");
     }
 
     return check_output(\%C, $name, split("\n", $output));
@@ -1256,6 +1297,9 @@ sub make_one_config {
         "appletvos" => "appletvos", "tvos" => "appletvos",
         "appletvsimulator" => "appletvsimulator", "tvsimulator" => "appletvsimulator",
         "bridgeos" => "bridgeos",
+        ### BEGIN APPLE INTERNAL
+        "exclavekit" => "exclavekit",
+        ### END APPLE INTERNAL
         );
 
     # attempt to fallback to SDK target info if the platform is not recognized
@@ -1297,7 +1341,13 @@ sub make_one_config {
         $C{TOOLCHAIN} = "bridgeos";
     } elsif ($C{OS} eq "macosx") {
         $C{TOOLCHAIN} = "osx";
-    } elsif ($didUseOSFallback) {
+    }
+    ### BEGIN APPLE INTERNAL
+    elsif ($C{OS} eq "exclavekit") {
+        $C{TOOLCHAIN} = "macosx";
+    }
+    ### END APPLE INTERNAL
+    elsif ($didUseOSFallback) {
         #shaky, but works as long as things follow ${name}os / ${name}simulator
         ($C{TOOLCHAIN} = $C{OS}) =~ s/simulator/os/;
     } else {
@@ -1347,6 +1397,12 @@ sub make_one_config {
         $C{DEPLOYMENT_TARGET} = "unknown_deployment_target";
         $C{SDK_PATH} = "/unknown/sdk";
     }
+
+    ### BEGIN APPLE INTERNAL
+    if ($C{OS} eq "exclavekit") {
+        $C{SDK_PATH} = "$C{SDK_PATH}/System/ExclaveKit";
+    }
+    ### END APPLE INTERNAL
 
     # Set run target.
     $C{RUN_TARGET} = $run_arg;
@@ -1404,9 +1460,25 @@ sub make_one_config {
 
     if ($VERBOSE) {
         foreach my $testlib (@{$C{TESTLIBS}}) {
-            my @uuids = `/usr/bin/dwarfdump -u '$testlib'`;
-            while (my $uuid = shift @uuids) {
-                print "note: $uuid";
+            if (-e "$testlib") {
+                my @uuids = `/usr/bin/dwarfdump -u '$testlib'`;
+                while (my $uuid = shift @uuids) {
+                    print "note: $uuid";
+                }
+            } else {
+                my $found = 0;
+
+                if (-x "/usr/local/bin/dyld_shared_cache_util") {
+                    my @uuids = `/usr/local/bin/dyld_shared_cache_util -list -uuid | grep '$testlib'`;
+                    while (my $uuid = shift @uuids) {
+                        print "note: UUID: $uuid";
+                        $found = 1;
+                    }
+                }
+
+                if (!$found) {
+                    print "note: cannot find $testlib\n";
+                }
             }
         }
     }
@@ -1445,18 +1517,19 @@ sub make_one_config {
 
     # Populate cflags
 
-    my $cflags = "-I$DIR -W -Wall -Wno-unknown-warning-option -Wno-objc-load-method -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -Os -arch $C{ARCH} ";
+    my $cflags = "-I$DIR -W -Wall -Wno-undef-prefix -Wno-unknown-warning-option -Wno-objc-load-method -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -nostdlib -lSystem -Os -arch $C{ARCH} ";
     if (!$BATS) {
         # Debug info disabled in BATS to save disk space.
         $cflags .= "-g ";
     }
     my $objcflags = "";
     my $swiftflags = "-g ";
-    
+    my $cxxflags = "-lc++";
+
     $cflags .= " -isysroot '$C{SDK_PATH}'";
     $cflags .= " '-Wl,-syslibroot,$C{SDK_PATH}'";
     $swiftflags .= " -sdk '$C{SDK_PATH}'";
-    
+
     # Set deployment target cflags
     my $target = undef;
     die "No deployment target" if $C{DEPLOYMENT_TARGET} eq "";
@@ -1488,6 +1561,12 @@ sub make_one_config {
         $cflags .= " -mbridgeos-version-min=$C{DEPLOYMENT_TARGET}";
         $target = "$C{ARCH}-apple-bridgeos$C{DEPLOYMENT_TARGET}";
     }
+    ### BEGIN APPLE INTERNAL
+    elsif ($C{OS} eq "exclavekit") {
+        $cflags .= " -mmacosx-version-min=$C{DEPLOYMENT_TARGET} -fapple-link-rtlib -fobjc-relative-method-lists";
+        $target = "$C{ARCH}-apple-macosx$C{DEPLOYMENT_TARGET}";
+    }
+    ### END APPLE INTERNAL
     elsif ($didUseOSFallback) {
         $target = "$C{ARCH}-apple-$C{OS}$C{DEPLOYMENT_TARGET}";
         $cflags .= " -target $target";
@@ -1513,9 +1592,9 @@ sub make_one_config {
         $cflags .= " -isystem '$C{TESTLOCALINCLUDEDIR}'";
     }
 
-    
+    $cflags .= " -DVERBOSE=$VERBOSE" if $VERBOSE;
+
     # Populate objcflags
-    
     $objcflags .= " -lobjc.A";
     if ($C{MEM} eq "arc") {
         $objcflags .= " -fobjc-arc";
@@ -1526,7 +1605,7 @@ sub make_one_config {
     else {
         die "unrecognized MEM '$C{MEM}'\n";
     }
-    
+
     # Populate ENV_PREFIX
     $C{ENV} = "LANG=C";
     $C{ENV} .= " VERBOSE=$VERBOSE"  if $VERBOSE;
@@ -1549,9 +1628,9 @@ sub make_one_config {
     $C{XCRUN} = "env LANG=C /usr/bin/xcrun -toolchain '$C{TOOLCHAIN}'";
 
     $C{COMPILE_C}   = "$C{XCRUN} '$C{CC}'  $cflags -x c -std=gnu99";
-    $C{COMPILE_CXX} = "$C{XCRUN} '$C{CXX}' $cflags -x c++ -std=gnu++17";
+    $C{COMPILE_CXX} = "$C{XCRUN} '$C{CXX}' $cflags $cxxflags -x c++ -std=gnu++17";
     $C{COMPILE_M}   = "$C{XCRUN} '$C{CC}'  $cflags $objcflags -x objective-c -std=gnu99";
-    $C{COMPILE_MM}  = "$C{XCRUN} '$C{CXX}' $cflags $objcflags -x objective-c++ -std=gnu++17";
+    $C{COMPILE_MM}  = "$C{XCRUN} '$C{CXX}' $cflags $objcflags $cxxflags -x objective-c++ -std=gnu++17";
     $C{COMPILE_SWIFT} = "$C{XCRUN} '$C{SWIFT}' $swiftflags";
     
     $C{COMPILE} = $C{COMPILE_C}      if $C{LANGUAGE} eq "c";
@@ -1916,6 +1995,7 @@ $RUN = getbool("RUN", 1);
 $VERBOSE = getint("VERBOSE", 0);
 $BATS = getbool("BATS", 0);
 $BUILDDIR = getarg("BUILDDIR", $BATS ? $BATSBASE : $LOCALBASE);
+$RUNSCRIPT = getarg("RUNSCRIPT", "");
 
 my $root = getarg("ROOT", "");
 $root =~ s#/*$##;

@@ -1,7 +1,7 @@
 /*
 TEST_BUILD
-  $C{COMPILE} $DIR/enumClasses0.m -o enumClasses0.dylib -dynamiclib
-  $C{COMPILE} $DIR/enumClasses1.m -x none enumClasses0.dylib -o enumClasses1.dylib -dynamiclib
+  $C{COMPILE} $DIR/enumClasses0.m -install_name $T{DYLIBDIR}/enumClasses0.dylib -o enumClasses0.dylib -dynamiclib
+  $C{COMPILE} $DIR/enumClasses1.m -x none enumClasses0.dylib -install_name $T{DYLIBDIR}/enumClasses1.dylib -o enumClasses1.dylib -dynamiclib
   $C{COMPILE} $DIR/enumClasses.m -x none enumClasses0.dylib enumClasses1.dylib -o enumClasses.exe
 END
 
@@ -34,10 +34,10 @@ First four:
   Datschund
   Terrier
   Labrador
-In dylib:
+(Not looking in dylib \(no dlopen\)|In dylib:
   TestRoot
   Animal
-  Cat
+  Cat)
 Found a Heffalump
 OK: enumClasses.m
 END
@@ -255,6 +255,9 @@ int main() {
                           });
     testassertequal(stopCount, 4);
 
+#if TARGET_OS_EXCLAVEKIT
+    fprintf(stderr, "Not looking in dylib (no dlopen)\n");
+#else
     // Enumerate the classes in the dylib
     void *dylib = dlopen("enumClasses0.dylib", RTLD_NOLOAD);
     __block unsigned dylibCount = 0;
@@ -267,6 +270,7 @@ int main() {
                           });
     testassertequal(dylibCount, 3);
     dlclose(dylib);
+#endif // TARGET_OS_EXCLAVEKIT
 
     // Create a dynamic class
     Class heffalump = objc_allocateClassPair([Elephant class], "Heffalump", 0);

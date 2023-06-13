@@ -62,6 +62,11 @@ _Pragma("clang diagnostic ignored \"-Wundefined-bool-conversion\"") \
 ASSERT(this) \
 _Pragma("clang diagnostic pop")
 
+// Generate an alias for a function
+#define _OBJC_ALIAS_STR(x) #x
+#define OBJC_DECLARE_FUNCTION_ALIAS(alias,orig)                             \
+    asm("  .globl _" _OBJC_ALIAS_STR(alias) "\n"                            \
+        "  .set _" _OBJC_ALIAS_STR(alias) ",_" _OBJC_ALIAS_STR(orig) "\n")
 
 struct objc_class;
 struct objc_object;
@@ -95,18 +100,21 @@ public:
         ISA_BITFIELD;  // defined in isa.h
     };
 
-    bool isDeallocating() {
+#if ISA_HAS_INLINE_RC
+    bool isDeallocating() const {
         return extra_rc == 0 && has_sidetable_rc == 0;
     }
     void setDeallocating() {
         extra_rc = 0;
         has_sidetable_rc = 0;
     }
+#endif // ISA_HAS_INLINE_RC
+
 #endif
 
     void setClass(Class cls, objc_object *obj);
-    Class getClass(bool authenticated);
-    Class getDecodedClass(bool authenticated);
+    Class getClass(bool authenticated) const;
+    Class getDecodedClass(bool authenticated) const;
 };
 
 
@@ -120,13 +128,13 @@ private:
 public:
 
     // ISA() assumes this is NOT a tagged pointer object
-    Class ISA(bool authenticated = false);
+    Class ISA(bool authenticated = false) const;
 
     // rawISA() assumes this is NOT a tagged pointer object or a non pointer ISA
-    Class rawISA();
+    Class rawISA() const;
 
     // getIsa() allows this to be a tagged pointer object
-    Class getIsa();
+    Class getIsa() const;
     
     uintptr_t isaBits() const;
 
@@ -145,25 +153,25 @@ public:
     // If this is a new object, use initIsa() for performance.
     Class changeIsa(Class newCls);
 
-    bool hasNonpointerIsa();
-    bool isTaggedPointer();
-    bool isBasicTaggedPointer();
-    bool isExtTaggedPointer();
-    bool isClass();
+    bool hasNonpointerIsa() const;
+    bool isTaggedPointer() const;
+    bool isBasicTaggedPointer() const;
+    bool isExtTaggedPointer() const;
+    bool isClass() const;
 
     // object may have associated objects?
-    bool hasAssociatedObjects();
+    bool hasAssociatedObjects() const;
     void setHasAssociatedObjects();
 
     // object may be weakly referenced?
-    bool isWeaklyReferenced();
+    bool isWeaklyReferenced() const;
     void setWeaklyReferenced_nolock();
 
     // object may be uniquely referenced?
-    bool isUniquelyReferenced();
+    bool isUniquelyReferenced() const;
 
     // object may have -.cxx_destruct implementation?
-    bool hasCxxDtor();
+    bool hasCxxDtor() const;
 
     // Optimized calls to retain/release methods
     id retain();
@@ -176,10 +184,10 @@ public:
     id rootAutorelease();
     bool rootTryRetain();
     bool rootReleaseShouldDealloc();
-    uintptr_t rootRetainCount();
+    uintptr_t rootRetainCount() const;
 
     // Implementation of dealloc methods
-    bool rootIsDeallocating();
+    bool rootIsDeallocating() const;
     void clearDeallocating();
     void rootDealloc();
 
@@ -212,21 +220,21 @@ private:
     // Side table retain count overflow for nonpointer isa
     struct SidetableBorrow { size_t borrowed, remaining; };
 
-    void sidetable_lock();
-    void sidetable_unlock();
+    void sidetable_lock() const;
+    void sidetable_unlock() const;
 
     void sidetable_moveExtraRC_nolock(size_t extra_rc, bool isDeallocating, bool weaklyReferenced);
     bool sidetable_addExtraRC_nolock(size_t delta_rc);
     SidetableBorrow sidetable_subExtraRC_nolock(size_t delta_rc);
-    size_t sidetable_getExtraRC_nolock();
+    size_t sidetable_getExtraRC_nolock() const;
     void sidetable_clearExtraRC_nolock();
 #endif
 
     // Side-table-only retain count
-    bool sidetable_isDeallocating();
+    bool sidetable_isDeallocating() const;
     void sidetable_clearDeallocating();
 
-    bool sidetable_isWeaklyReferenced();
+    bool sidetable_isWeaklyReferenced() const;
     void sidetable_setWeaklyReferenced_nolock();
 
     id sidetable_retain(bool locked = false);
@@ -237,9 +245,9 @@ private:
 
     bool sidetable_tryRetain();
 
-    uintptr_t sidetable_retainCount();
+    uintptr_t sidetable_retainCount() const;
 #if DEBUG
-    bool sidetable_present();
+    bool sidetable_present() const;
 #endif
 
     void performDealloc();
@@ -670,8 +678,14 @@ extern void gdb_objc_class_changed(Class cls, unsigned long changes, const char 
 
 
 // Settings from environment variables
-#define OPTION(var, env, help) extern bool var;
-#define INTERNAL_OPTION(var, env, help) extern bool var;
+typedef enum {
+    Off = 0,
+    On = 1,
+    Fatal = 2
+} option_value_t;
+
+#define OPTION(var, def, env, help) extern option_value_t var;
+#define INTERNAL_OPTION(var, def, env, help) extern option_value_t var;
 #include "objc-env.h"
 #undef OPTION
 #undef INTERNAL_OPTION
@@ -715,8 +729,10 @@ extern void arr_init(void);
 extern id objc_autoreleaseReturnValue(id obj);
 
 // block trampolines
+#if !TARGET_OS_EXCLAVEKIT
 extern void _imp_implementationWithBlock_init(void);
 extern IMP _imp_implementationWithBlockNoCopy(id block);
+#endif
 
 // layout.h
 typedef struct {

@@ -1,4 +1,4 @@
-// TEST_CONFIG MEM=mrc
+// TEST_CONFIG MEM=mrc OS=!exclavekit
 // TEST_CFLAGS -framework CoreFoundation -framework Foundation
 
 #include "test.h"

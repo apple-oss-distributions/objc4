@@ -1,1 +1,3 @@
+OTHER_CFLAGS[sdk=exclavekit*] = $(inherited) -nostdinc++ -cxx-isystem "$(SDKROOT)$(SYSTEM_PREFIX)/usr/include/c++/v1"
+INSTALL_FEATURE_FLAGS[sdk=exclavekit*] = NO
 

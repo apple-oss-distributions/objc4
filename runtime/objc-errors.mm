@@ -33,6 +33,60 @@
 
 mutex_t crashlog_lock;
 
+#if TARGET_OS_EXCLAVEKIT
+static inline int getpid(void)
+{
+    return 1;
+}
+
+void _objc_inform_now_and_on_crash(const char *fmt, ...)
+{
+    va_list ap;
+    char *buf;
+
+    va_start(ap, fmt);
+    _objc_vasprintf(&buf, fmt, ap);
+    va_end(ap);
+    printf("objc[%d]: %s\n", getpid(), buf);
+    free(buf);
+}
+
+void __objc_error(id rcv, const char *fmt, ...)
+{
+    va_list ap;
+    char *buf;
+
+    va_start(ap, fmt);
+    _objc_vasprintf(&buf, fmt, ap);
+    va_end(ap);
+    _objc_fatal("%s: %s", object_getClassName(rcv), buf);
+}
+
+void _objc_inform(const char *fmt, ...)
+{
+    va_list ap;
+    char *buf;
+
+    va_start(ap, fmt);
+    _objc_vasprintf(&buf, fmt, ap);
+    va_end(ap);
+    printf("objc[%d]: %s\n", getpid(), buf);
+    free(buf);
+}
+
+void _objc_fatal(const char *fmt, ...)
+{
+    va_list ap;
+    char *buf;
+
+    va_start(ap, fmt);
+    _objc_vasprintf(&buf, fmt, ap);
+    va_end(ap);
+    printf("objc[%d]: %s\n", getpid(), buf);
+    abort();
+}
+
+#else
 
 #include <sandbox/private.h>
 #include <_simple.h>
@@ -245,6 +299,7 @@ void _objc_inform_now_and_on_crash(const char *fmt, ...)
     free(buf1);
 }
 
+#endif // !TARGET_OS_EXCLAVEKIT
 
 BREAKPOINT_FUNCTION( 
     void _objc_warn_deprecated(void)

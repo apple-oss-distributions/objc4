@@ -11,7 +11,10 @@ END
 
 #include "test.h"
 #include <dlfcn.h>
-#include <Foundation/NSObject.h>
+#include <objc/NSObject.h>
+#include <objc/runtime.h>
+
+typedef struct _NSZone NSZone;
 
 static int Retains;
 static int Releases;
@@ -241,9 +244,6 @@ int main(int argc __unused, char **argv)
     id ooo;
     Class cc2;
     id oo2;
-
-    void *dlh;
-
 
 #if __x86_64__
     // vtable dispatch can introduce bypass just like the ARC entrypoints
@@ -657,8 +657,11 @@ int main(int argc __unused, char **argv)
     objc_autorelease(oo2);
     testassertequal(Autoreleases, 0);
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     class_setSuperclass(ccc, [InheritingSub class]);
-    
+#pragma clang diagnostic pop
+
     objc_retain(ooo);
     testassertequal(Retains, 0);
     objc_release(ooo);
@@ -696,7 +699,10 @@ int main(int argc __unused, char **argv)
     objc_autorelease(oo2);
     testassertequal(Autoreleases, 0);
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     class_setSuperclass(ccc, [OverridingSub class]);
+#pragma clang diagnostic pop
 
     objc_retain(ooo);
     testassertequal(SubRetains, 1);
@@ -712,6 +718,9 @@ int main(int argc __unused, char **argv)
     objc_autorelease(oo2);
     testassertequal(SubAutoreleases, 2);
 
+    // These tests required dlopen()
+#if !TARGET_OS_EXCLAVEKIT
+    void *dlh;
 
     testprintf("category replacement of unrelated method does not clobber (InheritingSubCat)\n");
     zero();
@@ -752,7 +761,6 @@ int main(int argc __unused, char **argv)
     objc_autorelease(oo2);
     testassertequal(Autoreleases, 0);
 
-
     testprintf("category replacement clobbers (InheritingSubCat)\n");
     zero();
 
@@ -791,7 +799,7 @@ int main(int argc __unused, char **argv)
     testassertequal(Releases, 2);
     objc_autorelease(oo2);
     testassertequal(Autoreleases, 2);
-
+#endif // !TARGET_OS_EXCLAVEKIT
 
     testprintf("allocateClassPair with clean super does not clobber\n");
     zero();

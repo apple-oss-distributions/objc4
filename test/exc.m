@@ -1,6 +1,6 @@
 /*
 need exception-safe ARC for exception deallocation tests 
-TEST_CFLAGS -fobjc-arc-exceptions -framework Foundation
+TEST_CFLAGS -fobjc-arc-exceptions
 */
 
 #include "test.h"

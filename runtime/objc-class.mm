@@ -160,7 +160,9 @@
 #include "objc-abi.h"
 #include <objc/message.h>
 
+#if !TARGET_OS_EXCLAVEKIT
 #include <os/linker_set.h>
+#endif
 
 /***********************************************************************
 * Information about multi-thread support:
@@ -636,6 +638,7 @@ BREAKPOINT_FUNCTION(
 * class_respondsToSelector.
 **********************************************************************/
 
+#if !TARGET_OS_EXCLAVEKIT
 
 BOOL class_respondsToMethod(Class cls, SEL sel)
 {
@@ -644,6 +647,7 @@ BOOL class_respondsToMethod(Class cls, SEL sel)
     return class_respondsToSelector(cls, sel);
 }
 
+#endif // !TARGET_OS_EXCLAVEKIT
 
 
 BOOL class_respondsToSelector(Class cls, SEL sel)
@@ -669,6 +673,7 @@ class_respondsToSelector_inst(id inst, SEL sel, Class cls)
 * where obj is an instance of class cls.
 **********************************************************************/
 
+#if !TARGET_OS_EXCLAVEKIT
 
 IMP class_lookupMethod(Class cls, SEL sel)
 {
@@ -682,6 +687,7 @@ IMP class_lookupMethod(Class cls, SEL sel)
     return class_getMethodImplementation(cls, sel);
 }
 
+#endif // !TARGET_OS_EXCLAVEKIT
 
 __attribute__((flatten))
 IMP class_getMethodImplementation(Class cls, SEL sel)
@@ -917,6 +923,7 @@ inform_duplicate(const char *name, Class oldCls, Class newCls)
     const char *newName = newHeader ? newHeader->fname() : "??";
     const objc_duplicate_class **_dupi = NULL;
 
+#if !TARGET_OS_EXCLAVEKIT
     LINKER_SET_FOREACH(_dupi, const objc_duplicate_class **, "__objc_dupclass") {
         const objc_duplicate_class *dupi = *_dupi;
 
@@ -924,11 +931,14 @@ inform_duplicate(const char *name, Class oldCls, Class newCls)
             return;
         }
     }
+#endif // !TARGET_OS_EXCLAVEKIT
 
-    (DebugDuplicateClasses ? _objc_fatal : _objc_inform)
-        ("Class %s is implemented in both %s (%p) and %s (%p). "
-         "One of the two will be used. Which one is undefined.",
-         name, oldName, oldCls, newName, newCls);
+    if (DebugDuplicateClasses) {
+        (DebugDuplicateClasses == Fatal ? _objc_fatal : _objc_inform)
+            ("Class %s is implemented in both %s (%p) and %s (%p). "
+             "One of the two will be used. Which one is undefined.",
+             name, oldName, oldCls, newName, newCls);
+    }
 }
 
 

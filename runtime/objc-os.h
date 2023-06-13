@@ -127,6 +127,7 @@ static inline uintptr_t mask16ShiftBits(uint16_t mask)
 #   include <assert.h>
 #   include <limits.h>
 
+#if !TARGET_OS_EXCLAVEKIT
 #   include <fcntl.h>
 #   include <syslog.h>
 #   include <unistd.h>
@@ -140,6 +141,7 @@ static inline uintptr_t mask16ShiftBits(uint16_t mask)
 #   include <sys/reason.h>
 #   include <mach/mach.h>
 #   include <mach/mach_time.h>
+#endif // !TARGET_OS_EXCLAVEKIT
 
 #   include <mach-o/dyld.h>
 #   include <mach-o/loader.h>
@@ -150,11 +152,13 @@ static inline uintptr_t mask16ShiftBits(uint16_t mask)
 #   include <malloc/malloc.h>
 #endif
 
+#if !TARGET_OS_EXCLAVEKIT
 #   include <mach-o/ldsyms.h>
 #   include <os/lock_private.h>
 #   include <libkern/OSCacheControl.h>
 #   include <System/pthread_machdep.h>
 #   include "objc-probes.h"  // generated dtrace probe definitions.
+#endif // !TARGET_OS_EXCLAVEKIT
 
 // Some libc functions call objc_msgSend() 
 // so we can't use them without deadlocks.
@@ -293,7 +297,9 @@ T AtomicDecrement(volatile T *value)
 }
 
 #if !TARGET_OS_IPHONE
+#   if !TARGET_OS_EXCLAVEKIT
 #       include <CrashReporterClient.h>
+#   endif
 #else
     // CrashReporterClient not yet available on iOS
     __BEGIN_DECLS
@@ -501,6 +507,7 @@ int _objc_asprintf(char **strp, const char *fmt, ...);
 #endif // HAVE_ASPRINTF
 
 
+#if !TARGET_OS_EXCLAVEKIT
 #ifndef __BUILDING_OBJCDT__
 // fork() safety requires careful tracking of all locks.
 // Our custom lock types check this in debug builds.
@@ -509,5 +516,6 @@ typedef __darwin_pthread_mutex_t pthread_mutex_t UNAVAILABLE_ATTRIBUTE;
 typedef __darwin_pthread_rwlock_t pthread_rwlock_t UNAVAILABLE_ATTRIBUTE;
 typedef struct os_unfair_lock_s os_unfair_lock UNAVAILABLE_ATTRIBUTE;
 #endif
+#endif // !TARGET_OS_EXCLAVEKIT
 
 #endif

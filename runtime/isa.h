@@ -57,7 +57,20 @@
 # if __arm64__
 // ARM64 simulators have a larger address space, so use the ARM64e
 // scheme even when simulators build for ARM64-not-e.
-#   if __has_feature(ptrauth_calls) || TARGET_OS_SIMULATOR
+#   if TARGET_OS_EXCLAVEKIT
+      // Because there's no TBI on ExclaveKit, the PAC takes up all of
+      // the remaining bits and we can't have the inline reference count
+#     define ISA_MASK        0xfffffffffffffff8ULL
+#     define ISA_MAGIC_MASK  0x0000000000000001ULL
+#     define ISA_MAGIC_VALUE 0x0000000000000001ULL
+#     define ISA_HAS_CXX_DTOR_BIT 0
+#     define ISA_BITFIELD                                                      \
+        uintptr_t nonpointer        : 1;                                       \
+        uintptr_t has_assoc         : 1;                                       \
+        uintptr_t weakly_referenced : 1;                                       \
+        uintptr_t shiftcls_and_sig  : 61;
+#     define ISA_HAS_INLINE_RC 0
+#   elif __has_feature(ptrauth_calls) || TARGET_OS_SIMULATOR
 #     define ISA_MASK        0x007ffffffffffff8ULL
 #     define ISA_MAGIC_MASK  0x0000000000000001ULL
 #     define ISA_MAGIC_VALUE 0x0000000000000001ULL
@@ -100,6 +113,8 @@
 #     define ISA_MASK_NOSIG ISA_MASK
 #   elif TARGET_OS_OSX
 #     define ISA_MASK_NOSIG 0x00007ffffffffff8ULL
+#   elif TARGET_OS_EXCLAVEKIT
+#     define ISA_MASK_NOSIG 0x0000001ffffffff8ULL
 #   else
 #     define ISA_MASK_NOSIG 0x0000000ffffffff8ULL
 #   endif

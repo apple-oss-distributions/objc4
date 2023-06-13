@@ -2,8 +2,7 @@
 //TEST_ENV OBJC_DISABLE_AUTORELEASE_COALESCING=NO OBJC_DISABLE_AUTORELEASE_COALESCING_LRU=NO
 
 #include "test.h"
-#import <Foundation/NSObject.h>
-#include <os/feature_private.h>
+#import <objc/NSObject.h>
 
 @interface Counter: NSObject {
 @public

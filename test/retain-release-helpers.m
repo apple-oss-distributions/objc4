@@ -391,6 +391,13 @@ void testOverflowRetainReleaseOneRegFuncs(void)
 @implementation DeallocatingChecker
 
 - (void)dealloc {
+    // If we're using side tables, rc is 1 here, and it can still
+    // increment and decrement.  We should fix that.
+    // rdar://93537253 (Make side table retain count zero during dealloc)
+#if !ISA_HAS_INLINE_RC
+    testassertequal([self retainCount], 1);
+    testassert([self _isDeallocating]);
+#else
 #define CHECK()                             \
     testassertequal([self retainCount], 0); \
     testassert([self _isDeallocating]);
@@ -414,6 +421,7 @@ void testOverflowRetainReleaseOneRegFuncs(void)
     ALL_REGS(RETAIN_RELEASE)
 
 #undef RETAIN_RELEASE
+#endif
 
     *outDeallocated = YES;
     [super dealloc];
@@ -431,6 +439,7 @@ void testRetainReleaseInDealloc(void) {
 }
 
 void testSwift() {
+#if !TARGET_OS_EXCLAVEKIT // Probably can't dlopen libswiftCore in exclaves.
     void *swiftcore = dlopen("/usr/lib/swift/libswiftCore.dylib", RTLD_LAZY);
     testassert(swiftcore);
 
@@ -499,6 +508,7 @@ void testSwift() {
         #undef CALL_RETAIN_IF_MATCH
         #undef CALL_RELEASE_IF_MATCH
     }
+#endif
 }
 
 void testNilAndTagged()

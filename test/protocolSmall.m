@@ -1,6 +1,3 @@
-// TEST_CFLAGS -framework Foundation
-// need Foundation to get NSObject compatibility additions for class Protocol
-// because ARC calls [protocol retain]
 /*
 TEST_BUILD_OUTPUT
 .*protocolSmall.m:\d+:\d+: warning: cannot find protocol definition for 'SmallProto'
@@ -11,12 +8,23 @@ END
 #include "test.h"
 #include "testroot.i"
 #include <objc/runtime.h>
+#include <ptrauth.h>
+
+#if TARGET_OS_EXCLAVEKIT && __has_feature(ptrauth_calls)
+#define ptrauth_method_list_types \
+    __ptrauth(ptrauth_key_process_dependent_data, 1, \
+    ptrauth_string_discriminator("method_t::bigSigned::types"))
+#define ptrauth_objc_sel __ptrauth_objc_sel
+#else
+#define ptrauth_method_list_types
+#define ptrauth_objc_sel
+#endif
 
 struct MethodListOneEntry {
     uint32_t entSizeAndFlags;
     uint32_t count;
-    SEL name;
-    const char *types;
+    SEL ptrauth_objc_sel name;
+    const char * ptrauth_method_list_types types;
     void *imp;
 };
 

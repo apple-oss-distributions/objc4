@@ -10,7 +10,8 @@ ld: warning: passed two min versions.*for platform.*
 END
 
 TEST_RUN_OUTPUT
-objc\[\d+\]: Invalid or prematurely-freed autorelease pool 0x[0-9a-fA-f]+\. Set a breakpoint .* Proceeding anyway .*
+objc\[\d+\]: Invalid or prematurely-freed autorelease pool 0x[0-9a-fA-f]+\. Set a breakpoint .*
+objc\[\d+\]: Proceeding anyway.*
 OK: badPool.m
 END
 */

@@ -124,6 +124,16 @@ static int state = 0;
 #define SIGNED_CATEGORY_IMP
 #define SIGNED_METHOD_LIST
 #endif
+
+#if TARGET_OS_EXCLAVEKIT
+// On ExclaveKit, all method lists are signed
+#define SIGNED_OBJC_SEL "@AUTH(da,0x57c2,addr)"
+#define SIGNED_METHOD_TYPES "@AUTH(da,0xdec6,addr)"
+#else
+#define SIGNED_OBJC_SEL
+#define SIGNED_METHOD_TYPES
+#endif
+
 asm(
 "    .section __DATA,__objc_const                                       \n"
 "L_catlist2CategoryName:                                                \n"
@@ -137,8 +147,8 @@ asm(
 "l_OBJC_$_CATEGORY_INSTANCE_METHODS_Super_$_Category_catlist2:          \n"
 "    .long 24                                                           \n"
 "    .long 1                                                            \n"
-"    " PTR " L_catlist2MethodString                                     \n"
-"    " PTR " L_catlist2MethodTypes                                      \n"
+"    " PTR " L_catlist2MethodString" SIGNED_OBJC_SEL "                  \n"
+"    " PTR " L_catlist2MethodTypes" SIGNED_METHOD_TYPES "               \n"
 "    " PTR " _catlist2MethodImplementation" SIGNED_CATEGORY_IMP"        \n"
 
 "    .p2align 3                                                         \n"

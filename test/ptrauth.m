@@ -12,7 +12,7 @@ END
 
 #include "test.h"
 
-#include <Foundation/NSObject.h>
+#include <objc/NSObject.h>
 #include <objc/runtime.h>
 
 #include <stdio.h>

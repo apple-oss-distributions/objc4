@@ -441,32 +441,34 @@ OBJC_EXPORT const struct { char c; } objc_absolute_indexed_isa_index_shift
 
 #if __arm64__
 
+// N.B. These do not have the normal C calling convention (except for _x0),
+//      which is why the argument is "void" here.
 OBJC_EXPORT id _Nullable objc_retain_x0(id _Nullable) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x1(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x2(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x3(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x4(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x5(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x6(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x7(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x8(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x9(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x10(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x11(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x12(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x13(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x14(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x15(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x19(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x20(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x21(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x22(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x23(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x24(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x25(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x26(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x27(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
-OBJC_EXPORT void objc_retain_x28(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x1(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x2(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x3(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x4(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x5(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x6(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x7(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x8(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x9(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x10(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x11(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x12(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x13(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x14(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x15(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x19(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x20(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x21(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x22(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x23(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x24(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x25(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x26(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x27(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+OBJC_EXPORT id _Nullable objc_retain_x28(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
 
 OBJC_EXPORT void objc_release_x0(id _Nullable) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
 OBJC_EXPORT void objc_release_x1(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
@@ -509,7 +511,9 @@ OBJC_EXPORT void objc_release_x28(void) OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.
 __OSX_AVAILABLE(10.0)
 __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
 __WATCHOS_UNAVAILABLE
+#   ifndef __APPLE_BLEACH_SDK__
 __BRIDGEOS_UNAVAILABLE
+#   endif
 #endif
 OBJC_ROOT_CLASS
 @interface Object {

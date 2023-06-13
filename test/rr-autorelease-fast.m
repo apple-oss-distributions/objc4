@@ -6,7 +6,6 @@
 
 #include <objc/objc-internal.h>
 #include <objc/objc-abi.h>
-#include <Foundation/Foundation.h>
 
 @interface TestObject : TestRoot @end
 @implementation TestObject @end

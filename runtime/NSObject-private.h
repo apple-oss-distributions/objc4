@@ -38,7 +38,7 @@ struct RefcountMapValuePurgeable {
 
 // RefcountMap disguises its pointers because we
 // don't want the table to act as a root for `leaks`.
-typedef objc::DenseMap<DisguisedPtr<objc_object>,size_t,RefcountMapValuePurgeable> RefcountMap;
+typedef objc::DenseMap<DisguisedPtr<const objc_object>,size_t,RefcountMapValuePurgeable> RefcountMap;
 
 // Template parameters.
 enum HaveOld { DontHaveOld = false, DoHaveOld = true };

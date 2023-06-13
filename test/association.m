@@ -1,7 +1,7 @@
 // TEST_CONFIG
 
 #include "test.h"
-#include <Foundation/NSObject.h>
+#include <objc/NSObject.h>
 #include <objc/runtime.h>
 #include <objc/objc-internal.h>
 #include <Block.h>
@@ -11,7 +11,6 @@ static int supers;
 static int subs;
 
 static const char *key = "key";
-
 
 @interface Value : NSObject @end
 @interface Super : NSObject @end
@@ -30,7 +29,7 @@ static const char *key = "key";
     RELEASE_VAR(value);
 
     object_setClass(self, [Sub class]);
-    
+
     return self;
 }
 
@@ -191,10 +190,10 @@ int main()
         }
     });
     testcollect();
-            
-    testassert(supers == 0);
+
+    testassertequal(supers, 0);
     testassert(subs > 0);
-    testassert(subs == values);
+    testassertequal(subs, values);
 
 
     supers = 0;
@@ -210,8 +209,8 @@ int main()
     testcollect();
 
     testassert(supers > 0);
-    testassert(subs == 0);
-    testassert(supers == values);
+    testassertequal(subs, 0);
+    testassertequal(supers, values);
     
     // rdar://44094390 tolerate nil object and nil value
 #pragma clang diagnostic push

@@ -82,8 +82,10 @@
 #include "objc-private.h"
 
 #if TARGET_OS_OSX
+#   if !TARGET_OS_EXCLAVEKIT
 #include <Cambria/Traps.h>
 #include <Cambria/Cambria.h>
+#   endif
 #endif
 
 #if __arm__  ||  __x86_64__  ||  __i386__
@@ -989,6 +991,7 @@ void cache_t::destroy()
 * cache collection.
 **********************************************************************/
 
+#if !TARGET_OS_EXCLAVEKIT
 
 // A sentinel (magic value) to report bad thread_get_state status.
 // Must not be a valid PC.
@@ -1030,6 +1033,7 @@ static uintptr_t _get_pc_for_thread(thread_t thread)
 }
 #endif
 
+#endif // !TARGET_OS_EXCLAVEKIT
 
 /***********************************************************************
 * _collecting_in_critical.
@@ -1091,6 +1095,9 @@ void cache_t::init()
 
 static int _collecting_in_critical(void)
 {
+#if TARGET_OS_EXCLAVEKIT
+    return FALSE;
+#else
 
 #if HAVE_TASK_RESTARTABLE_RANGES
     // Only use restartable ranges if we registered them earlier.
@@ -1181,6 +1188,7 @@ static int _collecting_in_critical(void)
     // Return our finding
     return result;
 
+#endif // !TARGET_OS_EXCLAVEKIT
 }
 
 

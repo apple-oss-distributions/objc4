@@ -150,6 +150,8 @@
 		D34CF10F27E0BF9E00A395CA /* c11threads.h in Headers */ = {isa = PBXBuildFile; fileRef = D34CF10827E0BF9E00A395CA /* c11threads.h */; };
 		D34CF11227E0C06C00A395CA /* pthreads.h in Headers */ = {isa = PBXBuildFile; fileRef = D34CF11127E0C06C00A395CA /* pthreads.h */; };
 		D35BD77B27E099860064BAE2 /* objc-vm.h in Headers */ = {isa = PBXBuildFile; fileRef = D35BD77A27E099860064BAE2 /* objc-vm.h */; };
+		D36DEACB285B2E59009B5CC4 /* objc-test-env.c in Sources */ = {isa = PBXBuildFile; fileRef = D36DEACA285B2E59009B5CC4 /* objc-test-env.c */; };
+		D36DEACC285B304A009B5CC4 /* libobjc-env.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = D36DEAC4285B2C7D009B5CC4 /* libobjc-env.dylib */; settings = {ATTRIBUTES = (Weak, ); }; };
 		E8923DA5116AB2820071B552 /* objc-block-trampolines.mm in Sources */ = {isa = PBXBuildFile; fileRef = E8923DA0116AB2820071B552 /* objc-block-trampolines.mm */; };
 		F378CAC725534BC000AC8F83 /* module.modulemap in Headers */ = {isa = PBXBuildFile; fileRef = F378CAC625534BAC00AC8F83 /* module.modulemap */; settings = {ATTRIBUTES = (Private, ); }; };
 		F9BCC71B205C68E800DD9AFC /* objc-blocktramps-arm64.s in Sources */ = {isa = PBXBuildFile; fileRef = 8379996D13CBAF6F007C2B5F /* objc-blocktramps-arm64.s */; };
@@ -169,6 +171,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = D2AAC0620554660B00DB518D;
 			remoteInfo = objc;
+		};
+		D36DEACD285B306B009B5CC4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 08FB7793FE84155DC02AAC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D36DEAC3285B2C7D009B5CC4;
+			remoteInfo = "objc-test-env";
 		};
 		F9BCC728205C6A0900DD9AFC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -309,6 +318,9 @@
 		D34CF10827E0BF9E00A395CA /* c11threads.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = c11threads.h; sourceTree = "<group>"; };
 		D34CF11127E0C06C00A395CA /* pthreads.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = pthreads.h; sourceTree = "<group>"; };
 		D35BD77A27E099860064BAE2 /* objc-vm.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-vm.h"; path = "runtime/objc-vm.h"; sourceTree = "<group>"; };
+		D36DEAC4285B2C7D009B5CC4 /* libobjc-env.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = "libobjc-env.dylib"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D36DEAC9285B2CE9009B5CC4 /* objc-test-env.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "objc-test-env.h"; path = "runtime/objc-test-env.h"; sourceTree = "<group>"; };
+		D36DEACA285B2E59009B5CC4 /* objc-test-env.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = "objc-test-env.c"; path = "runtime/objc-test-env.c"; sourceTree = "<group>"; };
 		D3F2C17B27F4932500064435 /* objc.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = objc.xcconfig; sourceTree = "<group>"; };
 		E8923D9C116AB2820071B552 /* objc-blocktramps-i386.s */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.asm; name = "objc-blocktramps-i386.s"; path = "runtime/objc-blocktramps-i386.s"; sourceTree = "<group>"; };
 		E8923D9D116AB2820071B552 /* objc-blocktramps-x86_64.s */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.asm; name = "objc-blocktramps-x86_64.s"; path = "runtime/objc-blocktramps-x86_64.s"; sourceTree = "<group>"; };
@@ -332,6 +344,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		D289988505E68E00004EDB86 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D36DEACC285B304A009B5CC4 /* libobjc-env.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D36DEAC2285B2C7D009B5CC4 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -412,6 +432,7 @@
 				83C9C3381668B50E00F4E544 /* objc-msg-simulator-x86_64.s */,
 				830F2A720D737FB800392440 /* objc-msg-x86_64.s */,
 				87BB4E900EC39633005D08E1 /* objc-probes.d */,
+				D36DEACA285B2E59009B5CC4 /* objc-test-env.c */,
 			);
 			name = Source;
 			sourceTree = "<group>";
@@ -422,6 +443,7 @@
 				D2AAC0630554660B00DB518D /* libobjc.A.dylib */,
 				F9BCC727205C68E800DD9AFC /* libobjc-trampolines.dylib */,
 				6EF877D72325D62600963DBB /* objcdt */,
+				D36DEAC4285B2C7D009B5CC4 /* libobjc-env.dylib */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -537,6 +559,7 @@
 				D35BD77A27E099860064BAE2 /* objc-vm.h */,
 				39ABD71F12F0B61800D1054C /* objc-weak.h */,
 				6EACB841232C97A400CE9176 /* objc-zalloc.h */,
+				D36DEAC9285B2CE9009B5CC4 /* objc-test-env.h */,
 			);
 			name = "Project Headers";
 			sourceTree = "<group>";
@@ -654,6 +677,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D36DEAC0285B2C7D009B5CC4 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
@@ -688,11 +718,29 @@
 			buildRules = (
 			);
 			dependencies = (
+				D36DEACE285B306B009B5CC4 /* PBXTargetDependency */,
 				F9BCC729205C6A0900DD9AFC /* PBXTargetDependency */,
 			);
 			name = objc;
 			productName = objc;
 			productReference = D2AAC0630554660B00DB518D /* libobjc.A.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+		D36DEAC3285B2C7D009B5CC4 /* objc-env */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D36DEAC5285B2C7D009B5CC4 /* Build configuration list for PBXNativeTarget "objc-env" */;
+			buildPhases = (
+				D36DEAC0285B2C7D009B5CC4 /* Headers */,
+				D36DEAC1285B2C7D009B5CC4 /* Sources */,
+				D36DEAC2285B2C7D009B5CC4 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "objc-env";
+			productName = "objc-test-env";
+			productReference = D36DEAC4285B2C7D009B5CC4 /* libobjc-env.dylib */;
 			productType = "com.apple.product-type.library.dynamic";
 		};
 		F9BCC6CA205C68E800DD9AFC /* objc-trampolines */ = {
@@ -735,6 +783,9 @@
 					837F67A81A771F63004D34FA = {
 						CreatedOnToolsVersion = 6.3;
 					};
+					D36DEAC3285B2C7D009B5CC4 = {
+						CreatedOnToolsVersion = 14.3;
+					};
 				};
 			};
 			buildConfigurationList = 1DEB914E08733D8E0010E9CD /* Build configuration list for PBXProject "objc" */;
@@ -752,6 +803,7 @@
 			projectRoot = "";
 			targets = (
 				D2AAC0620554660B00DB518D /* objc */,
+				D36DEAC3285B2C7D009B5CC4 /* objc-env */,
 				837F67A81A771F63004D34FA /* objc-simulator */,
 				F9BCC6CA205C68E800DD9AFC /* objc-trampolines */,
 				834F9B01212E560100F95A54 /* objc4_tests */,
@@ -889,6 +941,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D36DEAC1285B2C7D009B5CC4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D36DEACB285B2E59009B5CC4 /* objc-test-env.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F9BCC6EF205C68E800DD9AFC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -912,6 +972,11 @@
 			isa = PBXTargetDependency;
 			target = D2AAC0620554660B00DB518D /* objc */;
 			targetProxy = 837F67AC1A771F6E004D34FA /* PBXContainerItemProxy */;
+		};
+		D36DEACE285B306B009B5CC4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D36DEAC3285B2C7D009B5CC4 /* objc-env */;
+			targetProxy = D36DEACD285B306B009B5CC4 /* PBXContainerItemProxy */;
 		};
 		F9BCC729205C6A0900DD9AFC /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1299,6 +1364,117 @@
 			};
 			name = Release;
 		};
+		D36DEAC6285B2C7D009B5CC4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				EXECUTABLE_PREFIX = lib;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				INSTALL_PATH = "$(SYSTEM_PREFIX)/usr/local/lib";
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		D36DEAC7285B2C7D009B5CC4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				EXECUTABLE_PREFIX = lib;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				INSTALL_PATH = "$(SYSTEM_PREFIX)/usr/local/lib";
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
 		F9BCC725205C68E800DD9AFC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1319,7 +1495,7 @@
 					"$(CONFIGURATION_BUILD_DIR)$(SYSTEM_PREFIX)/usr/local/include",
 					/System/Library/Frameworks/System.framework/PrivateHeaders,
 				);
-				INSTALL_PATH = /usr/lib;
+				INSTALL_PATH = "$(SYSTEM_PREFIX)/usr/lib";
 				IS_ZIPPERED = YES;
 				OTHER_CFLAGS = (
 					"-fdollars-in-identifiers",
@@ -1366,7 +1542,7 @@
 					"$(CONFIGURATION_BUILD_DIR)$(SYSTEM_PREFIX)/usr/local/include",
 					/System/Library/Frameworks/System.framework/PrivateHeaders,
 				);
-				INSTALL_PATH = /usr/lib;
+				INSTALL_PATH = "$(SYSTEM_PREFIX)/usr/lib";
 				IS_ZIPPERED = YES;
 				OTHER_CFLAGS = (
 					"-fdollars-in-identifiers",
@@ -1448,6 +1624,15 @@
 			buildConfigurations = (
 				837F67AA1A771F63004D34FA /* Debug */,
 				837F67AB1A771F63004D34FA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D36DEAC5285B2C7D009B5CC4 /* Build configuration list for PBXNativeTarget "objc-env" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D36DEAC6285B2C7D009B5CC4 /* Debug */,
+				D36DEAC7285B2C7D009B5CC4 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

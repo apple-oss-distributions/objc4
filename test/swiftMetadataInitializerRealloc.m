@@ -1,8 +1,8 @@
 /*
 TEST_CONFIG MEM=mrc
 TEST_BUILD
-    $C{COMPILE} $DIR/swiftMetadataInitializerRealloc-dylib1.m -o libswiftMetadataInitializerRealloc-dylib1.dylib -dynamiclib -Wno-deprecated-objc-pointer-introspection
-    $C{COMPILE} $DIR/swiftMetadataInitializerRealloc-dylib2.m -o libswiftMetadataInitializerRealloc-dylib2.dylib -dynamiclib -L. -lswiftMetadataInitializerRealloc-dylib1
+    $C{COMPILE} $DIR/swiftMetadataInitializerRealloc-dylib1.m -install_name $T{DYLIBDIR}/libswiftMetadataInitializerRealloc-dylib1.dylib -o libswiftMetadataInitializerRealloc-dylib1.dylib -dynamiclib -Wno-deprecated-objc-pointer-introspection
+    $C{COMPILE} $DIR/swiftMetadataInitializerRealloc-dylib2.m -install_name $T{DYLIBDIR}/libswiftMetadataInitializerRealloc-dylib2.dylib -o libswiftMetadataInitializerRealloc-dylib2.dylib -dynamiclib -L. -lswiftMetadataInitializerRealloc-dylib1
     $C{COMPILE} $DIR/swiftMetadataInitializerRealloc.m -o swiftMetadataInitializerRealloc.exe -L. -lswiftMetadataInitializerRealloc-dylib1 -Wno-deprecated-objc-pointer-introspection
 END
 */
@@ -147,7 +147,8 @@ int main()
     testassert(strcmp([[SwiftDylib1B new] dylib1BCategoryInSameDylib], "dylib1BCategoryInSameDylib") == 0);
     testassert(strcmp([[SwiftDylib1A new] dylib1ACategoryInApp], "dylib1ACategoryInApp") == 0);
     testassert(strcmp([[SwiftDylib1B new] dylib1BCategoryInApp], "dylib1BCategoryInApp") == 0);
-    
+
+#if !TARGET_OS_EXCLAVEKIT
     void *handle = dlopen("libswiftMetadataInitializerRealloc-dylib2.dylib", RTLD_LAZY);
     testassert(handle);
     
@@ -156,7 +157,8 @@ int main()
     testassert(strcmp([SwiftDylib1A dylib1ACategoryInAppClassMethod], "dylib1ACategoryInAppClassMethod") == 0);
     testassert(strcmp([SwiftDylib1B dylib1BCategoryInAppClassMethod], "dylib1BCategoryInAppClassMethod") == 0);
     [SwiftDylib1A testFromOtherDylib];
-    
+#endif // !TARGET_OS_EXCLAVEKIT
+
     testassert(objc_getClass("RealSwiftSub"));
     testassert(objc_getClass("RealSwiftDylib1A"));
     testassert(objc_getClass("RealSwiftDylib1B"));

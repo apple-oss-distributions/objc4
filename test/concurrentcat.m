@@ -1,4 +1,5 @@
 /*
+TEST_CONFIG OS=!exclavekit
 TEST_BUILD
     $C{COMPILE} $DIR/concurrentcat.m -o concurrentcat.exe -framework Foundation
 

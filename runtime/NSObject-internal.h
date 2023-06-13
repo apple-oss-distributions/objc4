@@ -50,6 +50,8 @@
 	 objects are stored.
 **********************************************************************/
 
+#include <stdint.h>
+
 // structure version number. Only bump if ABI compatability is broken
 #define AUTORELEASEPOOL_VERSION 1
 

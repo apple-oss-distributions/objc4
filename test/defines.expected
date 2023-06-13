@@ -163,4 +163,5 @@
 #define __OBJC_EXCEPTION_H_
 #define __OBJC_SNYC_H_
 #define __autoreleasing
+#define __DARWIN_NULL
 #define nil

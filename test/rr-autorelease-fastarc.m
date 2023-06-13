@@ -1,3 +1,4 @@
+// TEST_CONFIG OS=!exclavekit
 // TEST_CFLAGS -Os -framework Foundation
 // TEST_DISABLED pending clang support for rdar://20530049
 

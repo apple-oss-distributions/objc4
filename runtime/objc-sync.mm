@@ -301,6 +301,8 @@ int objc_sync_enter(id obj)
             _objc_inform("NIL SYNC DEBUG: @synchronized(nil); set a breakpoint on objc_sync_nil to debug");
         }
         objc_sync_nil();
+        if (DebugNilSync == Fatal)
+            _objc_fatal("@synchronized(nil) is fatal");
     }
 
     return result;
@@ -320,6 +322,8 @@ BOOL objc_sync_try_enter(id obj)
             _objc_inform("NIL SYNC DEBUG: @synchronized(nil); set a breakpoint on objc_sync_nil to debug");
         }
         objc_sync_nil();
+        if (DebugNilSync == Fatal)
+            _objc_fatal("@synchronized(nil) is fatal");
     }
 
     return result;

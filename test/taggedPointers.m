@@ -1,11 +1,14 @@
 // TEST_CFLAGS -fobjc-weak
 
+#define __APPLE_API_PRIVATE 1
+
 #include "test.h"
 #include <objc/runtime.h>
 #include <objc/objc-internal.h>
 #include <objc/objc-gdb.h>
+#include "../runtime/objc-vm.h"
 #include <dlfcn.h>
-#import <Foundation/NSObject.h>
+#import <objc/NSObject.h>
 
 #if OBJC_HAVE_TAGGED_POINTERS
 
@@ -307,7 +310,7 @@ void testConstantTaggedPointers(void)
 {
     testConstantTaggedPointerRoundTrip(0);
     testConstantTaggedPointerRoundTrip((void *)sizeof(void *));
-    testConstantTaggedPointerRoundTrip((void *)(MACH_VM_MAX_ADDRESS - sizeof(void *)));
+    testConstantTaggedPointerRoundTrip((void *)(OBJC_VM_MAX_ADDRESS - sizeof(void *)));
 }
 #endif
 

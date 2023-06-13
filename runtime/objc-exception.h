@@ -72,6 +72,7 @@ OBJC_EXPORT objc_uncaught_exception_handler _Nonnull
 objc_setUncaughtExceptionHandler(objc_uncaught_exception_handler _Nonnull fn)
     OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
 
+#if !TARGET_OS_EXCLAVEKIT
 // Not for iOS.
 OBJC_EXPORT uintptr_t
 objc_addExceptionHandler(objc_exception_handler _Nonnull fn,
@@ -81,6 +82,7 @@ objc_addExceptionHandler(objc_exception_handler _Nonnull fn,
 OBJC_EXPORT void
 objc_removeExceptionHandler(uintptr_t token)
     OBJC_OSX_AVAILABLE_OTHERS_UNAVAILABLE(10.5);
+#endif // !TARGET_OS_EXCLAVEKIT
 
 #endif  // __OBJC_EXCEPTION_H_
 

@@ -1,6 +1,5 @@
 // TEST_CONFIG MEM=mrc
 
-#include <libgen.h>
 #include <objc/runtime.h>
 
 #include "test.h"
