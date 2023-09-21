@@ -62,6 +62,13 @@ _Pragma("clang diagnostic ignored \"-Wundefined-bool-conversion\"") \
 ASSERT(this) \
 _Pragma("clang diagnostic pop")
 
+// An assert that's enabled in release builds.
+#define RELEASE_ASSERT(x, message, ...) \
+    do { \
+        if (slowpath(!(x))) \
+            _objc_fatal("Assertion failed: (%s) - " message, #x __VA_OPT__(,) __VA_ARGS__); \
+    } while(0)
+
 // Generate an alias for a function
 #define _OBJC_ALIAS_STR(x) #x
 #define OBJC_DECLARE_FUNCTION_ALIAS(alias,orig)                             \
@@ -263,6 +270,29 @@ typedef struct ivar_t *Ivar;
 typedef struct category_t *Category;
 typedef struct property_t *objc_property_t;
 
+// Settings from environment variables
+typedef enum {
+    Off = 0,
+    On = 1,
+    Fatal = 2
+} option_value_t;
+
+#define OPTION(var, def, env, help) extern option_value_t var;
+#define INTERNAL_OPTION(var, def, env, help) extern option_value_t var;
+#include "objc-env.h"
+#undef OPTION
+#undef INTERNAL_OPTION
+
+/* errors */
+extern id(*badAllocHandler)(Class);
+extern id _objc_callBadAllocHandler(Class cls) __attribute__((cold, noinline));
+extern void __objc_error(id, const char *, ...) __attribute__((cold, format (printf, 2, 3), noreturn));
+extern void _objc_inform(const char *fmt, ...) __attribute__((cold, format(printf, 1, 2)));
+extern void _objc_inform_on_crash(const char *fmt, ...) __attribute__((cold, format (printf, 1, 2)));
+extern void _objc_inform_now_and_on_crash(const char *fmt, ...) __attribute__((cold, format (printf, 1, 2)));
+extern void _objc_inform_deprecated(const char *oldname, const char *newname) __attribute__((cold, noinline));
+extern void inform_duplicate(const char *name, Class oldCls, Class cls);
+
 // Public headers
 
 #include "objc.h"
@@ -292,12 +322,27 @@ typedef struct property_t *objc_property_t;
 #include "objc-references.h"
 #include "objc-initialize.h"
 #include "objc-loadmethod.h"
+#include "objc-opt.h"
 
 
 #define STRINGIFY(x) #x
 #define STRINGIFY2(x) STRINGIFY(x)
 
 __BEGIN_DECLS
+
+/* preoptimization */
+extern void preopt_init(void);
+extern void disableSharedCacheProtocolOptimizations(void);
+extern bool isPreoptimized(void);
+extern bool noMissingWeakSuperclasses(void);
+extern header_info *preoptimizedHinfoForHeader(const headerType *mhdr);
+
+extern Protocol *getPreoptimizedProtocol(const char *name);
+extern Protocol *getSharedCachePreoptimizedProtocol(const char *name);
+
+extern unsigned getPreoptimizedClassUnreasonableCount();
+extern Class getPreoptimizedClass(const char *name);
+extern Class getPreoptimizedClassesWithMetaClass(Class metacls);
 
 namespace objc {
 
@@ -362,48 +407,8 @@ static inline bool inSharedCache(uintptr_t ptr) {
 
 struct header_info;
 
-// Split out the rw data from header info.  For now put it in a huge array
-// that more than exceeds the space needed.  In future we'll just allocate
-// this in the shared cache builder.
-typedef struct header_info_rw {
-
-    bool getLoaded() const {
-        return isLoaded;
-    }
-
-    void setLoaded(bool v) {
-        isLoaded = v ? 1: 0;
-    }
-
-    bool getAllClassesRealized() const {
-        return allClassesRealized;
-    }
-
-    void setAllClassesRealized(bool v) {
-        allClassesRealized = v ? 1: 0;
-    }
-
-    header_info *getNext() const {
-        return (header_info *)(next << 2);
-    }
-
-    void setNext(header_info *v) {
-        next = ((uintptr_t)v) >> 2;
-    }
-
-private:
-#ifdef __LP64__
-    uintptr_t isLoaded              : 1;
-    uintptr_t allClassesRealized    : 1;
-    uintptr_t next                  : 62;
-#else
-    uintptr_t isLoaded              : 1;
-    uintptr_t allClassesRealized    : 1;
-    uintptr_t next                  : 30;
-#endif
-} header_info_rw;
-
 struct header_info_rw* getPreoptimizedHeaderRW(const struct header_info *const hdr);
+bool hasSharedCacheDyldInfo();
 
 typedef struct header_info {
 private:
@@ -415,28 +420,16 @@ private:
     // from this location.
     intptr_t info_offset;
 
-    // Offset from this location to the non-lazy class list
-    intptr_t nlclslist_offset;
-    uintptr_t nlclslist_count;
-
-    // Offset from this location to the non-lazy category list
-    intptr_t nlcatlist_offset;
-    uintptr_t nlcatlist_count;
-
-    // Offset from this location to the category list
-    intptr_t catlist_offset;
-    uintptr_t catlist_count;
-
-    // Offset from this location to the category list 2
-    intptr_t catlist2_offset;
-    uintptr_t catlist2_count;
+    // Note, this is no longer a pointer, but instead an offset to a pointer
+    // from this location.
+    // This may not be present in old shared caches
+    intptr_t dyld_info_offset;
 
     // Do not add fields without editing ObjCModernAbstraction.hpp
 public:
 
     header_info_rw *getHeaderInfoRW() {
-        header_info_rw *preopt =
-            isPreoptimized() ? getPreoptimizedHeaderRW(this) : nil;
+        header_info_rw *preopt = getPreoptimizedHeaderRW(this);
         if (preopt) return preopt;
         else return &rw_data[0];
     }
@@ -457,29 +450,38 @@ public:
         info_offset = (intptr_t)info - (intptr_t)&info_offset;
     }
 
+    _dyld_section_location_info_t dyldInfo() const {
+        // Shared cache images might not have the info, for now
+        if ( isPreoptimized() ) {
+            if ( !hasSharedCacheDyldInfo() )
+                return NULL;
+        }
+        return (const _dyld_section_location_info_t)(((intptr_t)&dyld_info_offset) + dyld_info_offset);
+    }
+
+    void setdyldInfo(_dyld_section_location_info_t info) {
+        dyld_info_offset = (intptr_t)info - (intptr_t)&dyld_info_offset;
+    }
+
+    // refs sections
+    SEL *selrefs(size_t *outCount) const;
+    message_ref_t *messagerefs(size_t *outCount) const;
+    Class* classrefs(size_t *outCount) const;
+    Class* superrefs(size_t *outCount) const;
+    protocol_t ** protocolrefs(size_t *outCount) const;
+
+    // list sections
+    classref_t const *classlist(size_t *outCount) const;
     const classref_t *nlclslist(size_t *outCount) const;
-
-    void set_nlclslist(const void *list) {
-        nlclslist_offset = (intptr_t)list - (intptr_t)&nlclslist_offset;
-    }
-
-    category_t * const *nlcatlist(size_t *outCount) const;
-
-    void set_nlcatlist(const void *list) {
-        nlcatlist_offset = (intptr_t)list - (intptr_t)&nlcatlist_offset;
-    }
-
+    stub_class_t * const *stublist(size_t *outCount) const;
     category_t * const *catlist(size_t *outCount) const;
-
-    void set_catlist(const void *list) {
-        catlist_offset = (intptr_t)list - (intptr_t)&catlist_offset;
-    }
-
     category_t * const *catlist2(size_t *outCount) const;
+    category_t * const *nlcatlist(size_t *outCount) const;
+    protocol_t * const *protocollist(size_t *outCount) const;
 
-    void set_catlist2(const void *list) {
-        catlist2_offset = (intptr_t)list - (intptr_t)&catlist2_offset;
-    }
+    // misc sections
+    bool hasForkOkSection() const;
+    bool hasRawISASection() const;
 
     bool isLoaded() {
         return getHeaderInfoRW()->getLoaded();
@@ -487,14 +489,6 @@ public:
 
     void setLoaded(bool v) {
         getHeaderInfoRW()->setLoaded(v);
-    }
-
-    bool areAllClassesRealized() {
-        return getHeaderInfoRW()->getAllClassesRealized();
-    }
-
-    void setAllClassesRealized(bool v) {
-        getHeaderInfoRW()->setAllClassesRealized(v);
     }
 
     header_info *getNext() {
@@ -515,14 +509,6 @@ public:
 
     bool isPreoptimized() const;
 
-    bool hasPreoptimizedSelectors() const;
-
-    bool hasPreoptimizedClasses() const;
-
-    bool hasPreoptimizedProtocols() const;
-
-    bool hasPreoptimizedSectionLookups() const;
-
 private:
     // Images in the shared cache will have an empty array here while those
     // allocated at run time will allocate a single entry.
@@ -531,13 +517,27 @@ private:
 
 extern header_info *FirstHeader;
 extern header_info *LastHeader;
+extern header_info *LastHeaderRealizedAllClasses;
 
 extern void appendHeader(header_info *hi);
 extern void removeHeader(header_info *hi);
 
-extern objc_image_info *_getObjcImageInfo(const headerType *head, size_t *size);
-extern bool _hasObjcContents(const header_info *hi);
+extern objc_image_info *
+_getObjcImageInfo(const headerType *mhdr, _dyld_section_location_info_t info, size_t *outBytes);
 
+struct mapped_image_info {
+    header_info *hi;
+    _dyld_objc_notify_mapped_info dyldInfo;
+
+    bool dyldObjCRefsOptimized() {
+        return dyldInfo.dyldObjCRefsOptimized && isPreoptimized();
+    }
+
+    // TODO: dyld will add a flag for this which we need to adopt.
+    bool dyldCategoriesOptimized() {
+        return false;
+    }
+};
 
 // Mach-O segment and section names are 16 bytes and may be un-terminated.
 
@@ -562,23 +562,10 @@ extern bool didCallDyldNotifyRegister;
 /* selectors */
 extern void sel_init(size_t selrefCount);
 extern SEL sel_registerNameNoLock(const char *str, bool copy);
+extern SEL _sel_searchBuiltins(const char *str);
 
 extern SEL SEL_cxx_construct;
 extern SEL SEL_cxx_destruct;
-
-/* preoptimization */
-extern void preopt_init(void);
-extern void disableSharedCacheOptimizations(void);
-extern bool isPreoptimized(void);
-extern bool noMissingWeakSuperclasses(void);
-extern header_info *preoptimizedHinfoForHeader(const headerType *mhdr);
-
-extern Protocol *getPreoptimizedProtocol(const char *name);
-extern Protocol *getSharedCachePreoptimizedProtocol(const char *name);
-
-extern unsigned getPreoptimizedClassUnreasonableCount();
-extern Class getPreoptimizedClass(const char *name);
-extern Class getPreoptimizedClassesWithMetaClass(Class metacls);
 
 extern Class _calloc_class(size_t size);
 
@@ -619,15 +606,14 @@ extern void _objc_msgForward_impcache(void);
 extern id _objc_msgForward_impcache(id, SEL, ...);
 #endif
 
-/* errors */
-extern id(*badAllocHandler)(Class);
-extern id _objc_callBadAllocHandler(Class cls) __attribute__((cold, noinline));
-extern void __objc_error(id, const char *, ...) __attribute__((cold, format (printf, 2, 3), noreturn));
-extern void _objc_inform(const char *fmt, ...) __attribute__((cold, format(printf, 1, 2)));
-extern void _objc_inform_on_crash(const char *fmt, ...) __attribute__((cold, format (printf, 1, 2)));
-extern void _objc_inform_now_and_on_crash(const char *fmt, ...) __attribute__((cold, format (printf, 1, 2)));
-extern void _objc_inform_deprecated(const char *oldname, const char *newname) __attribute__((cold, noinline));
-extern void inform_duplicate(const char *name, Class oldCls, Class cls);
+// Report an error gated on an environment variable. Based on the variable,
+// uses _objc_inform or _objc_fatal. The format string and arguments are only
+// evaluated when needed.
+#define OBJC_DEBUG_OPTION_REPORT_ERROR(option, ...) \
+    do { \
+        if (option) \
+            (option == Fatal ? _objc_fatal : _objc_inform)(__VA_ARGS__); \
+    } while(0)
 
 /* magic */
 extern Class _objc_getFreedObjectClass (void);
@@ -646,13 +632,6 @@ extern objc_property_attribute_t *copyPropertyAttributeList(const char *attrs, u
 extern char *copyPropertyAttributeValue(const char *attrs, const char *name);
 
 /* locking */
-
-class monitor_locker_t : nocopy_t {
-    monitor_t& lock;
-  public:
-    monitor_locker_t(monitor_t& newLock) : lock(newLock) { lock.enter(); }
-    ~monitor_locker_t() { lock.leave(); }
-};
 
 class recursive_mutex_locker_t : nocopy_t {
     recursive_mutex_t& lock;
@@ -676,19 +655,6 @@ extern void _destroyAltHandlerList(struct alt_handler_list *list);
 extern void gdb_objc_class_changed(Class cls, unsigned long changes, const char *classname)
     __attribute__((noinline));
 
-
-// Settings from environment variables
-typedef enum {
-    Off = 0,
-    On = 1,
-    Fatal = 2
-} option_value_t;
-
-#define OPTION(var, def, env, help) extern option_value_t var;
-#define INTERNAL_OPTION(var, def, env, help) extern option_value_t var;
-#include "objc-env.h"
-#undef OPTION
-#undef INTERNAL_OPTION
 
 extern void environ_init(void);
 extern void runtime_init(void);
@@ -722,7 +688,24 @@ extern void encoding_getArgumentType(const char *t, unsigned int index, char *ds
 extern char *encoding_copyArgumentType(const char *t, unsigned int index);
 
 // sync.h
+/// Different kinds of synchronization. The `_objc_sync_enter/exit_kind` calls
+/// map each unique `(object, kind)` pair to a distinct lock. The `kind` allows
+/// multiple distinct locks for the same object, used for different purposes.
+enum class SyncKind {
+    invalid, // Don't use, raw value of 0 means something went wrong.
+    atSynchronize, // Used for @synchronize/objc_sync_enter/exit.
+    classInitialize, // Used for +initialize machinery.
+};
 extern void _destroySyncCache(struct SyncCache *cache);
+extern void _objc_sync_exit_forked_child(id obj, SyncKind kind);
+extern void _objc_sync_assert_locked(id obj, SyncKind kind);
+extern void _objc_sync_assert_unlocked(id obj, SyncKind kind);
+extern void _objc_sync_foreach_lock(void (^call)(id obj, SyncKind kind, recursive_mutex_t *mutex));
+extern void _objc_sync_lock_atfork_prepare(void);
+extern void _objc_sync_lock_atfork_parent(void);
+extern void _objc_sync_lock_atfork_child(void);
+extern int _objc_sync_enter_kind(id obj, SyncKind kind);
+extern int _objc_sync_exit_kind(id obj, SyncKind kind);
 
 // arr
 extern void arr_init(void);
@@ -760,15 +743,16 @@ extern void layout_bitmap_print(layout_bitmap bits);
 extern bool MultithreadedForkChild;
 extern id objc_noop_imp(id self, SEL _cmd);
 extern Class look_up_class(const char *aClassName, bool includeUnconnected, bool includeClassHandler);
-extern "C" void map_images(unsigned count, const char * const paths[],
-                           const struct mach_header * const mhdrs[]);
-extern void map_images_nolock(unsigned count, const char * const paths[],
-                              const struct mach_header * const mhdrs[],
+extern bool is_root_ramdisk();
+extern "C" void map_images(unsigned count, const struct _dyld_objc_notify_mapped_info infos[]);
+extern void map_images_nolock(unsigned count,
+                              const struct _dyld_objc_notify_mapped_info infos[],
                               bool *disabledClassROEnforcement);
-extern void load_images(const char *path, const struct mach_header *mh);
+extern void load_images(const struct _dyld_objc_notify_mapped_info* info);
 extern void unmap_image(const char *path, const struct mach_header *mh);
 extern void unmap_image_nolock(const struct mach_header *mh);
-extern void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int unoptimizedTotalClass);
+extern void _read_images(mapped_image_info infos[], uint32_t hCount, int totalClasses, int unoptimizedTotalClass);
+void loadAllCategoriesIfNeeded(void);
 extern void _unload_image(header_info *hi);
 
 extern const header_info *_headerForClass(Class cls);
@@ -776,7 +760,7 @@ extern const header_info *_headerForClass(Class cls);
 extern Class _class_remap(Class cls);
 extern Ivar _class_getVariable(Class cls, const char *name);
 
-extern unsigned _class_createInstancesFromZone(Class cls, size_t extraBytes, void *zone, id *results, unsigned num_requested);
+extern unsigned _class_createInstances(Class cls, size_t extraBytes, id *results, unsigned num_requested);
 
 extern const char *_category_getName(Category cat);
 extern const char *_category_getClassName(Category cat);
@@ -1003,14 +987,14 @@ class StripedMap {
 // Note that weak_entry_t knows about this encoding.
 template <typename T>
 class DisguisedPtr {
-    uintptr_t value;
+    void *value;
 
-    static uintptr_t disguise(T* ptr) {
-        return -(uintptr_t)ptr;
+    static void *disguise(T* ptr) {
+        return (void *)-(uintptr_t)ptr;
     }
 
-    static T* undisguise(uintptr_t val) {
-        return (T*)-val;
+    static T* undisguise(void *val) {
+        return (T*)-(uintptr_t)val;
     }
 
  public:
@@ -1155,6 +1139,49 @@ public:
         } else {
             memcpy(this->inlineElements, other.begin(), this->count * sizeof(T));
         }
+    }
+};
+
+// A simple wrapper around a pointer and a count, to allow using a plain C array
+// in a range-based for loop. There is no bounds checking of any kind, hence
+// "Unsafe."
+template <typename T>
+class UnsafeSpan {
+    T *ptr;
+    size_t count;
+
+public:
+    UnsafeSpan(T *ptr, size_t count) : ptr(ptr), count(count) {}
+
+    T *begin() { return ptr; }
+    T *end() { return ptr + count; }
+};
+
+// A fixed-size array that fills from the back, producing a contiguous chunk of
+// memory with the elements ordered in reverse order from how they were added.
+// This is a small wrapper around a C array and a count, with a bit of logic for
+// computing insertion points. Built for attachCategories, which wants to build
+// up arrays of category lists in reverse order.
+template <typename T, uint32_t size>
+struct ReversedFixedSizeArray {
+    T array[size];
+    uint32_t count = 0;
+
+    bool isFull() const {
+        return count >= size;
+    }
+
+    void add(T value) {
+        ASSERT(!isFull());
+        array[size - ++count] = value;
+    }
+
+    void clear() {
+        count = 0;
+    }
+
+    T *begin() {
+        return array + size - count;
     }
 };
 

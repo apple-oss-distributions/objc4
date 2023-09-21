@@ -80,7 +80,7 @@ typedef struct {
     
 OBJC_EXPORT NXHashTable * _Nonnull
 NXCreateHashTableFromZone (NXHashTablePrototype prototype, unsigned capacity,
-                           const void * _Nullable info, void * _Nullable z)
+                           const void * _Nullable info, void * _Nullable zone __unused)
     OBJC_HASH_AVAILABILITY;
 
 OBJC_EXPORT NXHashTable * _Nonnull

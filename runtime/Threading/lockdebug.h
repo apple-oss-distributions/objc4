@@ -50,16 +50,11 @@ namespace lockdebug {
         void remember(objc_recursive_lock_base_t *lock);
         void lock(objc_recursive_lock_base_t *lock);
         void unlock(objc_recursive_lock_base_t *lock);
-
-        void remember(objc_monitor_base_t *monitor);
-        void enter(objc_monitor_base_t *monitor);
-        void leave(objc_monitor_base_t *monitor);
-        void wait(objc_monitor_base_t *monitor);
     }
 #endif
 
-    // Use fork_unsafe to get a lock or monitor that isn't acquired and
-    // released around fork().
+    // Use fork_unsafe to get a lock that isn't acquired and released around
+    // fork().
     struct fork_unsafe_t {
         constexpr fork_unsafe_t() = default;
     };
@@ -98,6 +93,11 @@ namespace lockdebug {
             return success;
         }
 
+        void unlockForkedChild() {
+            lockdebug::notify::unlock((T *)this);
+            T::unlockForkedChild();
+        }
+
         void reset() {
             lockdebug::notify::unlock((T *)this);
             T::reset();
@@ -108,41 +108,6 @@ namespace lockdebug {
 #endif
     };
 
-    template <class T>
-    class monitor_mixin: public T {
-    public:
-#if LOCKDEBUG
-        monitor_mixin() : T() {
-            lockdebug::notify::remember((T *)this);
-        }
-
-        monitor_mixin(const fork_unsafe_t) : T() {}
-
-        void enter() {
-            lockdebug::notify::enter((T *)this);
-            T::enter();
-        }
-
-        void leave() {
-            lockdebug::notify::leave((T *)this);
-            T::leave();
-        }
-
-        void wait() {
-            lockdebug::notify::wait((T *)this);
-            T::wait();
-        }
-
-        void reset() {
-            lockdebug::notify::leave((T *)this);
-            T::reset();
-        }
-#else
-        monitor_mixin() : T() {}
-        monitor_mixin(const fork_unsafe_t) : T() {}
-#endif
-    };
-
     // APIs
 #if LOCKDEBUG
     void assert_locked(objc_lock_base_t *lock);
@@ -150,9 +115,6 @@ namespace lockdebug {
 
     void assert_locked(objc_recursive_lock_base_t *lock);
     void assert_unlocked(objc_recursive_lock_base_t *lock);
-
-    void assert_locked(objc_monitor_base_t *monitor);
-    void assert_unlocked(objc_monitor_base_t *monitor);
 
     void assert_all_locks_locked();
     void assert_no_locks_locked();
@@ -166,9 +128,6 @@ namespace lockdebug {
 
     static inline void assert_locked(objc_recursive_lock_base_t *) {}
     static inline void assert_unlocked(objc_recursive_lock_base_t *) {}
-
-    static inline void assert_locked(objc_monitor_base_t *) {}
-    static inline void assert_unlocked(objc_monitor_base_t *) {}
 
     static inline void assert_all_locks_locked() {}
     static inline void assert_no_locks_locked() {}

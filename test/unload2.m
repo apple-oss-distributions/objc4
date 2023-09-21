@@ -25,6 +25,7 @@ OBJC_ROOT_CLASS
 -(void)unload2_category_method { }
 @end
 
+__attribute__((weak_import))
 @interface ClassThatIsWeakImportAndMissing : TestRoot @end
 
 @interface SubclassOfMissingWeakImport : ClassThatIsWeakImportAndMissing <SmallProtocol> @end

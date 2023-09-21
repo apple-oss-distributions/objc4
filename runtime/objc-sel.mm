@@ -25,7 +25,6 @@
 #include "DenseMapExtras.h"
 
 static objc::ExplicitInitDenseSet<const char *> namedSelectors;
-static SEL search_builtins(const char *key);
 
 
 /***********************************************************************
@@ -81,7 +80,7 @@ BOOL sel_isMapped(SEL sel)
 
     const char *name = (const char *)(void *)sel;
 
-    if (sel == search_builtins(name)) return YES;
+    if (sel == _sel_searchBuiltins(name)) return YES;
 
     mutex_locker_t lock(selLock);
     auto it = namedSelectors.get().find(name);
@@ -89,7 +88,7 @@ BOOL sel_isMapped(SEL sel)
 }
 
 
-static SEL search_builtins(const char *name) 
+SEL _sel_searchBuiltins(const char *name)
 {
 #if SUPPORT_PREOPT
   if (SEL result = (SEL)_dyld_get_objc_selector(name))
@@ -108,7 +107,7 @@ static SEL __sel_registerName(const char *name, bool shouldLock, bool copy)
 
     if (!name) return (SEL)0;
 
-    result = search_builtins(name);
+    result = _sel_searchBuiltins(name);
     if (result) return result;
     
     conditional_mutex_locker_t lock(selLock, shouldLock);
@@ -141,7 +140,7 @@ SEL sel_getUid(const char *name) {
 SEL sel_lookUpByName(const char *name) {
     if (!name) return (SEL)0;
 
-    SEL result = search_builtins(name);
+    SEL result = _sel_searchBuiltins(name);
     if (result) return result;
 
     mutex_locker_t lock(selLock);

@@ -47,6 +47,7 @@
 		393CEAC60DC69E67000B69DE /* objc-references.h in Headers */ = {isa = PBXBuildFile; fileRef = 393CEAC50DC69E67000B69DE /* objc-references.h */; };
 		39ABD72312F0B61800D1054C /* objc-weak.h in Headers */ = {isa = PBXBuildFile; fileRef = 39ABD71F12F0B61800D1054C /* objc-weak.h */; };
 		39ABD72412F0B61800D1054C /* objc-weak.mm in Sources */ = {isa = PBXBuildFile; fileRef = 39ABD72012F0B61800D1054C /* objc-weak.mm */; };
+		4D88C664298C76E1009A8928 /* objc-malloc-instance.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D88C663298C76E1009A8928 /* objc-malloc-instance.h */; };
 		6E1475EA21DFDB1B001357EA /* llvm-AlignOf.h in Headers */ = {isa = PBXBuildFile; fileRef = 6E1475E521DFDB1A001357EA /* llvm-AlignOf.h */; };
 		6E1475EB21DFDB1B001357EA /* llvm-DenseMap.h in Headers */ = {isa = PBXBuildFile; fileRef = 6E1475E621DFDB1B001357EA /* llvm-DenseMap.h */; };
 		6E1475EC21DFDB1B001357EA /* llvm-DenseMapInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 6E1475E721DFDB1B001357EA /* llvm-DenseMapInfo.h */; };
@@ -135,6 +136,7 @@
 		83F4B52915E843B100E0926F /* NSObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 83F4B52715E843B100E0926F /* NSObject.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		87BB4EA70EC39854005D08E1 /* objc-probes.d in Sources */ = {isa = PBXBuildFile; fileRef = 87BB4E900EC39633005D08E1 /* objc-probes.d */; };
 		9672F7EE14D5F488007CEC96 /* NSObject.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9672F7ED14D5F488007CEC96 /* NSObject.mm */; };
+		C204A64329D4DDF50054A65C /* objc-opt.h in Headers */ = {isa = PBXBuildFile; fileRef = C204A64229D4DDF50054A65C /* objc-opt.h */; };
 		C22F5208230EF38B001BFE14 /* objc-ptrauth.h in Headers */ = {isa = PBXBuildFile; fileRef = C22F5207230EF38B001BFE14 /* objc-ptrauth.h */; };
 		C264847D2679203E00B3A6F7 /* retain-release-helpers-arm64.s in Sources */ = {isa = PBXBuildFile; fileRef = C264847C2679203D00B3A6F7 /* retain-release-helpers-arm64.s */; };
 		C269791A2645D7AE009C19E3 /* NSObject-private.h in Headers */ = {isa = PBXBuildFile; fileRef = C26979192645D7AE009C19E3 /* NSObject-private.h */; };
@@ -207,6 +209,7 @@
 		393CEAC50DC69E67000B69DE /* objc-references.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-references.h"; path = "runtime/objc-references.h"; sourceTree = "<group>"; };
 		39ABD71F12F0B61800D1054C /* objc-weak.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-weak.h"; path = "runtime/objc-weak.h"; sourceTree = "<group>"; };
 		39ABD72012F0B61800D1054C /* objc-weak.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = "objc-weak.mm"; path = "runtime/objc-weak.mm"; sourceTree = "<group>"; };
+		4D88C663298C76E1009A8928 /* objc-malloc-instance.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "objc-malloc-instance.h"; path = "runtime/objc-malloc-instance.h"; sourceTree = "<group>"; };
 		6E1475E521DFDB1A001357EA /* llvm-AlignOf.h */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.c.h; name = "llvm-AlignOf.h"; path = "runtime/llvm-AlignOf.h"; sourceTree = "<group>"; tabWidth = 2; };
 		6E1475E621DFDB1B001357EA /* llvm-DenseMap.h */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.c.h; name = "llvm-DenseMap.h"; path = "runtime/llvm-DenseMap.h"; sourceTree = "<group>"; tabWidth = 2; };
 		6E1475E721DFDB1B001357EA /* llvm-DenseMapInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.c.h; name = "llvm-DenseMapInfo.h"; path = "runtime/llvm-DenseMapInfo.h"; sourceTree = "<group>"; tabWidth = 2; };
@@ -301,6 +304,7 @@
 		87BB4E900EC39633005D08E1 /* objc-probes.d */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.dtrace; name = "objc-probes.d"; path = "runtime/objc-probes.d"; sourceTree = "<group>"; };
 		9672F7ED14D5F488007CEC96 /* NSObject.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = NSObject.mm; path = runtime/NSObject.mm; sourceTree = "<group>"; };
 		BC8B5D1212D3D48100C78A5B /* libauto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libauto.dylib; path = /usr/lib/libauto.dylib; sourceTree = "<absolute>"; };
+		C204A64229D4DDF50054A65C /* objc-opt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-opt.h"; path = "runtime/objc-opt.h"; sourceTree = "<group>"; };
 		C217B55222DE556D004369BA /* objc-env.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "objc-env.h"; path = "runtime/objc-env.h"; sourceTree = "<group>"; };
 		C22F5207230EF38B001BFE14 /* objc-ptrauth.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-ptrauth.h"; path = "runtime/objc-ptrauth.h"; sourceTree = "<group>"; };
 		C264847C2679203D00B3A6F7 /* retain-release-helpers-arm64.s */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.asm; name = "retain-release-helpers-arm64.s"; path = "runtime/retain-release-helpers-arm64.s"; sourceTree = "<group>"; };
@@ -551,7 +555,9 @@
 				838485D90D6D68A200CEA253 /* objc-loadmethod.h */,
 				75A9504E202BAA0300D7D56F /* objc-locks-new.h */,
 				75A95050202BAA9A00D7D56F /* objc-locks.h */,
+				4D88C663298C76E1009A8928 /* objc-malloc-instance.h */,
 				7593EC57202248DF0046AB96 /* objc-object.h */,
+				C204A64229D4DDF50054A65C /* objc-opt.h */,
 				831C85D30E10CF850066E64C /* objc-os.h */,
 				838485DC0D6D68A200CEA253 /* objc-private.h */,
 				393CEAC50DC69E67000B69DE /* objc-references.h */,
@@ -618,6 +624,7 @@
 				83A4AEDE1EA08C7200ACADDE /* ObjectiveC.apinotes in Headers */,
 				D35BD77B27E099860064BAE2 /* objc-vm.h in Headers */,
 				75A95051202BAA9A00D7D56F /* objc-locks.h in Headers */,
+				4D88C664298C76E1009A8928 /* objc-malloc-instance.h in Headers */,
 				6E1475ED21DFDB1B001357EA /* llvm-type_traits.h in Headers */,
 				83A4AEDC1EA0840800ACADDE /* module.modulemap in Headers */,
 				830F2A980D738DC200392440 /* hashtable.h in Headers */,
@@ -628,6 +635,7 @@
 				C2E6D3FC2225DCF00059DFAA /* DenseMapExtras.h in Headers */,
 				838486260D6D68F000CEA253 /* List.h in Headers */,
 				838485C30D6D687300CEA253 /* maptable.h in Headers */,
+				C204A64329D4DDF50054A65C /* objc-opt.h in Headers */,
 				838486280D6D6A2400CEA253 /* message.h in Headers */,
 				834EC0A411614167009B2563 /* objc-abi.h in Headers */,
 				838485EF0D6D68A200CEA253 /* objc-api.h in Headers */,
@@ -880,7 +888,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/sh;
-			shellScript = "# Copy the feature flags plist into place\ncase \"$INSTALL_FEATURE_FLAGS\" in\n  NO|No|no) \n    echo \"Skipping installation of feature flags plist\"\n    ;;\n  *)\n    echo \"Installing feature flags plist\"\n    mkdir -p \"$DSTROOT/System/Library/FeatureFlags/Domain\"\n    cp \"$SRCROOT/objc4.plist\" \"$DSTROOT/System/Library/FeatureFlags/Domain/objc4.plist\"\n    ;;\nesac\n";
+			shellScript = "#!/bin/bash -e\n# Copy the feature flags plist into place\n  \ncase \"$INSTALL_FEATURE_FLAGS\" in\n  NO|No|no) \n    echo \"Skipping installation of feature flags plist\"\n    ;;\n  *)\n    arch=`echo $ARCHS | awk '{print $1;}'`\n    echo \"Installing feature flags plist for $arch\"\n    inpath=\"$SCRIPT_INPUT_FILE_0\"\n    outfile=\"$SCRIPT_OUTPUT_FILE_0\"\n    \n    mkdir -p $(dirname \"$outfile\")\n\n    xcrun clang -x c -P -E                          \\\n            -target ${arch}-${LLVM_TARGET_TRIPLE_VENDOR}-${LLVM_TARGET_TRIPLE_OS_VERSION}${LLVM_TARGET_TRIPLE_SUFFIX} \\\n            -imacros TargetConditionals.h           \\\n            \"$inpath\"                               \\\n            -o \"$outfile\"\n    \n    cat \"$outfile\"\n    \n    if test $PLATFORM_NAME != macosx; then\n        plutil -convert binary1 \"$outfile\"\n    else\n        plutil -convert xml1    \"$outfile\"\n    fi\n    ;;\nesac\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1018,9 +1026,15 @@
 				OTHER_CFLAGS = (
 					"-fdollars-in-identifiers",
 					"-fno-objc-convert-messages-to-runtime-calls",
+					"-fno-objc-msgsend-selector-stubs",
 					"$(OTHER_CFLAGS)",
 				);
+				OTHER_LDFLAGS = (
+					"-Xlinker",
+					"-init_offsets",
+				);
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
+					"$(inherited)",
 					"-lc++abi",
 					"-Wl,-segalign,0x4000",
 					"-Xlinker",
@@ -1041,6 +1055,7 @@
 					0x100,
 				);
 				"OTHER_LDFLAGS[sdk=iphonesimulator*][arch=*]" = (
+					"$(inherited)",
 					"-lc++abi",
 					"-Xlinker",
 					"-interposable_list",
@@ -1048,6 +1063,7 @@
 					interposable.txt,
 				);
 				"OTHER_LDFLAGS[sdk=macosx*]" = (
+					"$(inherited)",
 					"-lCrashReporterClient",
 					"-lc++abi",
 					"-Xlinker",
@@ -1064,7 +1080,10 @@
 					interposable.txt,
 					"-loah",
 				);
-				"OTHER_LDFLAGS[sdk=macosx*][arch=i386]" = "-nodefaultlibs";
+				"OTHER_LDFLAGS[sdk=macosx*][arch=i386]" = (
+					"$(inherited)",
+					"-nodefaultlibs",
+				);
 				OTHER_TAPI_FLAGS = "-exclude-public-header $(DSTROOT)$(SYSTEM_PREFIX)/usr/include/objc/ObjectiveC.apinotes -exclude-public-header $(DSTROOT)$(SYSTEM_PREFIX)/usr/include/objc/module.modulemap -Xparser -Wno-deprecated-declarations -Xparser -Wno-unavailable-declarations -Xparser -D_OBJC_PRIVATE_H_=1 -DOBJC_DECLARE_SYMBOLS=1 -D__APPLE_API_PRIVATE=1";
 				PRIVATE_HEADERS_FOLDER_PATH = "$(SYSTEM_PREFIX)/usr/local/include/objc";
 				PRODUCT_NAME = objc.A;
@@ -1109,9 +1128,15 @@
 				OTHER_CFLAGS = (
 					"-fdollars-in-identifiers",
 					"-fno-objc-convert-messages-to-runtime-calls",
+					"-fno-objc-msgsend-selector-stubs",
 					"$(OTHER_CFLAGS)",
 				);
+				OTHER_LDFLAGS = (
+					"-Xlinker",
+					"-init_offsets",
+				);
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
+					"$(inherited)",
 					"-lc++abi",
 					"-Wl,-segalign,0x4000",
 					"-Xlinker",
@@ -1132,6 +1157,7 @@
 					0x100,
 				);
 				"OTHER_LDFLAGS[sdk=iphonesimulator*][arch=*]" = (
+					"$(inherited)",
 					"-lc++abi",
 					"-Xlinker",
 					"-interposable_list",
@@ -1139,6 +1165,7 @@
 					interposable.txt,
 				);
 				"OTHER_LDFLAGS[sdk=macosx*]" = (
+					"$(inherited)",
 					"-lCrashReporterClient",
 					"-lc++abi",
 					"-Xlinker",
@@ -1155,7 +1182,10 @@
 					interposable.txt,
 					"-loah",
 				);
-				"OTHER_LDFLAGS[sdk=macosx*][arch=i386]" = "-nodefaultlibs";
+				"OTHER_LDFLAGS[sdk=macosx*][arch=i386]" = (
+					"$(inherited)",
+					"-nodefaultlibs",
+				);
 				OTHER_TAPI_FLAGS = "-exclude-public-header $(DSTROOT)$(SYSTEM_PREFIX)/usr/include/objc/ObjectiveC.apinotes -exclude-public-header $(DSTROOT)$(SYSTEM_PREFIX)/usr/include/objc/module.modulemap -Xparser -Wno-deprecated-declarations -Xparser -Wno-unavailable-declarations -Xparser -D_OBJC_PRIVATE_H_=1 -DOBJC_DECLARE_SYMBOLS=1 -D__APPLE_API_PRIVATE=1";
 				PRIVATE_HEADERS_FOLDER_PATH = "$(SYSTEM_PREFIX)/usr/local/include/objc";
 				PRODUCT_NAME = objc.A;
@@ -1178,12 +1208,13 @@
 		1DEB914F08733D8E0010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_LINK_OBJC_RUNTIME = NO;
 				CLANG_OBJC_RUNTIME = NO;
 				CODE_SIGN_IDENTITY = "-";
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_ENABLE_CPP_EXCEPTIONS = NO;
 				GCC_ENABLE_CPP_RTTI = NO;
 				GCC_INLINES_ARE_PRIVATE_EXTERN = YES;
@@ -1207,9 +1238,10 @@
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(OTHER_CFLAGS)",
 					"-D_LIBCPP_VISIBLE=\"\"",
+					"-fno-typed-cxx-new-delete",
 				);
 				SDKROOT = macosx.internal;
-				SUPPORTED_PLATFORMS = "macosx iphoneos appletvos watchos";
+				SUPPORTED_PLATFORMS = "macosx iphoneos appletvos watchos xros";
 				WARNING_CFLAGS = (
 					"-Wall",
 					"-Wextra",
@@ -1226,12 +1258,13 @@
 		1DEB915008733D8E0010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_LINK_OBJC_RUNTIME = NO;
 				CLANG_OBJC_RUNTIME = NO;
 				CODE_SIGN_IDENTITY = "-";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_ENABLE_CPP_EXCEPTIONS = NO;
 				GCC_ENABLE_CPP_RTTI = NO;
 				GCC_INLINES_ARE_PRIVATE_EXTERN = YES;
@@ -1257,9 +1290,10 @@
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(OTHER_CFLAGS)",
 					"-D_LIBCPP_VISIBLE=\"\"",
+					"-fno-typed-cxx-new-delete",
 				);
 				SDKROOT = macosx.internal;
-				SUPPORTED_PLATFORMS = "macosx iphoneos appletvos watchos";
+				SUPPORTED_PLATFORMS = "macosx iphoneos appletvos watchos xros";
 				WARNING_CFLAGS = (
 					"-Wall",
 					"-Wextra",
@@ -1370,7 +1404,6 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -1403,7 +1436,6 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				EXECUTABLE_PREFIX = lib;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -1428,7 +1460,6 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -1461,7 +1492,6 @@
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				EXECUTABLE_PREFIX = lib;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;

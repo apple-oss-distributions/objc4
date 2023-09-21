@@ -26,6 +26,7 @@
 
 #include <objc/objc.h>
 
+#include <bit>
 #include <ptrauth.h>
 
 // Workaround <rdar://problem/64531063> Definitions of ptrauth_sign_unauthenticated and friends generate unused variables warnings
@@ -57,6 +58,15 @@
 #define ptrauth_method_list_types
 
 #endif
+
+// A combination ptrauth_auth_and_resign and bitcast, to avoid implicit
+// re-signing operations when casting to/from function pointers when
+// -fptrauth-function-pointer-type-discrimination is enabled. This produces
+// better code than casting and using a 0 discriminator, as clang currently
+// doesn't remove the redundant sign-then-auth that happens in the middle.
+// rdar://110175155
+#define bitcast_auth_and_resign(castType, value, oldKey, oldData, newKey, newData) \
+    ptrauth_auth_and_resign(std::bit_cast<castType>(value), oldKey, oldData, newKey, newData)
 
 // Method lists use process-independent signature for compatibility.
 using MethodListIMP = IMP __ptrauth_objc_method_list_imp;

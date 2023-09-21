@@ -491,6 +491,7 @@ enum
     OBJC_TAG_Foundation_2      = 23,
     OBJC_TAG_Foundation_3      = 24,
     OBJC_TAG_Foundation_4      = 25,
+    OBJC_TAG_CGRegion          = 26,
 
     // When using the split tagged pointer representation
     // (OBJC_SPLIT_TAGGED_POINTERS), this is the first tag where
@@ -1003,7 +1004,7 @@ _objc_rootInit(id _Nonnull obj)
 
 OBJC_EXPORT
 id _Nullable
-_objc_rootAllocWithZone(Class _Nonnull cls, objc_zone_t _Nullable zone)
+_objc_rootAllocWithZone(Class _Nonnull cls, objc_zone_t _Nullable zone __unused)
     OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
 
 OBJC_EXPORT
@@ -1223,13 +1224,42 @@ _protocol_getMethodTypeEncoding(Protocol * _Nonnull proto, SEL _Nonnull sel,
 
 
 /**
+ * Function type for a function that is called when an image is loaded.
+ *
+ * @param header The mach header for the newly loaded image.
+ * @param dyldInfo The dyld info for the newly loaded image.
+ */
+struct _dyld_section_location_info_s;
+struct mach_header;
+typedef void (*objc_func_loadImage2)(const struct mach_header * _Nonnull header,
+                                     struct _dyld_section_location_info_s * _Nonnull dyldInfo);
+
+/**
+ * Add a function to be called when a new image is loaded. The function is
+ * called after ObjC has scanned and fixed up the image. It is called
+ * BEFORE +load methods are invoked.
+ *
+ * When adding a new function, that function is immediately called with all
+ * images that are currently loaded. It is then called as needed for images
+ * that are loaded afterwards.
+ *
+ * Note: the function is called with ObjC's internal runtime lock held.
+ * Be VERY careful with what the function does to avoid deadlocks or
+ * poor performance.
+ *
+ * @param func The function to add.
+ */
+#define OBJC_ADDLOADIMAGEFUNC2_DEFINED 1
+OBJC_EXPORT void objc_addLoadImageFunc2(objc_func_loadImage2 _Nonnull func)
+    OBJC_AVAILABLE(14.0, 17.0, 17.0, 10.0, 8.0);
+
+/**
  * Function type for a function that is called when a realized class
  * is about to be initialized.
  *
  * @param context The context pointer the function was registered with.
  * @param cls The class that's about to be initialized.
  */
-struct mach_header;
 typedef void (*_objc_func_willInitializeClass)(void * _Nullable context, Class _Nonnull cls);
 
 /**
@@ -1258,10 +1288,18 @@ OBJC_EXPORT const uintptr_t _objc_has_weak_formation_callout;
 #define OBJC_WEAK_FORMATION_CALLOUT_DEFINED 0
 #endif
 
-#if defined(__arm64__) && TARGET_OS_IOS && !TARGET_OS_SIMULATOR && !TARGET_OS_MACCATALYST
+// Be sure to edit the equivalent define in objc-config.h as well.
+// Be sure to not enable CONFIG_USE_PREOPT_CACHES if CACHE_MASK_STORAGE != CACHE_MASK_STORAGE_HIGH_16
+#ifndef CONFIG_USE_PREOPT_CACHES
+#if TARGET_OS_EXCLAVEKIT
+#define CONFIG_USE_PREOPT_CACHES 0
+#elif TARGET_OS_OSX || TARGET_OS_MACCATALYST || TARGET_OS_SIMULATOR
+#define CONFIG_USE_PREOPT_CACHES 0
+#elif defined(__arm64__) && __LP64__
 #define CONFIG_USE_PREOPT_CACHES 1
 #else
 #define CONFIG_USE_PREOPT_CACHES 0
+#endif
 #endif
 
 

@@ -24,6 +24,8 @@ bool hasAssociations = false;
 @end
 
 int main() {
+    // Intel simulator doesn't support this method.
+#if !TARGET_OS_SIMULATOR || !__x86_64__
     id obj = [TestRoot new];
     id value = [TestRoot new];
     const void *key = "key";
@@ -41,6 +43,7 @@ int main() {
 
     out = objc_getAssociatedObject(obj, key);
     testassert(out == value);
+#endif
 
     succeed(__FILE__);
 }

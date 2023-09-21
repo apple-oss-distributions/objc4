@@ -23,29 +23,31 @@ Class UnrealizedClass_raw = (__bridge Class)(void *)&OBJC_CLASS_$_UnrealizedClas
 extern void *OBJC_CLASS_$_ClassWithUnsignedClassRO;
 Class ClassWithUnsignedClassRO_raw = (__bridge Class)(void *)&OBJC_CLASS_$_ClassWithUnsignedClassRO;
 
+Class getFromNamedClassTable(const char *name) {
+    void *cls = NXMapGet(gdb_objc_realized_classes, name);
+    // Don't bother with trying to authenticate it for a test.
+    cls = ptrauth_strip(cls, ptrauth_key_process_dependent_data);
+    return (__bridge Class)cls;
+}
+
 int main()
 {
     // Class hashes
     Class result;
-
-    // Class should not be realized yet
-    // fixme not true during class hash rearrangement
-    // result = NXMapGet(gdb_objc_realized_classes, "TestRoot");
-    // testassert(!result);
 
     [TestRoot class];
     // Now class should be realized
 
     if (!testdyld3()) {
         // In dyld3 mode, the class will be in the launch closure and not in our table.
-        result = (__bridge Class)(NXMapGet(gdb_objc_realized_classes, "TestRoot"));
+        result = getFromNamedClassTable("TestRoot");
         testassert(result);
         testassert(result == [TestRoot class]);
     }
 
     Class dynamic = objc_allocateClassPair([TestRoot class], "Dynamic", 0);
     objc_registerClassPair(dynamic);
-    result = (__bridge Class)(NXMapGet(gdb_objc_realized_classes, "Dynamic"));
+    result = getFromNamedClassTable("Dynamic");
     testassert(result);
     testassert(result == dynamic);
 
@@ -62,7 +64,7 @@ int main()
     testassert(foundTestRoot);
     testassert(foundDynamic);
 
-    result = (__bridge Class)(NXMapGet(gdb_objc_realized_classes, "DoesNotExist"));
+    result = getFromNamedClassTable("DoesNotExist");
     testassert(!result);
 
     // Class structure decoding

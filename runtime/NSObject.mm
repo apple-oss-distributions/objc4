@@ -48,6 +48,7 @@
 extern "C" {
 #include <os/reason_private.h>
 #include <os/variant_private.h>
+#include <os/log_simple_private.h>
 }
 #endif
 
@@ -126,9 +127,7 @@ namespace objc {
 
 namespace {
 
-#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-uint32_t numFaults = 0;
-#endif
+_Atomic uint32_t numFaults = 0;
 
 // The order of these bits is important.
 #define SIDE_TABLE_WEAKLY_REFERENCED (1UL<<0)
@@ -682,19 +681,15 @@ private:
         hotPage_;
 	static uint8_t const SCRIBBLE = 0xA3;  // 0xA3A3A3A3 after releasing
 	static size_t const COUNT = SIZE / sizeof(id);
-    static size_t const MAX_FAULTS = 2;
+    static size_t const MAX_FAULTS = 1;
 
     // SIZE-sizeof(*this) bytes of contents follow
 
     static void * operator new(size_t size) {
-#if SUPPORT_ZONES
-        return malloc_zone_memalign(malloc_default_zone(), SIZE, SIZE);
-#else
         void *result = 0;
         int r = posix_memalign(&result, SIZE, SIZE);
         ASSERT(r == 0);
         return result;
-#endif
     }
     static void operator delete(void * p) {
         return free(p);
@@ -716,16 +711,18 @@ private:
 
     void checkTooMuchAutorelease()
     {
-#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-        bool objcModeNoFaults = DisableFaults || getpid() == 1 ||
-            !os_variant_has_internal_diagnostics("com.apple.obj-c");
-        if (!objcModeNoFaults) {
-            if (depth+1 >= (uint32_t)objc::PageCountWarning && numFaults < MAX_FAULTS) {  //depth is 0 when first page is allocated
+#if !TARGET_OS_EXCLAVEKIT
+        int newDepth = depth+1;
+        if (newDepth == objc::PageCountWarning && numFaults < MAX_FAULTS) {
+            bool objcModeNoFaults = DisableFaults || getpid() == 1 || is_root_ramdisk() || !os_variant_has_internal_diagnostics("com.apple.obj-c");
+            if (!objcModeNoFaults) {
                 os_fault_with_payload(OS_REASON_LIBSYSTEM,
-                        OS_REASON_LIBSYSTEM_CODE_FAULT,
-                        NULL, 0, "Large Autorelease Pool", 0);
-                numFaults++;
+                                      OS_REASON_LIBSYSTEM_CODE_FAULT,
+                                      NULL, 0, "Large Autorelease Pool", 0);
+            } else {
+                os_log_simple("Large Autorelease Pool");
             }
+            numFaults++;
         }
 #endif
     }
@@ -1064,6 +1061,10 @@ private:
         } while (page->full());
 
         setHotPage(page);
+
+        // dtrace probe
+        OBJC_RUNTIME_AUTORELEASE_POOL_GROW(page->depth);
+
         return page->add(obj);
     }
 
@@ -1109,12 +1110,15 @@ private:
         // Install the first page.
         AutoreleasePoolPage *page = new AutoreleasePoolPage(nil);
         setHotPage(page);
-        
+
+        // dtrace probe
+        OBJC_RUNTIME_AUTORELEASE_POOL_GROW(page->depth);
+
         // Push a boundary on behalf of the previously-placeholder'd pool.
         if (pushExtraBoundary) {
             page->add(POOL_BOUNDARY);
         }
-        
+
         // Push the requested object or pool.
         return page->add(obj);
     }
@@ -1172,6 +1176,10 @@ public:
             dest = autoreleaseFast(POOL_BOUNDARY);
         }
         ASSERT(dest == (id *)EMPTY_POOL_PLACEHOLDER || *dest == POOL_BOUNDARY);
+
+        // dtrace probe
+        OBJC_RUNTIME_AUTORELEASE_POOL_PUSH(dest);
+
         return dest;
     }
 
@@ -1241,6 +1249,9 @@ public:
     static inline void
     pop(void *token)
     {
+        // dtrace probe
+        OBJC_RUNTIME_AUTORELEASE_POOL_POP(token);
+
         // We may have an object in the ReturnAutorelease TLS when the pool is
         // otherwise empty. Release that first before checking for an empty pool
         // so we don't return prematurely. Loop in case the release placed a new

@@ -218,55 +218,17 @@ public:
         return mtx_unlock(&lock_) == thrd_success;
     }
 
+    void unlockForkedChild() {
+        unlock();
+    }
+
     void reset() {
         memset(&lock_, 0, sizeof(lock_));
         init();
     }
-};
 
-// .. objc_monitor_t ...................................................
-
-class objc_monitor_base_t : nocopy_t {
-    mtx_t mutex_;
-    cnd_t cond_;
-
-    void init() {
-        mtx_init(&mutex_, mtx_plain);
-        cnd_init(&cond_);
-    }
-public:
-    objc_monitor_base_t() {
-        init();
-    }
-    ~objc_monitor_base_t() {
-        mtx_destroy(&mutex_);
-        cnd_destroy(&cond_);
-    }
-
-    void enter() {
-        mtx_lock(&mutex_);
-    }
-
-    void leave() {
-        mtx_unlock(&mutex_);
-    }
-
-    void wait() {
-        cnd_wait(&cond_, &mutex_);
-    }
-
-    void notify() {
-        cnd_signal(&cond_);
-    }
-
-    void notifyAll() {
-        cnd_broadcast(&cond_);
-    }
-
-    void reset() {
-        memset(&mutex_, 0, sizeof(mutex_));
-        memset(&cond_, 0, sizeof(cond_));
-        init();
+    void hardReset() {
+        reset();
     }
 };
 

@@ -136,21 +136,9 @@ public:
     bool tryLock() { return true; }
     void unlock() {}
     bool tryUnlock() { return true; }
+    void unlockForkedChild() {}
     void reset() {}
-};
-
-// .. objc_monitor_t ...................................................
-
-class objc_monitor_base_t : nocopy_t {
-public:
-    objc_monitor_base_t() {}
-
-    void enter() {}
-    void leave() {}
-    void wait() {}
-    void notify() {}
-    void notifyAll() {}
-    void reset() {}
+    void hardReset() {}
 };
 
 #endif // _OBJC_NOTHREADS_H

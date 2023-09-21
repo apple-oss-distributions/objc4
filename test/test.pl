@@ -477,6 +477,8 @@ sub check_output {
     my $bad = "";
     my $warn = "";
     my $runerror = $T{TEST_RUN_OUTPUT};
+    my $runoutputfilter = $T{TEST_RUN_OUTPUT_FILTER};
+    filter_run_output_filter(\@output, $runoutputfilter);
     filter_hax(\@output);
     filter_verbose(\@output);
     filter_simulator(\@output);
@@ -491,10 +493,15 @@ sub check_output {
     $bad = "(output not 'OK: $name')" if ($bad eq ""  &&  (scalar(@output) != 1  ||  $output[0] !~ /^OK: $name/));
     
     if ($bad ne "") {
+        my @badlines = split /\n/, $bad;
+        my $badfirst = shift(@badlines);
         colorprint  $red, "FAIL: /// test '$name' \\\\\\";
         colorprefix $red, @original_output;
         colorprint  $red, "FAIL: \\\\\\ test '$name' ///";
-        colorprint  $red, "FAIL: $name: $bad";
+        colorprint  $red, "FAIL: $name: $badfirst";
+        foreach (@badlines) {
+            colorprint $red, "FAIL: $_";
+        }
         $xit = 0;
     } 
     elsif ($warn ne "") {
@@ -522,7 +529,7 @@ sub filter_expected
 
     my $output = join("\n", @$outputref) . "\n";
     if ($output !~ /$runerror/) {
-	$bad = "(run output does not match TEST_RUN_OUTPUT)";
+	$bad = "run output does not match expected. TEST_RUN_OUTPUT is:\n" . $runerror;
 	@$outputref = ("FAIL: $name");
     } else {
 	@$outputref = ("OK: $name");  # pacify later filter
@@ -611,6 +618,23 @@ sub filter_class_ro_warnings
     }
 
     @$outputref = @new_output;
+}
+
+sub filter_run_output_filter
+{
+    my $outputref = shift;
+    my $runoutputfilter = shift;
+
+    if ($runoutputfilter) {
+        my @new_output;
+        for my $line (@$outputref) {
+            if ($line !~ /$runoutputfilter/) {
+                push @new_output, $line;
+            }
+        }
+
+        @$outputref = @new_output;
+    }
 }
 
 sub filter_hax
@@ -818,6 +842,7 @@ sub gather_simple {
     my ($buildcmd) = extract_multiline("TEST_BUILD", $contents, $name);
     my ($builderror) = extract_multiple_multiline("TEST_BUILD_OUTPUT", $contents, $name);
     my ($runerror) = extract_multiple_multiline("TEST_RUN_OUTPUT", $contents, $name);
+    my ($runoutputfilter) = ($contents =~ /\bTEST_RUN_OUTPUT_FILTER\b(.*)$/m);
 
     return 0 if !$test_h && !$disabled && !$crashes && !defined($conditionstring)
                 && !defined($envstring) && !defined($cflags) && !defined($buildcmd)
@@ -914,10 +939,11 @@ sub gather_simple {
 
     # save some results for build and run phases
     $$CREF{"TEST_$name"} = {
-        TEST_BUILD => $buildcmd, 
-        TEST_BUILD_OUTPUT => $builderror, 
-        TEST_CRASHES => $crashes, 
-        TEST_RUN_OUTPUT => $runerror, 
+        TEST_BUILD => $buildcmd,
+        TEST_BUILD_OUTPUT => $builderror,
+        TEST_CRASHES => $crashes,
+        TEST_RUN_OUTPUT => $runerror,
+        TEST_RUN_OUTPUT_FILTER => $runoutputfilter,
         TEST_CFLAGS => $cflags,
         TEST_ENV => $envstring,
         TEST_RUN => $run,
@@ -1141,7 +1167,7 @@ sub run_simple {
             $env .= " DYLD_INSERT_LIBRARIES=$remotedir/libcrashcatch.dylib";
         }
 
-        my $cmd = "ssh $PORT $HOST 'cd $remotedir && env $env ./$name.exe'";
+        my $cmd = "ssh -o LogLevel=quiet $PORT $HOST 'cd $remotedir && env $env ./$name.exe'";
         $output = make("$cmd");
     }
     elsif ($C{OS} =~ /simulator/) {
@@ -1311,6 +1337,9 @@ sub make_one_config {
             print "found valid fallback for OS $os_arg: $fallbacks->{$os_arg}\n";
             $C{OS} = $os_arg;
             $didUseOSFallback = 1;
+        } elsif ($BATS) {
+            # If we're running in BATS, accept the OS even if we don't recognize it.
+            $C{OS} = $os_arg;
         }
     }
 
@@ -1517,7 +1546,7 @@ sub make_one_config {
 
     # Populate cflags
 
-    my $cflags = "-I$DIR -W -Wall -Wno-undef-prefix -Wno-unknown-warning-option -Wno-objc-load-method -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -nostdlib -lSystem -Os -arch $C{ARCH} ";
+    my $cflags = "-I$DIR -W -Wall -Wno-deprecated-volatile -Wno-undef-prefix -Wno-unknown-warning-option -Wno-objc-load-method -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -nostdlib -lSystem -Os -arch $C{ARCH} ";
     if (!$BATS) {
         # Debug info disabled in BATS to save disk space.
         $cflags .= "-g ";
@@ -1627,10 +1656,10 @@ sub make_one_config {
     # Populate compiler commands
     $C{XCRUN} = "env LANG=C /usr/bin/xcrun -toolchain '$C{TOOLCHAIN}'";
 
-    $C{COMPILE_C}   = "$C{XCRUN} '$C{CC}'  $cflags -x c -std=gnu99";
-    $C{COMPILE_CXX} = "$C{XCRUN} '$C{CXX}' $cflags $cxxflags -x c++ -std=gnu++17";
-    $C{COMPILE_M}   = "$C{XCRUN} '$C{CC}'  $cflags $objcflags -x objective-c -std=gnu99";
-    $C{COMPILE_MM}  = "$C{XCRUN} '$C{CXX}' $cflags $objcflags $cxxflags -x objective-c++ -std=gnu++17";
+    $C{COMPILE_C}   = "$C{XCRUN} '$C{CC}'  $cflags -x c -std=gnu17";
+    $C{COMPILE_CXX} = "$C{XCRUN} '$C{CXX}' $cflags $cxxflags -x c++ -std=gnu++20";
+    $C{COMPILE_M}   = "$C{XCRUN} '$C{CC}'  $cflags $objcflags -x objective-c -std=gnu17";
+    $C{COMPILE_MM}  = "$C{XCRUN} '$C{CXX}' $cflags $objcflags $cxxflags -x objective-c++ -std=gnu++20";
     $C{COMPILE_SWIFT} = "$C{XCRUN} '$C{SWIFT}' $swiftflags";
     
     $C{COMPILE} = $C{COMPILE_C}      if $C{LANGUAGE} eq "c";
@@ -1836,7 +1865,7 @@ sub build_and_run_one_config {
         # nothing to do
     }
     else {
-        if ($HOST && $C{ARCH} =~ /^arm/ && `uname -p` !~ /^arm/) {
+        if ($HOST) {
             # upload timeout - longer for slow watch devices
             my $timeout = ($C{OS} =~ /watch/) ? 120 : 20;
             

@@ -369,21 +369,12 @@ int main(int argc __unused, char **argv)
     objc_autorelease(obj);
     testassertequal(Autoreleases, 0);
 
-#if SUPPORT_NONPOINTER_ISA
     objc_retain(cls);
     testassertequal(PlusRetains, 0);
     objc_release(cls);
     testassertequal(PlusReleases, 0);
     objc_autorelease(cls);
     testassertequal(PlusAutoreleases, 0);
-#else
-    objc_retain(cls);
-    testassertequal(PlusRetains, 1);
-    objc_release(cls);
-    testassertequal(PlusReleases, 1);
-    objc_autorelease(cls);
-    testassertequal(PlusAutoreleases, 1);
-#endif
 
     objc_retain(inh);
     testassertequal(Retains, 0);
@@ -392,22 +383,13 @@ int main(int argc __unused, char **argv)
     objc_autorelease(inh);
     testassertequal(Autoreleases, 0);
 
-#if SUPPORT_NONPOINTER_ISA
     objc_retain(icl);
     testassertequal(PlusRetains, 0);
     objc_release(icl);
     testassertequal(PlusReleases, 0);
     objc_autorelease(icl);
     testassertequal(PlusAutoreleases, 0);
-#else
-    objc_retain(icl);
-    testassertequal(PlusRetains, 2);
-    objc_release(icl);
-    testassertequal(PlusReleases, 2);
-    objc_autorelease(icl);
-    testassertequal(PlusAutoreleases, 2);
-#endif
-    
+
     objc_retain(ovr);
     testassertequal(SubRetains, 1);
     objc_release(ovr);
@@ -422,21 +404,12 @@ int main(int argc __unused, char **argv)
     objc_autorelease(ocl);
     testassertequal(SubPlusAutoreleases, 1);
 
-#if SUPPORT_NONPOINTER_ISA
     objc_retain((Class)&OBJC_CLASS_$_UnrealizedSubC1);
     testassertequal(PlusRetains, 1);
     objc_release((Class)&OBJC_CLASS_$_UnrealizedSubC2);
     testassertequal(PlusReleases, 1);
     objc_autorelease((Class)&OBJC_CLASS_$_UnrealizedSubC3);
     testassertequal(PlusAutoreleases, 1);
-#else
-    objc_retain((Class)&OBJC_CLASS_$_UnrealizedSubC1);
-    testassertequal(PlusRetains, 3);
-    objc_release((Class)&OBJC_CLASS_$_UnrealizedSubC2);
-    testassertequal(PlusReleases, 3);
-    objc_autorelease((Class)&OBJC_CLASS_$_UnrealizedSubC3);
-    testassertequal(PlusAutoreleases, 3);
-#endif
 
     testprintf("unrelated addMethod does not clobber\n");
     zero();

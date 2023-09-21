@@ -157,8 +157,9 @@ static inline uintptr_t mask16ShiftBits(uint16_t mask)
 #   include <os/lock_private.h>
 #   include <libkern/OSCacheControl.h>
 #   include <System/pthread_machdep.h>
-#   include "objc-probes.h"  // generated dtrace probe definitions.
 #endif // !TARGET_OS_EXCLAVEKIT
+
+#   include "objc-probes.h"  // generated dtrace probe definitions.
 
 // Some libc functions call objc_msgSend() 
 // so we can't use them without deadlocks.
@@ -404,10 +405,9 @@ static inline uint64_t nanoseconds() {
 // Threading
 #include "Threading/threading.h"
 
-// Old names for locks and monitors
+// Old names for locks
 using spinlock_t = objc_lock_t;
 using mutex_t = objc_lock_t;
-using monitor_t = objc_monitor_t;
 using recursive_mutex_t = objc_recursive_lock_t;
 
 using mutex_locker_t = mutex_t::locker;
@@ -425,6 +425,22 @@ typedef struct section_64 sectionType;
 #endif
 #define headerIsBundle(hi) (hi->mhdr()->filetype == MH_BUNDLE)
 #define libobjc_header ((headerType *)&_mh_dylib_header)
+
+template<typename T>
+static T* getSectionData(const headerType* mhdr,
+                         _dyld_section_location_info_t info,
+                         _dyld_section_location_kind kind,
+                         size_t *outCount)
+{
+    _dyld_section_info_result result = _dyld_lookup_section_info((const struct mach_header *)mhdr, info, kind);
+    if ( result.buffer != NULL ) {
+        *outCount = result.bufferSize / sizeof(T);
+        return (T*)result.buffer;
+    }
+
+    *outCount = 0;
+    return NULL;
+}
 
 // Prototypes
 

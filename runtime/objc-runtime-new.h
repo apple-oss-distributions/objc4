@@ -24,7 +24,13 @@
 #ifndef _OBJC_RUNTIME_NEW_H
 #define _OBJC_RUNTIME_NEW_H
 
+#include "objc-opt.h"
+#include "objc-ptrauth.h"
 #include "PointerUnion.h"
+#include <bit>
+#include <cinttypes>
+#include <os/overflow.h>
+#include <ptrauth.h>
 #include <type_traits>
 
 // class_data_bits_t is the class_t->data field (class_rw_t pointer plus flags)
@@ -125,10 +131,13 @@
 // data pointer
 #if TARGET_OS_EXCLAVEKIT
 #define FAST_DATA_MASK          0x0000001ffffffff8UL
+#define DEBUG_DATA_MASK         0x0000001ffffffff8UL
 #elif TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-#define FAST_DATA_MASK          0x0000007ffffffff8UL
+#define FAST_DATA_MASK          0x0f00007ffffffff8UL
+#define DEBUG_DATA_MASK         0x0000007ffffffff8UL
 #else
-#define FAST_DATA_MASK          0x00007ffffffffff8UL
+#define FAST_DATA_MASK          0x0f007ffffffffff8UL
+#define DEBUG_DATA_MASK         0x00007ffffffffff8UL
 #endif
 
 static_assert((OBJC_VM_MAX_ADDRESS & FAST_DATA_MASK)
@@ -171,6 +180,7 @@ static_assert((OBJC_VM_MAX_ADDRESS & FAST_DATA_MASK)
 #define FAST_IS_SWIFT_STABLE  (1UL<<1)
 // data pointer
 #define FAST_DATA_MASK        0xfffffffcUL
+#define DEBUG_DATA_MASK       FAST_DATA_MASK
 // flags mask
 #define FAST_FLAGS_MASK       0x00000003UL
 // no fast RW pointer flag on 32-bit
@@ -231,10 +241,11 @@ private:
         if (!newImp) return 0;
 #if CACHE_IMP_ENCODING == CACHE_IMP_ENCODING_PTRAUTH
         return (uintptr_t)
-            ptrauth_auth_and_resign(newImp,
-                                    ptrauth_key_function_pointer, 0,
-                                    ptrauth_key_process_dependent_code,
-                                    modifierForSEL(base, newSel, cls));
+        bitcast_auth_and_resign(void *, newImp,
+                                ptrauth_key_function_pointer,
+                                ptrauth_function_pointer_type_discriminator(IMP),
+                                ptrauth_key_process_dependent_code,
+                                modifierForSEL(base, newSel, cls));
 #elif CACHE_IMP_ENCODING == CACHE_IMP_ENCODING_ISA_XOR
         return (uintptr_t)newImp ^ (uintptr_t)cls;
 #elif CACHE_IMP_ENCODING == CACHE_IMP_ENCODING_NONE
@@ -271,11 +282,11 @@ public:
         if (!imp) return nil;
 #if CACHE_IMP_ENCODING == CACHE_IMP_ENCODING_PTRAUTH
         SEL sel = _sel.load(memory_order_relaxed);
-        return (IMP)
-            ptrauth_auth_and_resign((const void *)imp,
-                                    ptrauth_key_process_dependent_code,
-                                    modifierForSEL(base, sel, cls),
-                                    ptrauth_key_function_pointer, 0);
+        return bitcast_auth_and_resign(IMP, imp,
+                                       ptrauth_key_process_dependent_code,
+                                       modifierForSEL(base, sel, cls),
+                                       ptrauth_key_function_pointer,
+                                       ptrauth_function_pointer_type_discriminator(IMP));
 #elif CACHE_IMP_ENCODING == CACHE_IMP_ENCODING_ISA_XOR
         return (IMP)(imp ^ (uintptr_t)cls);
 #elif CACHE_IMP_ENCODING == CACHE_IMP_ENCODING_NONE
@@ -698,11 +709,17 @@ struct entsize_list_tt {
         return entsizeAndFlags & FlagMask;
     }
 
-    Element& getOrEnd(uint32_t i) const { 
+    ALWAYS_INLINE
+    Element& getOrEnd(uint32_t i) const {
         ASSERT(i <= count);
-        return *PointerModifier::modify(*(List *)this, (Element *)((uint8_t *)this + sizeof(*this) + i*entsize()));
+        uint32_t iBytes;
+        if (os_mul_overflow(i, entsize(), &iBytes))
+            _objc_fatal("entsize_list_tt overflow: index %" PRIu32 " in list %p with entsize %" PRIu32,
+                        i, this, entsize());
+        return *PointerModifier::modify(*(List *)this, (Element *)((uint8_t *)this + sizeof(*this) + iBytes));
     }
-    Element& get(uint32_t i) const { 
+
+    Element& get(uint32_t i) const {
         ASSERT(i < count);
         return getOrEnd(i);
     }
@@ -712,7 +729,16 @@ struct entsize_list_tt {
     }
     
     static size_t byteSize(uint32_t entsize, uint32_t count) {
-        return sizeof(entsize_list_tt) + count*entsize;
+        // sizeof(entsize_list_tt) + entsize*count
+        uint32_t countBytes;
+        if (os_mul_overflow(count, entsize, &countBytes))
+            _objc_fatal("entsize_list_tt overflow: count %" PRIu32 " with entsize %" PRIu32,
+                        count, entsize);
+        size_t size;
+        if (os_add_overflow(sizeof(entsize_list_tt), countBytes, &size))
+            _objc_fatal("entsize_list_tt overflow: %" PRIu32 " bytes plus list size",
+                        countBytes);
+        return size;
     }
 
     template <bool authenticated>
@@ -725,6 +751,7 @@ struct entsize_list_tt {
     iterator begin() {
         return iterator(*static_cast<const List*>(this), 0);
     }
+    ALWAYS_INLINE
     const iterator end() const {
         return iterator(*static_cast<const List*>(this), count);
     }
@@ -756,6 +783,7 @@ struct entsize_list_tt {
 
         iteratorImpl() { }
 
+        ALWAYS_INLINE
         iteratorImpl(const List& list, uint32_t start = 0)
             : entsize(list.entsize())
             , index(start)
@@ -980,7 +1008,7 @@ private:
     struct small {
         // The name field either refers to a selector (in the shared
         // cache) or a selref (everywhere else).
-        RelativePointer<const void *> name;
+        RelativePointer<const void *, /*isNullable*/false> name;
         RelativePointer<const char *> types;
         RelativePointer<IMP, /*isNullable*/false> imp;
 
@@ -1075,8 +1103,8 @@ public:
     IMP imp(bool needsLock) const {
         switch (getKind()) {
             case Kind::small: {
-                IMP smallIMP = ptrauth_sign_unauthenticated(small().imp.get(),
-                                                            ptrauth_key_function_pointer, 0);
+                IMP smallIMP = (IMP)ptrauth_sign_unauthenticated(small().imp.getRaw(),
+                                                                 ptrauth_key_function_pointer, 0);
                 // We must sign the newly generated function pointer before calling
                 // out to remappedImp(). That call may spill `this` leaving it open
                 // to being overwritten while it's on the stack. By signing first,
@@ -1086,7 +1114,21 @@ public:
                 // The compiler REALLY wants to perform this signing operation after
                 // the call to remappedImp. This asm statement prevents it from
                 // doing that reordering.
-                asm ("": : "r" (smallIMP) :);
+
+                // This used to say
+                //
+                //   asm ("": : "r" (smallIMP) :);
+                //
+                // but in general it seems that isn't sufficient to discourage
+                // the compiler from fusing the PAC and AUT instructions and
+                // inadvertently bypassing PAC.
+                //
+                // Telling the compiler we're futzing with smallIMP and might
+                // change it appears to stop it, however.
+                //
+                // (See rdar://110191524)
+
+                asm volatile("" : "=r"(smallIMP) : "0"(smallIMP));
 
                 IMP remappedIMP = remappedImp(needsLock);
                 if (remappedIMP)
@@ -1129,6 +1171,11 @@ public:
     SEL getSmallNameAsSEL() const {
         ASSERT(small().inSharedCache());
         return (SEL)small().name.get(sharedCacheRelativeMethodBase());
+    }
+
+    int32_t getSmallNameAsSELOffset() const {
+        ASSERT(small().inSharedCache());
+        return small().name.offset;
     }
 
     SEL getSmallNameAsSELRef() const {
@@ -1381,25 +1428,166 @@ struct method_list_t : entsize_list_tt<method_t, method_list_t, 0xffff0003, meth
                       void * __ptrauth(ptrauth_key_method_list_pointer, 1, discriminator) *>::value,
                       "Method list pointer signing discriminator must match ptrauth.h");
 
-        ALWAYS_INLINE static method_list_t *sign (method_list_t *ptr, const void *address) {
+        template <typename T>
+        ALWAYS_INLINE static T *sign (T *ptr, const void *address) {
             return ptrauth_sign_unauthenticated(ptr,
                                                 ptrauth_key_method_list_pointer,
                                                 ptrauth_blend_discriminator(address,
                                                                             discriminator));
         }
 
-        ALWAYS_INLINE static method_list_t *auth(method_list_t *ptr, const void *address) {
+        template <typename T>
+        ALWAYS_INLINE static T *auth(T *ptr, const void *address) {
             (void)address;
 #if __has_feature(ptrauth_calls)
+#   if __BUILDING_OBJCDT__
+            ptr = ptrauth_strip(ptr, ptrauth_key_method_list_pointer);
+#   else
             if (ptr)
                 ptr = ptrauth_auth_data(ptr,
                                         ptrauth_key_method_list_pointer,
                                         ptrauth_blend_discriminator(address,
                                                                     discriminator));
+#   endif
 #endif
             return ptr;
         }
     };
+};
+
+/// The entries in a relative list-of-lists. Each entry contains an index of the
+/// image its list belongs to, and a relative offset to the list itself. This
+/// layout is ABI with the shared cache.
+struct relative_list_list_entry_t {
+    uint64_t imageIndex: 16;
+    int64_t listOffset: 48;
+    
+    relative_list_list_entry_t(const relative_list_list_entry_t &other) = delete;
+    
+    void *list() const {
+        return (void *)((intptr_t)this + (intptr_t)listOffset);
+    }
+};
+
+/// A relative list-of-lists. This can be a list of method lists, protocol
+/// lists, or property lists. Individual lists within this structure may be
+/// loaded or not loaded. If they are not loaded then they are automatically
+/// skipped during iteration.
+template <typename ResolvedEntry>
+struct relative_list_list_t : entsize_list_tt<relative_list_list_entry_t, relative_list_list_t<ResolvedEntry>, 0> {
+    using Super = entsize_list_tt<relative_list_list_entry_t, relative_list_list_t<ResolvedEntry>, 0>;
+
+    ALWAYS_INLINE
+    bool isLoaded(relative_list_list_entry_t &entry) const {
+#if __BUILDING_OBJCDT__
+        // We should probably try to read the remote process's
+        // objc_debug_headerInfoRWs and use that info here. For now, just
+        // pretend everything is loaded.
+        return true;
+#else
+        // Check if the entry's image is loaded.
+        return objc_debug_headerInfoRWs->headers[entry.imageIndex].getLoaded();
+#endif
+    }
+
+    // An iterator that knows how to iterate over the lists in the list-of-lists
+    // and skip unloaded lists.
+    class ListIterator {
+        const relative_list_list_t<ResolvedEntry> *list;
+        typename Super::iterator wrapped;
+
+        // Move the iterator ahead to the next loaded entry, or until the end of the list.
+        // If the current entry is loaded, the iterator does not move.
+        ALWAYS_INLINE
+        void skipToNextLoaded() {
+            while (wrapped < list->end() && !list->isLoaded(*wrapped)) {
+                ++wrapped;
+            }
+        }
+
+    public:
+        ALWAYS_INLINE
+        ListIterator(typename Super::iterator wrapped, const relative_list_list_t *list) : list(list), wrapped(wrapped) {
+            skipToNextLoaded();
+        }
+
+        ALWAYS_INLINE
+        bool operator==(const ListIterator &other) const {
+            return wrapped == other.wrapped;
+        }
+
+        ALWAYS_INLINE
+        bool operator!=(const ListIterator &other) const {
+            return wrapped != other.wrapped;
+        }
+
+        ALWAYS_INLINE
+        ResolvedEntry *operator*() const {
+            return (ResolvedEntry *)wrapped->list();
+        }
+
+        ALWAYS_INLINE
+        ListIterator &operator++() {
+            ++wrapped;
+            skipToNextLoaded();
+            return *this;
+        }
+
+        ListIterator &operator--() {
+            do {
+                ASSERT(wrapped > list->begin());
+                --wrapped;
+            } while(!list->isLoaded(*wrapped));
+            return *this;
+        }
+
+        size_t operator-(ListIterator other) const {
+            size_t diff = 0;
+            while (other < *this)
+                ++diff, ++other;
+            return diff;
+        }
+
+        bool operator<(const ListIterator &other) const {
+            return wrapped < other.wrapped;
+        }
+    };
+
+    ALWAYS_INLINE
+    ListIterator beginLists() const {
+#if __BUILDING_OBJCDT__
+        return ListIterator(Super::begin(), this);
+#else
+        typename Super::iterator wrapped;
+        if (slowpath(DisablePreattachedCategories)) {
+            // If we contain some elements, then start at the end and move back
+            // one. If we're empty, then just start at the end.
+            wrapped = Super::end();
+            if (this->count > 0)
+                --wrapped;
+        } else {
+            wrapped = Super::begin();
+        }
+        return ListIterator(wrapped, this);
+#endif
+    }
+
+    ALWAYS_INLINE
+    ListIterator endLists() const {
+        return ListIterator(Super::end(), this);
+    }
+
+    uint32_t countLists() const {
+        return (uint32_t)(endLists() - beginLists());
+    }
+
+    ResolvedEntry *lastList() {
+        auto end = endLists();
+        if (end == beginLists())
+            return nullptr;
+        --end;
+        return *end;
+    }
 };
 
 struct ivar_list_t : entsize_list_tt<ivar_t, ivar_list_t, 0> {
@@ -1516,12 +1704,12 @@ struct class_ro_t {
     };
 
     explicit_atomic<const char *> name;
-    WrappedPtr<method_list_t, method_list_t::Ptrauth> baseMethods;
-    protocol_list_t * baseProtocols;
+    objc::PointerUnion<method_list_t, relative_list_list_t<method_list_t>, method_list_t::Ptrauth, method_list_t::Ptrauth> baseMethods;
+    objc::PointerUnion<protocol_list_t, relative_list_list_t<protocol_list_t>, PtrauthRaw, PtrauthRaw> baseProtocols;
     const ivar_list_t * ivars;
 
     const uint8_t * weakIvarLayout;
-    property_list_t *baseProperties;
+    objc::PointerUnion<property_list_t, relative_list_list_t<property_list_t>, PtrauthRaw, PtrauthRaw> baseProperties;
 
     // This field exists only when RO_HAS_SWIFT_INITIALIZER is set.
     _objc_swiftMetadataInitializer __ptrauth_objc_method_list_imp _swiftMetadataInitializer_NEVER_USE[0];
@@ -1577,7 +1765,7 @@ struct class_ro_t {
 *
 * Element is the underlying metadata type (e.g. method_t)
 * List is the metadata's list type (e.g. method_list_t)
-* List is a template applied to Element to make Element*. Useful for
+* Ptr is a template applied to Element to make Element*. Useful for
 * applying qualifiers to the pointer type.
 *
 * A list_array_tt has one of three values:
@@ -1590,6 +1778,7 @@ struct class_ro_t {
 **********************************************************************/
 template <typename Element, typename List, template<typename> class Ptr>
 class list_array_tt {
+public:
     struct array_t {
         uint32_t count;
         Ptr<List> lists[0];
@@ -1602,34 +1791,166 @@ class list_array_tt {
         }
     };
 
+    // An iterator over the lists in the list array.
+    class ListIterator {
+        // A pointer to the list array this iterator was created from. Its
+        // storage type is used to discriminate what kind of underlying iterator
+        // we use, and the original array is also needed to implement
+        // operator--.
+        const list_array_tt *listArray;
+
+        // The iterator has three representations, depending on the
+        // representation of the list array it was created from.
+        union {
+            // When the array contains a single list, the iterator is just a
+            // pointer to a list. The end iterator is represented with NULL.
+            Ptr<List> listPtr;
+
+            // When the array contains a C array of lists, the iterator is a
+            // pointer to an entry in that array, with the end iterator being
+            // off the end of the array.
+            Ptr<List> *listPtrPtr;
+
+            // When the representation is a relative list-of-lists, then the
+            // iterator is the that ListIterator type.
+            typename relative_list_list_t<List>::ListIterator listListIterator;
+        };
+
+        ListIterator(const list_array_tt *list) : listArray(list) {}
+
+    public:
+        ListIterator(const ListIterator &other) {
+            listArray = other.listArray;
+            if (listArray->storage.template is<List *>())
+                listPtr = other.listPtr;
+            else if (listArray->storage.template is<array_t *>())
+                listPtrPtr = other.listPtrPtr;
+            else if (listArray->storage.template is<relative_list_list_t<List> *>())
+                listListIterator = other.listListIterator;
+        }
+
+        ALWAYS_INLINE
+        static ListIterator begin(const list_array_tt *list) {
+            ListIterator iter{list};
+            if (List *mlist = list->storage.template dyn_cast<List *>())
+                iter.listPtr = mlist;
+            else if (list->storage.isNull())
+                iter.listPtr = nullptr;
+            else if (array_t *array = list->storage.template dyn_cast<array_t *>())
+                iter.listPtrPtr = &array->lists[0];
+            else if (auto *listList = list->storage.template dyn_cast<relative_list_list_t<List> *>())
+                iter.listListIterator = listList->beginLists();
+            return iter;
+        }
+
+        ALWAYS_INLINE
+        static ListIterator end(const list_array_tt *list) {
+            ListIterator iter{list};
+            if (list->storage.template is<List *>())
+                iter.listPtr = nullptr;
+            if (array_t *array = list->storage.template dyn_cast<array_t *>())
+                iter.listPtrPtr = &array->lists[array->count];
+            if (auto *listList = list->storage.template dyn_cast<relative_list_list_t<List> *>())
+                iter.listListIterator = listList->endLists();
+            return iter;
+        }
+
+        ALWAYS_INLINE
+        Ptr<List> operator*() const {
+            if (listArray->storage.template is<List *>())
+                return listPtr;
+            if (listArray->storage.template is<array_t *>())
+                return *listPtrPtr;
+            if (listArray->storage.template is<relative_list_list_t<List> *>())
+                return *listListIterator;
+            return nullptr;
+        }
+
+        ALWAYS_INLINE
+        bool operator==(const ListIterator &other) const {
+            if (listArray != other.listArray)
+                return false;
+
+            if (listArray->storage.template is<List *>())
+                return listPtr == other.listPtr;
+            if (listArray->storage.template is<array_t *>())
+                return listPtrPtr == other.listPtrPtr;
+            if (listArray->storage.template is<relative_list_list_t<List> *>())
+                return listListIterator == other.listListIterator;
+            return false;
+        }
+
+        ALWAYS_INLINE
+        bool operator!=(const ListIterator &other) const {
+            return !(*this == other);
+        }
+
+        bool operator<(const ListIterator &other) const {
+            if (listArray->storage.template is<List *>())
+                return listPtr && !other.listPtr; // null listPtr means it's the end iterator
+            if (listArray->storage.template is<array_t *>())
+                return listPtrPtr < other.listPtrPtr;
+            if (listArray->storage.template is<relative_list_list_t<List> *>())
+                return listListIterator < other.listListIterator;
+            return false;
+        }
+
+        ALWAYS_INLINE
+        ListIterator &operator++() {
+            if (listArray->storage.template is<List *>())
+                listPtr = nullptr;
+            if (listArray->storage.template is<array_t *>())
+                listPtrPtr++;
+            if (listArray->storage.template is<relative_list_list_t<List> *>())
+                ++listListIterator;
+            return *this;
+        }
+
+        ListIterator &operator--() {
+            if (List *mlist = listArray->storage.template dyn_cast<List *>())
+                listPtr = mlist;
+            if (listArray->storage.template is<array_t *>())
+                listPtrPtr--;
+            if (listArray->storage.template is<relative_list_list_t<List> *>())
+                --listListIterator;
+            return *this;
+        }
+    };
+
  protected:
     template <bool authenticated>
     class iteratorImpl {
-        const Ptr<List> *lists;
-        const Ptr<List> *listsEnd;
+        ListIterator lists;
+        ListIterator listsEnd;
 
         template<bool B>
-        struct ListIterator {
+        struct InteriorListIterator {
             using Type = typename List::signedIterator;
             static Type begin(Ptr<List> ptr) { return ptr->signedBegin(); }
             static Type end(Ptr<List> ptr) { return ptr->signedEnd(); }
         };
         template<>
-        struct ListIterator<false> {
+        struct InteriorListIterator<false> {
             using Type = typename List::iterator;
             static Type begin(Ptr<List> ptr) { return ptr->begin(); }
             static Type end(Ptr<List> ptr) { return ptr->end(); }
         };
-        typename ListIterator<authenticated>::Type m, mEnd;
+        typename InteriorListIterator<authenticated>::Type m, mEnd;
+
+        void skipEmptyLists() {
+            while (lists != listsEnd && (*lists)->count == 0)
+                ++lists;
+        }
 
      public:
-        iteratorImpl(const Ptr<List> *begin, const Ptr<List> *end)
+        iteratorImpl(ListIterator begin, ListIterator end)
             : lists(begin), listsEnd(end)
         {
             if (begin != end) {
-                m = ListIterator<authenticated>::begin(*begin);
-                mEnd = ListIterator<authenticated>::end(*begin);
+                m = InteriorListIterator<authenticated>::begin(*begin);
+                mEnd = InteriorListIterator<authenticated>::end(*begin);
             }
+            skipEmptyLists();
         }
 
         const Element& operator * () const {
@@ -1639,11 +1960,15 @@ class list_array_tt {
             return *m;
         }
 
+        bool operator == (const iteratorImpl& rhs) const {
+            if (lists != rhs.lists) return false;
+            if (lists == listsEnd) return true;  // m is undefined
+            if (m != rhs.m) return false;
+            return true;
+        }
+
         bool operator != (const iteratorImpl& rhs) const {
-            if (lists != rhs.lists) return true;
-            if (lists == listsEnd) return false;  // m is undefined
-            if (m != rhs.m) return true;
-            return false;
+            return !(*this == rhs);
         }
 
         const iteratorImpl& operator ++ () {
@@ -1651,10 +1976,12 @@ class list_array_tt {
             m++;
             if (m == mEnd) {
                 ASSERT(lists != listsEnd);
-                lists++;
+                ++lists;
+                skipEmptyLists();
                 if (lists != listsEnd) {
-                    m = ListIterator<authenticated>::begin(*lists);
-                    mEnd = ListIterator<authenticated>::end(*lists);
+                    m = InteriorListIterator<authenticated>::begin(*lists);
+                    mEnd = InteriorListIterator<authenticated>::end(*lists);
+                    RELEASE_ASSERT(m != mEnd, "empty list %p encountered during iteration", (void *)*lists);
                 }
             }
             return *this;
@@ -1663,43 +1990,79 @@ class list_array_tt {
     using iterator = iteratorImpl<false>;
     using signedIterator = iteratorImpl<true>;
 
- private:
-    union {
-        Ptr<List> list;
-        uintptr_t arrayAndFlag;
-    };
-
-    bool hasArray() const {
-        return arrayAndFlag & 1;
-    }
-
-    array_t *array() const {
-        return (array_t *)(arrayAndFlag & ~1);
-    }
-
-    void setArray(array_t *array) {
-        arrayAndFlag = (uintptr_t)array | 1;
-    }
-
-    void validate() {
-        for (auto cursor = beginLists(), end = endLists(); cursor != end; cursor++)
-            cursor->validate();
-    }
-
  public:
-    list_array_tt() : list(nullptr) { }
-    list_array_tt(List *l) : list(l) { }
+
+    // The storage type for the PointerUnion4. When we have ptrauth, this is a
+    // uintptr_t signed with our scheme. Otherwise it's a plain uintptr_t.
+    typedef
+#if __has_feature(ptrauth_calls) && !__BUILDING_OBJCDT__
+    __ptrauth_restricted_intptr(ptrauth_key_process_dependent_data, 1, ptrauth_string_discriminator("list_array_tt::storage"))
+#endif
+    uintptr_t StorageTy;
+
+    // A list array has three possible representations: a single list, an array,
+    // or a relative list-of-lists. We use PointerUnion4 to store and
+    // discriminate these types. Since we don't use the fourth type, we use
+    // max_align_t* as a dummy type. (void* upsets the template's static asserts
+    // for the minimum alignment of the underlying types.)
+    objc::PointerUnion4<
+        List*,
+        array_t*,
+        relative_list_list_t<List>*,
+        max_align_t*,
+        StorageTy>
+    storage{(List *)nullptr};
+
+    void validate() const {
+        for (auto cursor = beginLists(), end = endLists(); cursor != end; ++cursor) {
+            // Cursor is an iterator that doesn't provide ->, because it can't
+            // always materialize a pointer to a pointer to a method list.
+            // Instead we do a pretend -> with a combination of * and .
+            (*cursor).validate();
+        }
+    }
+
+    list_array_tt() { }
+    list_array_tt(List *l) : storage(l) { }
+    list_array_tt(relative_list_list_t<List> *l) : storage(l) { }
     list_array_tt(const list_array_tt &other) {
         *this = other;
     }
 
+    template <typename T>
+    list_array_tt(const T &ptrUnion) {
+        if (List *l = ptrUnion.template dyn_cast<List *>())
+            storage.set(l);
+        else if (auto *ll = ptrUnion.template dyn_cast<relative_list_list_t<List> *>())
+            storage.set(ll);
+    }
+
     list_array_tt &operator =(const list_array_tt &other) {
-        if (other.hasArray()) {
-            arrayAndFlag = other.arrayAndFlag;
-        } else {
-            list = other.list;
-        }
+        storage = other.storage;
         return *this;
+    }
+
+    struct ListAlternates {
+        List *oneList;
+
+        Ptr<List> *array;
+        unsigned arrayCount;
+
+        relative_list_list_t<List> *listList;
+    };
+
+    ALWAYS_INLINE
+    ListAlternates listAlternates() const {
+        ListAlternates result = {};
+        result.oneList = storage.template dyn_cast<List *>();
+        result.listList = storage.template dyn_cast<relative_list_list_t<List> *>();
+
+        if (auto array = storage.template dyn_cast<array_t *>()) {
+            result.array = array->lists;
+            result.arrayCount = array->count;
+        }
+
+        return result;
     }
 
     uint32_t count() const {
@@ -1731,100 +2094,162 @@ class list_array_tt {
         return signedIterator(e, e);
     }
 
-    inline uint32_t countLists(const std::function<const array_t * (const array_t *)> & peek) const {
-        if (hasArray()) {
-            return peek(array())->count;
-        } else if (list) {
-            return 1;
-        } else {
-            return 0;
-        }
+    ALWAYS_INLINE
+    ListIterator beginLists() const {
+        return ListIterator::begin(this);
     }
 
-    uint32_t countLists() {
-        return countLists([](array_t *x) { return x; });
+    ALWAYS_INLINE
+    ListIterator endLists() const {
+        return ListIterator::end(this);
     }
 
-    const Ptr<List>* beginLists() const {
-        if (hasArray()) {
-            return array()->lists;
-        } else {
-            return &list;
-        }
+    // Returns true if the array contains any of the lists passed in.
+    bool containsLists(List* const *lists, uint32_t count) {
+        for (auto iterator = beginLists(); iterator != endLists(); ++iterator)
+            for (uint32_t i = 0; i < count; i++)
+                if (*iterator == lists[i])
+                    return true;
+        return false;
     }
 
-    const Ptr<List>* endLists() const {
-        if (hasArray()) {
-            return array()->lists + array()->count;
-        } else if (list) {
-            return &list + 1;
-        } else {
-            return &list;
-        }
-    }
-
-    void attachLists(List* const * addedLists, uint32_t addedCount) {
+    // Attach an array of method lists. When preoptimized is true, the lists are
+    // in the relative_list_list_t, so if our storage still points to that then
+    // we skip the attach.
+    void attachLists(List* const * addedLists,
+                     uint32_t addedCount,
+                     bool preoptimized,
+                     const char *logKind) {
         if (addedCount == 0) return;
 
-        if (hasArray()) {
+        // Preoptimized lists don't need to be attached to a relative_list_list_t.
+        // They're already in there.
+        if (preoptimized) {
+            if (auto *listList = storage.template dyn_cast<relative_list_list_t<List> *>()) {
+                if (slowpath(logKind)) {
+                    _objc_inform("PREOPTIMIZATION: not attaching preoptimized "
+                                 "category, class's %s list %p is still original.",
+                                 logKind, listList);
+                }
+                ASSERT(containsLists(addedLists, addedCount));
+                return;
+            } else {
+                if (slowpath(logKind)) {
+                    _objc_inform("PREOPTIMIZATION: copying preoptimized "
+                                 "category, class's %s list has already "
+                                 "been copied.",
+                                 logKind);
+                }
+            }
+        }
+
+        // We shouldn't ever add the same list twice.
+        ASSERT(!containsLists(addedLists, addedCount));
+
+        if (storage.isNull() && addedCount == 1) {
+            // 0 lists -> 1 list
+            storage.set(*addedLists);
+            validate();
+        } else if (storage.isNull() || storage.template is<List *>()) {
+            List *oldList = storage.template dyn_cast<List *>();
+            // 0 or 1 list -> many lists
+            uint32_t oldCount = oldList ? 1 : 0;
+            uint32_t newCount = oldCount + addedCount;
+            array_t *array = (array_t *)malloc(array_t::byteSize(newCount));
+            storage.set(array);
+            array->count = newCount;
+            if (oldList) array->lists[addedCount] = oldList;
+            for (unsigned i = 0; i < addedCount; i++)
+                array->lists[i] = addedLists[i];
+            validate();
+        } else if (array_t *array = storage.template dyn_cast<array_t *>()) {
             // many lists -> many lists
-            uint32_t oldCount = array()->count;
+            uint32_t oldCount = array->count;
             uint32_t newCount = oldCount + addedCount;
             array_t *newArray = (array_t *)malloc(array_t::byteSize(newCount));
             newArray->count = newCount;
-            array()->count = newCount;
 
             for (int i = oldCount - 1; i >= 0; i--)
-                newArray->lists[i + addedCount] = array()->lists[i];
+                newArray->lists[i + addedCount] = array->lists[i];
             for (unsigned i = 0; i < addedCount; i++)
                 newArray->lists[i] = addedLists[i];
-            free(array());
-            setArray(newArray);
+            free(array);
+            storage.set(newArray);
             validate();
-        }
-        else if (!list  &&  addedCount == 1) {
-            // 0 lists -> 1 list
-            list = addedLists[0];
-            validate();
-        } 
-        else {
-            // 1 list -> many lists
-            Ptr<List> oldList = list;
-            uint32_t oldCount = oldList ? 1 : 0;
+        } else if (auto *listList = storage.template dyn_cast<relative_list_list_t<List> *>()) {
+            // list-of-lists -> many lists
+            auto listListBegin = listList->beginLists();
+            uint32_t oldCount = listList->countLists();
             uint32_t newCount = oldCount + addedCount;
-            setArray((array_t *)malloc(array_t::byteSize(newCount)));
-            array()->count = newCount;
-            if (oldList) array()->lists[addedCount] = oldList;
-            for (unsigned i = 0; i < addedCount; i++)
-                array()->lists[i] = addedLists[i];
+            array_t *newArray = (array_t *)malloc(array_t::byteSize(newCount));
+            newArray->count = newCount;
+
+            uint32_t i;
+            for (i = 0; i < addedCount; i++) {
+                newArray->lists[i] = addedLists[i];
+            }
+            for (; i < newCount; i++) {
+                newArray->lists[i] = *listListBegin;
+                ++listListBegin;
+            }
+            storage.set(newArray);
             validate();
         }
     }
 
-    void tryFree() {
-        if (hasArray()) {
-            for (uint32_t i = 0; i < array()->count; i++) {
-                try_free(stripTBI(array()->lists[i]));
-            }
-            try_free(array());
+    void attachListList(relative_list_list_t<List> *listList) {
+        // We only attach a list-of-lists to an empty array. We never attach one
+        // to an array that already contains other stuff.
+        ASSERT(storage.isNull());
+        storage.set(listList);
+    }
+
+    // Copy the loaded elements of a relative_list_list_t storage into array
+    // storage.
+    void copyListList(unsigned numLoaded) {
+        auto *listList = storage.template dyn_cast<relative_list_list_t<List> *>();
+        ASSERT(listList);
+
+        // It's not possible to have zero loaded lists.
+        ASSERT(numLoaded > 0);
+
+        auto iter = listList->beginLists();
+        if (numLoaded == 1) {
+            storage.set(*iter);
+        } else {
+            array_t *array = (array_t *)malloc(array_t::byteSize(numLoaded));
+            storage.set(array);
+            array->count = numLoaded;
+            for (unsigned i = 0; i < numLoaded; i++, ++iter)
+                array->lists[i] = *iter;
         }
-        else if (list) {
+        validate();
+    }
+
+    void tryFree() {
+        if (array_t *array = storage.template dyn_cast<array_t *>()) {
+            for (uint32_t i = 0; i < array->count; i++) {
+                try_free(stripTBI(array->lists[i]));
+            }
+            try_free(array);
+        }
+        else if (List *list = storage.template dyn_cast<List *>()) {
             try_free(stripTBI(list));
         }
     }
 
     template<typename Other>
     void duplicateInto(Other &other) {
-        if (hasArray()) {
-            array_t *a = array();
-            other.setArray((array_t *)memdup(a, a->byteSize()));
-            for (uint32_t i = 0; i < a->count; i++) {
-                other.array()->lists[i] = a->lists[i]->duplicate();
+        if (array_t *array = storage.template dyn_cast<array_t *>()) {
+            array_t *otherArray = (array_t *)memdup(array, array->byteSize());
+            other.storage.set(otherArray);
+            for (uint32_t i = 0; i < array->count; i++) {
+                otherArray->lists[i] = array->lists[i]->duplicate();
             }
-        } else if (list) {
-            other.list = list->duplicate();
+        } else if (List *list = storage.template dyn_cast<List *>()) {
+            other.storage.set(list->duplicate());
         } else {
-            other.list = nil;
+            other.storage.set((List *)nullptr);
         }
     }
 };
@@ -1838,16 +2263,14 @@ class method_array_t :
     typedef list_array_tt<method_t, method_list_t, method_list_t_authed_ptr> Super;
 
  public:
-    method_array_t() : Super() { }
-    method_array_t(method_list_t *l) : Super(l) { }
+    using Super::Super;
 
-    const method_list_t_authed_ptr<method_list_t> *beginCategoryMethodLists() const {
+    ListIterator beginCategoryMethodLists() const {
         return beginLists();
     }
     
-    const method_list_t_authed_ptr<method_list_t> *endCategoryMethodLists(Class cls) const;
+    ListIterator endCategoryMethodLists(Class cls) const;
 };
-
 
 class property_array_t : 
     public list_array_tt<property_t, property_list_t, RawPtr>
@@ -1855,8 +2278,7 @@ class property_array_t :
     typedef list_array_tt<property_t, property_list_t, RawPtr> Super;
 
  public:
-    property_array_t() : Super() { }
-    property_array_t(property_list_t *l) : Super(l) { }
+    using Super::Super;
 };
 
 
@@ -1866,8 +2288,7 @@ class protocol_array_t :
     typedef list_array_tt<protocol_ref_t, protocol_list_t, RawPtr> Super;
 
  public:
-    protocol_array_t() : Super() { }
-    protocol_array_t(protocol_list_t *l) : Super(l) { }
+    using Super::Super;
 };
 
 struct class_rw_ext_t {
@@ -1970,13 +2391,41 @@ public:
         }
     }
 
-    const method_array_t methods() const {
+    struct MethodListAlternates {
+        method_array_t *array;
+        method_list_t *list;
+        relative_list_list_t<method_list_t> *relativeList;
+    };
+
+    // Get the class's method lists without wrapping the different
+    // representations in a method_array_t. This allows the caller to directly
+    // access the underlying representations and have separate code for them,
+    // rather than relying on the iterator abstraction being sufficiently
+    // optimized. This exists for getMethodNoSuper_nolock to call, other callers
+    // should be able to just use methods().
+    ALWAYS_INLINE
+    MethodListAlternates methodAlternates() const {
+        MethodListAlternates result = {};
         auto v = get_ro_or_rwe();
         if (v.is<class_rw_ext_t *>()) {
-            return v.get<class_rw_ext_t *>(&ro_or_rw_ext)->methods;
+            result.array = &v.get<class_rw_ext_t *>(&ro_or_rw_ext)->methods;
         } else {
-            return method_array_t{v.get<const class_ro_t *>(&ro_or_rw_ext)->baseMethods};
+            auto &baseMethods = v.get<const class_ro_t *>(&ro_or_rw_ext)->baseMethods;
+            result.list = baseMethods.dyn_cast<method_list_t *>();
+            result.relativeList = baseMethods.dyn_cast<relative_list_list_t<method_list_t> *>();
         }
+        return result;
+    }
+
+    const method_array_t methods() const {
+        auto alternates = methodAlternates();
+        if (auto *array = alternates.array)
+            return *array;
+        if (auto *list = alternates.list)
+            return method_array_t{list};
+        if (auto *relativeList = alternates.relativeList)
+            return method_array_t{relativeList};
+        return method_array_t{};
     }
 
     const property_array_t properties() const {
@@ -1984,7 +2433,8 @@ public:
         if (v.is<class_rw_ext_t *>()) {
             return v.get<class_rw_ext_t *>(&ro_or_rw_ext)->properties;
         } else {
-            return property_array_t{v.get<const class_ro_t *>(&ro_or_rw_ext)->baseProperties};
+            auto &baseProperties = v.get<const class_ro_t *>(&ro_or_rw_ext)->baseProperties;
+            return property_array_t{baseProperties};
         }
     }
 
@@ -1993,7 +2443,8 @@ public:
         if (v.is<class_rw_ext_t *>()) {
             return v.get<class_rw_ext_t *>(&ro_or_rw_ext)->protocols;
         } else {
-            return protocol_array_t{v.get<const class_ro_t *>(&ro_or_rw_ext)->baseProtocols};
+            auto &baseProtocols = v.get<const class_ro_t *>(&ro_or_rw_ext)->baseProtocols;
+            return protocol_array_t{baseProtocols};
         }
     }
 };

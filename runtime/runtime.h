@@ -72,6 +72,8 @@ typedef struct {
     const char * _Nonnull value;          /**< The value of the attribute (usually empty) */
 } objc_property_attribute_t;
 
+// Used by objc_func_loadImage
+struct mach_header;
 
 /* Functions */
 
@@ -1640,7 +1642,7 @@ objc_storeWeak(id _Nullable * _Nonnull location, id _Nullable obj)
  * These are options to objc_setAssociatedObject()
  */
 typedef OBJC_ENUM(uintptr_t, objc_AssociationPolicy) {
-    OBJC_ASSOCIATION_ASSIGN = 0,           /**< Specifies a weak reference to the associated object. */
+    OBJC_ASSOCIATION_ASSIGN = 0,           /**< Specifies an unsafe unretained reference to the associated object. */
     OBJC_ASSOCIATION_RETAIN_NONATOMIC = 1, /**< Specifies a strong reference to the associated object. 
                                             *   The association is not made atomically. */
     OBJC_ASSOCIATION_COPY_NONATOMIC = 3,   /**< Specifies that the associated object is copied. 
@@ -1777,7 +1779,6 @@ OBJC_EXPORT void objc_setHook_getClass(objc_hook_getClass _Nonnull newValue,
  *
  * @param header The newly loaded header.
  */
-struct mach_header;
 typedef void (*objc_func_loadImage)(const struct mach_header * _Nonnull header);
 
 /**
@@ -1939,12 +1940,12 @@ class_respondsToMethod(Class _Nullable cls, SEL _Nonnull sel)
 ;
 
 OBJC_EXPORT id _Nullable
-object_copyFromZone(id _Nullable anObject, size_t nBytes, void * _Nullable z) 
+object_copyFromZone(id _Nullable anObject, size_t nBytes, void * _Nullable zone __unused)
     OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(10.0, 10.5, "use object_copy instead");
 
 OBJC_EXPORT id _Nullable
 class_createInstanceFromZone(Class _Nullable, size_t idxIvars,
-                             void * _Nullable z)
+                             void * _Nullable zone __unused)
     OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(10.0, 10.5, "use class_createInstance instead");
 
 #endif // !TARGET_OS_EXCLAVEKIT

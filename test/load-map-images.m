@@ -45,13 +45,13 @@ int main()
     struct Header header = {
         .machHeader = {
             .magic = magic,
-            .ncmds = 2,
+            .ncmds = 1,
             .sizeofcmds = sizeof(header.segments) + sizeof(header.sections),
         },
         .segments = {
             {
                 .cmd = segmentCmd,
-                .cmdsize = sizeof(sectionType),
+                .cmdsize = sizeof(header.segments) + sizeof(header.sections),
                 .segname = "__DATA",
                 .nsects = 2,
             },
@@ -60,13 +60,13 @@ int main()
             {
                 // .sectname = "__objc_classlist",
                 .segname = "__DATA",
-                .addr = (uintptr_t)&RawDynamicClass,
+                .addr = (uintptr_t)&RawDynamicClass - (uintptr_t)&header,
                 .size = sizeof(uintptr_t),
             },
             {
                 // .sectname = "__objc_imageinfo",
                 .segname = "__DATA",
-                .addr = (uintptr_t)&imageInfo,
+                .addr = (uintptr_t)&imageInfo - (uintptr_t)&header,
                 .size = sizeof(imageInfo),
             },
         },

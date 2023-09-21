@@ -150,21 +150,20 @@ void lockdebug::lock_precedes_lock(const void *oldlock, const void *newlock)
 
 
 /***********************************************************************
-* Recording - per-thread list of mutexes and monitors held
+* Recording - per-thread list of mutexes held
 **********************************************************************/
 
 enum class lockkind {
-    MUTEX = 1, MONITOR = 2, RDLOCK = 3, WRLOCK = 4, RECURSIVE = 5
+    MUTEX = 1, RDLOCK = 2, WRLOCK = 3, RECURSIVE = 4
 };
 
 #define MUTEX     lockkind::MUTEX
-#define MONITOR   lockkind::MONITOR
 #define RDLOCK    lockkind::RDLOCK
 #define WRLOCK    lockkind::WRLOCK
 #define RECURSIVE lockkind::RECURSIVE
 
 struct lockcount {
-    lockkind k;  // the kind of lock it is (MUTEX, MONITOR, etc)
+    lockkind k;  // the kind of lock it is (MUTEX, RDLOCK, etc)
     int i;       // the lock's nest count
 };
 
@@ -285,12 +284,6 @@ void
 lockdebug::notify::remember(objc_recursive_lock_base_t *lock)
 {
     setLock(AllLocks(), lock, RECURSIVE);
-}
-
-void
-lockdebug::notify::remember(objc_monitor_base_t *lock)
-{
-    setLock(AllLocks(), lock, MONITOR);
 }
 
 void
@@ -419,62 +412,5 @@ lockdebug::assert_unlocked(objc_recursive_lock_base_t *lock)
     }
 }
 
-
-/***********************************************************************
-* Monitor checking
-**********************************************************************/
-
-void
-lockdebug::notify::enter(objc_monitor_base_t *lock)
-{
-    auto& locks = ownedLocks();
-
-    if (hasLock(locks, lock, MONITOR)) {
-        _objc_fatal("deadlock: relocking monitor");
-    }
-    setLock(locks, lock, MONITOR);
-}
-
-void
-lockdebug::notify::leave(objc_monitor_base_t *lock)
-{
-    auto& locks = ownedLocks();
-
-    if (!hasLock(locks, lock, MONITOR)) {
-        _objc_fatal("unlocking unowned monitor");
-    }
-    clearLock(locks, lock, MONITOR);
-}
-
-void
-lockdebug::notify::wait(objc_monitor_base_t *lock)
-{
-    auto& locks = ownedLocks();
-
-    if (!hasLock(locks, lock, MONITOR)) {
-        _objc_fatal("waiting in unowned monitor");
-    }
-}
-
-
-void
-lockdebug::assert_locked(objc_monitor_base_t *lock)
-{
-    auto& locks = ownedLocks();
-
-    if (!hasLock(locks, lock, MONITOR)) {
-        _objc_fatal("monitor incorrectly not locked");
-    }
-}
-
-void
-lockdebug::assert_unlocked(objc_monitor_base_t *lock)
-{
-    auto& locks = ownedLocks();
-
-    if (hasLock(locks, lock, MONITOR)) {
-        _objc_fatal("monitor incorrectly held");
-    }
-}
 
 #endif

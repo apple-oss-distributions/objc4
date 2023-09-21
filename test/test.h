@@ -204,16 +204,17 @@ static inline void failnotequal(uint8_t *lhs, size_t lhsSize, uint8_t *rhs, size
         /* valgrind; do nothing */                                      \
     } else
 #endif
-#define timecheck(name, time, fast, slow)                               \
-    timecheck_valgrind                                                  \
-    if (time > slow) {                                                  \
-        fprintf(stderr, "SLOW: %s %llu, expected %llu..%llu\n",         \
-                name, (uint64_t)(time), (uint64_t)(fast), (uint64_t)(slow)); \
-    } else if (time < fast) {                                           \
-        fprintf(stderr, "FAST: %s %llu, expected %llu..%llu\n",         \
-                name, (uint64_t)(time), (uint64_t)(fast), (uint64_t)(slow)); \
-    } else {                                                            \
-        testprintf("time: %s %llu, expected %llu..%llu\n",              \
+#define timecheck(name, time, fast, slow)                                       \
+    timecheck_valgrind                                                          \
+    testprintf("timecheck: %s %llu in %llu, %llu\n", name, time, fast, slow);   \
+    if (time > slow) {                                                          \
+        fprintf(stderr, "SLOW: %s %llu, expected %llu..%llu\n",                 \
+                name, (uint64_t)(time), (uint64_t)(fast), (uint64_t)(slow));    \
+    } else if (time < fast) {                                                   \
+        fprintf(stderr, "FAST: %s %llu, expected %llu..%llu\n",                 \
+                name, (uint64_t)(time), (uint64_t)(fast), (uint64_t)(slow));    \
+    } else {                                                                    \
+        testprintf("time: %s %llu, expected %llu..%llu\n",                      \
                    name, (uint64_t)(time), (uint64_t)(fast), (uint64_t)(slow)); \
     }
 

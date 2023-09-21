@@ -35,7 +35,8 @@
 // Lock ordering is declared in _objc_fork_prepare()
 // and is enforced by lockdebug.
 
-extern monitor_t classInitLock;
+extern mutex_t classInitLock;
+extern mutex_t pendingInitializeMapLock;
 extern mutex_t selLock;
 #if CONFIG_USE_CACHE_LOCK
 extern mutex_t cacheUpdateLock;

@@ -133,8 +133,7 @@ void cycle(void)
 
 int main()
 {
-    char *useClosures = getenv("DYLD_USE_CLOSURES");
-    int dyld3 = useClosures != NULL && useClosures[0] != '0';
+    int dyld3 = testdyld3();
 
     objc_setForwardHandler((void*)&forward_handler, (void*)&forward_handler);
 
@@ -163,9 +162,7 @@ int main()
     int err = dlclose(dylib);
     testassert(err == 0);
     err = dlclose(dylib);
-    // dyld3 doesn't error when dlclosing the dylib twice. This is probably expected. rdar://problem/53769374
-    if (!dyld3)
-        testassert(err == -1);  // already closed
+    // dyld doesn't error when dlclosing the dylib twice. This is probably expected. rdar://problem/53769374
 
     // Make sure dylibs with real objc content cannot close
     dylib = dlopen("unload4.dylib", RTLD_LAZY);
@@ -173,9 +170,7 @@ int main()
     err = dlclose(dylib);
     testassert(err == 0);
     err = dlclose(dylib);
-    // dyld3 doesn't error when dlclosing the dylib twice. This is probably expected. rdar://problem/53769374
-    if (!dyld3)
-        testassert(err == -1);  // already closed
+    // dyld doesn't error when dlclosing the dylib twice. This is probably expected. rdar://problem/53769374
 
     succeed(__FILE__);
 }

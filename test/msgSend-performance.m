@@ -24,7 +24,6 @@
 #   define ALIGN_() asm(".align 4");
 #endif
 
-
 @interface Super : TestRoot @end
 
 @implementation Super
@@ -90,37 +89,10 @@ int main()
     // catches failure to cache or (abi=2) failure to fixup (#5584187)
     // fixme unless they all fail
 
-    uint64_t minTime;
-    uint64_t targetTime;
-
     Sub *sub = [Sub new];
 
-    // fill cache first
-
-    [sub voidret_nop];
-    [sub voidret_nop2];
-    [sub llret_nop];
-    [sub stret_nop];
-    [sub fpret_nop];
-    [sub lfpret_nop];
-    [sub vecret_nop];
-    [sub voidret_nop];
-    [sub voidret_nop2];
-    [sub llret_nop];
-    [sub stret_nop];
-    [sub fpret_nop];
-    [sub lfpret_nop];
-    [sub vecret_nop];
-    [sub voidret_nop];
-    [sub voidret_nop2];
-    [sub llret_nop];
-    [sub stret_nop];
-    [sub fpret_nop];
-    [sub lfpret_nop];
-    [sub vecret_nop];
-
-    // Some of these times have high variance on some compilers. 
-    // The errors we're trying to catch should be catastrophically slow, 
+    // Some of these times have high variance on some compilers.
+    // The errors we're trying to catch should be catastrophically slow,
     // so the margins here are generous to avoid false failures.
 
     // Use voidret because id return is too slow for perf test with ARC.
@@ -133,13 +105,44 @@ int main()
 #define TRIALS 50
 #define MESSAGES 1000000
 
-    // Measure the time needed to send MESSAGES messages. To reduce the
-    // influence of transient effects on the result, it will perform TRIALS
-    // measurements, then take the minimum time from those trials. On
-    // completion, the minimum measured time is stored in `minTime`.
+    enum {
+        voidret_nop,
+        voidret_nop2,
+        llret_nop,
+        stret_nop,
+        fpret_nop,
+        lfpret_nop,
+        vecret_nop,
+      
+        timesCount
+    };
+    
+    uint64_t times[timesCount];
+    for (int i = 0; i < timesCount; i++)
+        times[i] = UINT64_MAX;
+
+    // Measure the time needed to send MESSAGES messages. On completion,
+    // the minimum measured time is stored in the `times` array.
     //
-    // We take a minimum over many trials rather than a simple average for two
-    // reasons:
+    // Attempt to test with a clean method cache by flushing the class's
+    // cache, then sending the message to be tested once before
+    // measuring.
+#define MEASURE(message)                                      \
+    do {                                                      \
+        _objc_flush_caches([sub class]);                      \
+        [sub message];                                        \
+        uint64_t startTime = hires_time();                    \
+        ALIGN_();                                             \
+        for (int i = 0; i < MESSAGES; i++)                    \
+            [sub message];                                    \
+        uint64_t totalTime = hires_time() - startTime;        \
+        testprintf("trial: " #message "  %llu\n", totalTime); \
+        if (totalTime < times[message])                       \
+            times[message] = totalTime;                       \
+    } while(0)
+    
+    // Measure each message TRIALS times. We take a minimum over many
+    // trials rather than a simple average for two reasons:
     //
     // 1. If preemption or sudden system load makes a trial slow, it is not
     //    useful to incorporate that into the data. We want to reject those
@@ -148,34 +151,56 @@ int main()
     // 2. Some hardware seems to take time to ramp up performance when suddenly
     //    placed under load. The first ~10 trials of a test run can be much
     //    slower than the rest, causing subsequent tests to be "too fast.'
-#define MEASURE(message)                                           \
-    do {                                                           \
-        minTime = UINT64_MAX;                                      \
-        for (int i = 0; i < TRIALS; i++) {                         \
-            uint64_t startTime = hires_time();                     \
-            ALIGN_();                                              \
-            for (int i = 0; i < MESSAGES; i++)                     \
-                [sub message];                                     \
-            uint64_t totalTime = hires_time() - startTime;         \
-            testprintf("trial: " #message "  %llu\n", totalTime);  \
-            if (totalTime < minTime)                               \
-                minTime = totalTime;                               \
-        }                                                          \
-    } while(0)
-    
+    //
+    // The baseline time comes from measuring voidret_nop and
+    // voidret_nop2. We measure those between measuring each of the
+    // other methods, to try to capture any variance.
+    for (int i = 0; i < TRIALS; i++) {
+        MEASURE(voidret_nop);
+        MEASURE(voidret_nop2);
+
+        MEASURE(llret_nop);
+
+        MEASURE(voidret_nop);
+        MEASURE(voidret_nop2);
+
+        MEASURE(stret_nop);
+
+        MEASURE(voidret_nop);
+        MEASURE(voidret_nop2);
+
+        MEASURE(fpret_nop);
+
+        MEASURE(voidret_nop);
+        MEASURE(voidret_nop2);
+
+        MEASURE(vecret_nop);
+
+        MEASURE(voidret_nop);
+        MEASURE(voidret_nop2);
+
+        MEASURE(lfpret_nop);
+    }
+
     MEASURE(voidret_nop);
-    testprintf("BASELINE: voidret  %llu\n", minTime);
-    targetTime = minTime;
-    
     MEASURE(voidret_nop2);
-    testprintf("BASELINE: voidret2  %llu\n", minTime);
-    if (minTime < targetTime)
-        targetTime = minTime;
+
+    testprintf("BASELINE: voidret  %llu\n", times[voidret_nop]);
+    testprintf("BASELINE: voidret2  %llu\n", times[voidret_nop2]);
+    
+    // Take the min/max of the two baseline methods, multiplied/divided
+    // by a fudge factor for the final range we'll accept as "good."
+    // Running times can vary a lot so we have a generous fudge factor
+    // to avoid false positives.
+    #define FUDGE 3
+    uint64_t minTargetTime = MIN(times[voidret_nop], times[voidret_nop2]) / FUDGE;
+    uint64_t maxTargetTime = MAX(times[voidret_nop], times[voidret_nop2]) * FUDGE;
+    
+    testprintf("BASELINE: acceptable range is %llu - %llu\n", minTargetTime, maxTargetTime);
     
 #define CHECK(message)                                                         \
     do {                                                                       \
-        MEASURE(message);                                                      \
-        timecheck(#message " ", minTime, targetTime * 0.65, targetTime * 2.0); \
+        timecheck(#message " ", times[message], minTargetTime, maxTargetTime); \
     } while(0)
     
     CHECK(llret_nop);

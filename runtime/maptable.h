@@ -80,7 +80,7 @@ typedef struct OBJC_MAP_AVAILABILITY _NXMapTablePrototype {
 
 OBJC_EXPORT NXMapTable * _Nonnull
 NXCreateMapTableFromZone(NXMapTablePrototype prototype,
-                         unsigned capacity, void * _Nullable z)
+                         unsigned capacity, void * _Nullable zone __unused)
     OBJC_MAP_AVAILABILITY;
 
 OBJC_EXPORT NXMapTable * _Nonnull
@@ -117,13 +117,24 @@ OBJC_EXPORT void * _Nullable
 NXMapGet(NXMapTable * _Nonnull table, const void * _Nullable key)
     OBJC_MAP_AVAILABILITY;
     /* return original corresponding value or NULL.  When NULL need be stored as value, NXMapMember can be used to test for presence */
-	
+
+OBJC_EXPORT void * _Nullable
+NXMapGetWithHash(NXMapTable * _Nonnull table, const void * _Nullable key, unsigned hash)
+    OBJC_MAP_AVAILABILITY;
+    /* Like NXMapGet, except the hash is passed in by the caller. The value MUST match what's returned by the table's hash callback. This allows callers that also need the hash to avoid computing it twice. */
+
 OBJC_EXPORT void * _Nullable
 NXMapInsert(NXMapTable * _Nonnull table, const void * _Nullable key,
             const void * _Nullable value)
     OBJC_MAP_AVAILABILITY;
     /* override preexisting pair; Return previous value or NULL. */
-	
+
+OBJC_EXPORT void * _Nullable
+NXMapInsertWithHash(NXMapTable * _Nonnull table, const void * _Nullable key,
+                    unsigned hash, const void * _Nullable value)
+    OBJC_MAP_AVAILABILITY;
+    /* Like NXMapInsert, except the hash is passed in by the caller. The value MUST match what's returned by the table's hash callback. This allows callers that also need the hash to avoid computing it twice. */
+
 OBJC_EXPORT void * _Nullable
 NXMapRemove(NXMapTable * _Nonnull table, const void * _Nullable key)
     OBJC_MAP_AVAILABILITY;

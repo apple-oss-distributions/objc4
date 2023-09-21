@@ -43,13 +43,10 @@
 #   define SUPPORT_GC_COMPAT 1
 #endif
 
-// Define SUPPORT_ZONES=1 to enable malloc zone support in NXHashTable.
-#if TARGET_OS_EXCLAVEKIT
-#   define SUPPORT_ZONES 0
-#elif !(TARGET_OS_OSX || TARGET_OS_MACCATALYST)
-#   define SUPPORT_ZONES 0
-#else
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
 #   define SUPPORT_ZONES 1
+#else
+#   define SUPPORT_ZONES 0
 #endif
 
 // Define SUPPORT_MOD=1 to use the mod operator in NXHashTable and objc-sel-set
@@ -237,6 +234,9 @@
 #define ISA_SIGNING_DISCRIMINATOR 0x6AE1 // ptrauth_string_discriminator("isa")
 #define ISA_SIGNING_DISCRIMINATOR_CLASS_SUPERCLASS 0xB5AB // ptrauth_string_discriminator("objc_class:superclass")
 #define METHOD_SIGNING_DISCRIMINATOR 0xC1AB // ptrauth_string_discriminator("method_t")
+#if __has_feature(ptrauth_function_pointer_type_discrimination)
+#define IMP_SIGNING_DISCRIMINATOR 0x4A27
+#endif
 
 #define ISA_SIGNING_KEY ptrauth_key_process_independent_data
 
@@ -292,10 +292,18 @@
 #define CLASS_DATA_BITS_RO_SIGNING_KEY   ptrauth_key_process_independent_data
 #define CLASS_DATA_BITS_RO_DISCRIMINATOR 0x61f8 // "class_data_bits"
 
-#if defined(__arm64__) && TARGET_OS_IOS && !TARGET_OS_SIMULATOR && !TARGET_OS_MACCATALYST
+// Be sure to edit the equivalent define in objc-internal.h as well.
+// Be sure to not enable CONFIG_USE_PREOPT_CACHES if CACHE_MASK_STORAGE != CACHE_MASK_STORAGE_HIGH_16
+#ifndef CONFIG_USE_PREOPT_CACHES
+#if TARGET_OS_EXCLAVEKIT
+#define CONFIG_USE_PREOPT_CACHES 0
+#elif TARGET_OS_OSX || TARGET_OS_MACCATALYST || TARGET_OS_SIMULATOR
+#define CONFIG_USE_PREOPT_CACHES 0
+#elif defined(__arm64__) && __LP64__
 #define CONFIG_USE_PREOPT_CACHES 1
 #else
 #define CONFIG_USE_PREOPT_CACHES 0
+#endif
 #endif
 
 // When set to 1, small methods in the shared cache have a direct

@@ -158,6 +158,7 @@
 
 #include "objc-private.h"
 #include "objc-abi.h"
+#include "objc-malloc-instance.h"
 #include <objc/message.h>
 
 #if !TARGET_OS_EXCLAVEKIT
@@ -858,36 +859,26 @@ char * method_copyArgumentType(Method m, unsigned int index)
 }
 
 /***********************************************************************
-* _class_createInstancesFromZone
-* Batch-allocating version of _class_createInstanceFromZone.
+* _class_createInstances
+* Batch-allocating version of _class_createInstance.
 * Attempts to allocate num_requested objects, each with extraBytes.
 * Returns the number of allocated objects (possibly zero), with 
 * the allocated pointers in *results.
 **********************************************************************/
 unsigned
-_class_createInstancesFromZone(Class cls, size_t extraBytes, void *zone, 
-                               id *results, unsigned num_requested)
+_class_createInstances(Class cls, size_t extraBytes, id *results,
+                       unsigned num_requested)
 {
     unsigned num_allocated;
     if (!cls) return 0;
 
     size_t size = cls->instanceSize(extraBytes);
 
-#if SUPPORT_ZONES
-    num_allocated = 
-        malloc_zone_batch_malloc((malloc_zone_t *)(zone ? zone : malloc_default_zone()), 
-                                 size, (void**)results, num_requested);
-
-    for (unsigned i = 0; i < num_allocated; i++) {
-        memset(results[i], 0, size);
-    }
-#else
     for (num_allocated = 0; num_allocated < num_requested; ++num_allocated) {
-        results[num_allocated] = (id)calloc(1, size);
+        results[num_allocated] = objc::malloc_instance(size, cls);
         if (!results[num_allocated])
             break;
     }
-#endif
 
     // Construct each object, and delete any that fail construction.
 
@@ -933,12 +924,10 @@ inform_duplicate(const char *name, Class oldCls, Class newCls)
     }
 #endif // !TARGET_OS_EXCLAVEKIT
 
-    if (DebugDuplicateClasses) {
-        (DebugDuplicateClasses == Fatal ? _objc_fatal : _objc_inform)
-            ("Class %s is implemented in both %s (%p) and %s (%p). "
-             "One of the two will be used. Which one is undefined.",
-             name, oldName, oldCls, newName, newCls);
-    }
+    OBJC_DEBUG_OPTION_REPORT_ERROR(DebugDuplicateClasses,
+         "Class %s is implemented in both %s (%p) and %s (%p). "
+         "One of the two will be used. Which one is undefined.",
+         name, oldName, oldCls, newName, newCls);
 }
 
 

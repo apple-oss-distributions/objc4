@@ -938,7 +938,7 @@ deallocate:
 
 
 // Equivalent to [this autorelease], with shortcuts if there is no override
-inline id 
+ALWAYS_INLINE id
 objc_object::autorelease()
 {
     ASSERT(!isTaggedPointer());
@@ -951,7 +951,7 @@ objc_object::autorelease()
 
 
 // Base autorelease implementation, ignoring overrides.
-inline id 
+ALWAYS_INLINE id
 objc_object::rootAutorelease()
 {
     if (isTaggedPointer()) return (id)this;
@@ -1184,6 +1184,10 @@ objc_object::retain()
     ASSERT(!isTaggedPointer());
 
     if (fastpath(!ISA()->hasCustomRR())) {
+        // Standard RR of a class is a no-op.
+        if (ISA()->isMetaClass())
+            return (id)this;
+
         return sidetable_retain();
     }
 
@@ -1209,7 +1213,9 @@ objc_object::release()
     ASSERT(!isTaggedPointer());
 
     if (fastpath(!ISA()->hasCustomRR())) {
-        sidetable_release();
+        // Standard RR of a class is a no-op.
+        if (!ISA()->isMetaClass())
+            sidetable_release();
         return;
     }
 
@@ -1249,7 +1255,7 @@ objc_object::autorelease()
 
 
 // Base autorelease implementation, ignoring overrides.
-inline id 
+ALWAYS_INLINE id
 objc_object::rootAutorelease()
 {
     if (isTaggedPointer()) return (id)this;
@@ -1616,7 +1622,13 @@ prepareOptimizedReturn(id obj, bool cameFromRootAutorelease, ReturnDisposition d
     // Initializing later can cause +initialize to run in unexpected lock
     // contexts. rdar://88956559
     if (slowpath(!obj->ISA()->isInitialized())) {
-        class_initialize(obj->ISA(true /*authenticated*/), obj);
+        Class cls = obj->ISA(true /*authenticated*/);
+        // If the class isn't even realized, abandon elision. We'll fall back
+        // to a msgSend that will realize it for us.
+        if (!cls->isRealized())
+            return false;
+
+        class_initialize(cls, obj);
     }
 
     // If the object has custom RR overrides and this is an explicit return

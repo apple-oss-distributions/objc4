@@ -40,6 +40,8 @@
 #include <os/variant_private.h> // os_variant_allows_internal_security_policies()
 #endif
 
+#include <strings.h>
+
 #if TARGET_OS_EXCLAVEKIT
 #include "objc-test-env.h"
 #endif
@@ -113,25 +115,15 @@ struct objc::SafeRanges objc::dataSegmentsRanges;
 header_info *FirstHeader = 0;  // NULL means empty list
 header_info *LastHeader  = 0;  // NULL means invalid; recompute it
 
+// The last header which has realized all classes. Headers after this in the
+// list (possibly) not realized all of their classes. When NULL, no headers have
+// had all classes realized. This is sometimes conservative, and we may have
+// realized all classes in headers after this point.
+header_info *LastHeaderRealizedAllClasses;
+
 // Set to true on the child side of fork() 
 // if the parent process was multithreaded when fork() was called.
 bool MultithreadedForkChild = false;
-
-#if TARGET_OS_EXCLAVEKIT
-#include <ctype.h>
-
-/* This doesn't have to be fast - it's only used to check the environment
-   variables. */
-int strcasecmp(const char *s1, const char *s2) {
-    int c1, c2;
-    while ((c1 = *s1++) || (c2 = *s2++)) {
-        int diff = toupper(c1) - toupper(c2);
-        if (diff)
-            return diff;
-    }
-    return 0;
-}
-#endif
 
 /***********************************************************************
 * objc_noop_imp. Used when we need to install a do-nothing method somewhere.
@@ -332,10 +324,15 @@ void removeHeader(header_info *hi)
             header_info *deadHead = current;
 
             // Remove from the linked list.
-            if (prev)
+            if (prev) {
                 prev->setNext(current->getNext());
-            else
+                if (hi == LastHeaderRealizedAllClasses)
+                    LastHeaderRealizedAllClasses = prev;
+            } else {
                 FirstHeader = current->getNext(); // no prev so removing head
+                if (hi == LastHeaderRealizedAllClasses)
+                    LastHeaderRealizedAllClasses = nullptr;
+            }
             
             // Update LastHeader if necessary.
             if (LastHeader == deadHead) {
@@ -402,6 +399,11 @@ void environ_init(void)
     // default unless this OS feature is enabled.
     if (!os_feature_enabled_simple(objc4, classRoSigningFaults, false))
         DisableClassROFaults = On;
+
+#if TARGET_OS_OSX || TARGET_OS_SIMULATOR
+    if (!os_feature_enabled_simple(objc4, autoreleaseFaultsMacOS, false))
+        DisableFaults = On;
+#endif
 #endif // !TARGET_OS_EXCLAVEKIT
 
     bool PrintHelp = false;

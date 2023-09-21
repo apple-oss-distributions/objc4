@@ -7,6 +7,7 @@ END
 
 #include "test.h"
 #include "testroot.i"
+#include "class-structures.h"
 
 typedef const char * _Nullable (*objc_hook_lazyClassNamer)(_Nonnull Class);
 
@@ -15,44 +16,11 @@ void objc_setHook_lazyClassNamer(_Nonnull objc_hook_lazyClassNamer newValue,
 
 #define RW_COPIED_RO          (1<<27)
 
-struct ObjCClass {
-    struct ObjCClass * __ptrauth_objc_isa_pointer isa;
-    struct ObjCClass * __ptrauth_objc_super_pointer superclass;
-    void *cachePtr;
-    uintptr_t zero;
-    void *__ptrauth_objc_class_ro data;
-};
-
-struct ObjCClass_ro {
-    uint32_t flags;
-    uint32_t instanceStart;
-    uint32_t instanceSize;
-#ifdef __LP64__
-    uint32_t reserved;
-#endif
-
-    union {
-        const uint8_t * ivarLayout;
-        struct ObjCClass * nonMetaClass;
-    };
-
-    const char * name;
-    struct ObjCMethodList * __ptrauth_objc_method_list_pointer baseMethodList;
-    struct protocol_list_t * baseProtocols;
-    const struct ivar_list_t * ivars;
-
-    const uint8_t * weakIvarLayout;
-    struct property_list_t *baseProperties;
-};
-
-extern struct ObjCClass OBJC_METACLASS_$_NSObject;
-extern struct ObjCClass OBJC_CLASS_$_NSObject;
-
 extern struct ObjCClass LazyClassName;
 extern struct ObjCClass LazyClassName2;
 
 struct ObjCClass_ro LazyClassNameMetaclass_ro = {
-    .flags = 1,
+    .flags = RO_META,
     .instanceStart = 40,
     .instanceSize = 40,
     .nonMetaClass = &LazyClassName,
@@ -78,7 +46,7 @@ struct ObjCClass LazyClassName = {
 };
 
 struct ObjCClass_ro LazyClassName2Metaclass_ro = {
-    .flags = 1,
+    .flags = RO_META,
     .instanceStart = 40,
     .instanceSize = 40,
     .nonMetaClass = &LazyClassName2,

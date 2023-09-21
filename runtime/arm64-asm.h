@@ -110,9 +110,13 @@
 #if __has_feature(ptrauth_calls)
 // JOP
 
-.macro TailCallFunctionPointer
-	// $0 = function pointer value
-	braaz	$0
+.macro TailCallFunctionPointer fptrRegister
+#if IMP_SIGNING_DISCRIMINATOR
+	mov	x16, #IMP_SIGNING_DISCRIMINATOR
+	braa	\fptrRegister, x16
+#else
+	braaz	\fptrRegister
+#endif
 .endmacro
 
 .macro TailCallCachedImp IMP, IMPAddress, SEL, ISA
@@ -136,7 +140,7 @@ LTailCallCachedImpIndirectBranch:
 .endmacro
 
 .macro AuthAndResignAsIMP
-	// $0 = cached imp, $1 = address of cached imp, $2 = SEL, $3 = isa
+	// $0 = cached imp, $1 = address of cached imp, $2 = SEL, $3 = isa, $4 = temp register
 	// note: assumes the imp is not nil
     eor $1, $1, $2          // mix SEL into ptrauth modifier
     eor $1, $1, $3          // mix isa into ptrauth modifier
@@ -144,7 +148,13 @@ LTailCallCachedImpIndirectBranch:
     eor $1, $0, $0, lsl #1  // mix together the two failure bits
     tbz $1, #62, 0f         // if the result is zero, we authenticated
     brk #0xc471             // crash if authentication failed
-0:  paciza  $0              // resign cached imp as IMP
+0:
+#ifdef IMP_SIGNING_DISCRIMINATOR
+    mov     $4, #IMP_SIGNING_DISCRIMINATOR
+    pacia   $0, $4         // resign cached imp as IMP
+#else
+    paciza  $0              // resign cached imp as IMP
+#endif
 .endmacro
 
 .macro ExtractISA
@@ -167,8 +177,13 @@ LTailCallCachedImpIndirectBranch:
 #endif
 .endmacro
 
-.macro SignAsImp
-	paciza	$0
+.macro SignAsImp fptr, temporary
+#if IMP_SIGNING_DISCRIMINATOR
+	mov	\temporary, #IMP_SIGNING_DISCRIMINATOR
+	pacia	\fptr, \temporary
+#else
+	paciza	\fptr
+#endif
 .endmacro
 
 // JOP

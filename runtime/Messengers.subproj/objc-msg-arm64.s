@@ -318,13 +318,13 @@ LExit$0:
 	TailCallCachedImp x17, x10, x1, x16	// authenticate and call imp
 .elseif $0 == GETIMP
 	mov	p0, p17
-	cbz	p0, 9f			// don't ptrauth a nil imp
-	AuthAndResignAsIMP x0, x10, x1, x16	// authenticate imp and re-sign as IMP
-9:	ret				// return IMP
+	cbz	p0, 9f					// don't ptrauth a nil imp
+	AuthAndResignAsIMP x0, x10, x1, x16, x17	// authenticate imp and re-sign as IMP
+9:	ret						// return IMP
 .elseif $0 == LOOKUP
 	// No nil check for ptrauth: the caller would crash anyway when they
 	// jump to a nil IMP. We don't care if that jump also fails ptrauth.
-	AuthAndResignAsIMP x17, x10, x1, x16	// authenticate imp and re-sign as IMP
+	AuthAndResignAsIMP x17, x10, x1, x16, x10	// authenticate imp and re-sign as IMP
 	cmp	x16, x15
 	cinc	x16, x16, ne			// x16 += 1 when x15 != x16 (for instrumentation ; fallback to the parent class)
 	ret				// return imp via x17
@@ -493,7 +493,7 @@ LLookupPreopt\Function:
 	b.ne	\MissLabelConstant		// cache miss
 	sbfiz x17, x17, #2, #38         // imp_offs = combined_imp_and_sel[0..37] << 2
 	sub	x0, x16, x17        		// imp = isa - imp_offs
-	SignAsImp x0
+	SignAsImp x0, x17
 	ret
 .else
 	b.ne	5f				        // cache miss
@@ -503,7 +503,7 @@ LLookupPreopt\Function:
 	br	x17
 .elseif \Mode == LOOKUP
 	orr x16, x16, #3 // for instrumentation, note that we hit a constant cache
-	SignAsImp x17
+	SignAsImp x17, x10
 	ret
 .else
 .abort  unhandled mode \Mode
@@ -631,7 +631,7 @@ LLookup_NilOrTagged:
 
 LLookup_Nil:
 	adr	x17, __objc_msgNil
-	SignAsImp x17
+	SignAsImp x17, x16
 	ret
 
 	END_ENTRY _objc_msgLookup

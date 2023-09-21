@@ -90,13 +90,18 @@ typedef struct objc_image_info {
   private:
     enum : uint32_t {
         // 1 byte assorted flags
-        IsReplacement       = 1<<0,  // used for Fix&Continue, now ignored
-        SupportsGC          = 1<<1,  // image supports GC
-        RequiresGC          = 1<<2,  // image requires GC
-        OptimizedByDyld     = 1<<3,  // image is from an optimized shared cache
-        SignedClassRO       = 1<<4,  // class_ro_t pointers are signed
-        IsSimulated         = 1<<5,  // image compiled for a simulator platform
-        HasCategoryClassProperties  = 1<<6,  // class properties in category_t
+        DyldCategoriesOptimized     = 1<<0, // categories were optimized by dyld
+        SupportsGC                  = 1<<1, // image supports GC
+        RequiresGC                  = 1<<2, // image requires GC
+        OptimizedByDyld             = 1<<3, // image is from an optimized shared cache
+        SignedClassRO               = 1<<4, // class_ro_t pointers are signed
+        IsSimulated                 = 1<<5, // image compiled for a simulator platform
+        HasCategoryClassProperties  = 1<<6, // class properties in category_t
+
+        // OptimizedByDyldClosure is currently set by dyld, but we don't use it
+        // anymore. Instead use
+        // _dyld_objc_notify_mapped_info::dyldObjCRefsOptimized.
+        // Once dyld stops setting it, it will be unused.
         OptimizedByDyldClosure = 1 << 7, // dyld (not the shared cache) optimized this.
 
         // 1 byte Swift unstable ABI version number
@@ -122,22 +127,23 @@ typedef struct objc_image_info {
     };
 
   public:
-    bool isReplacement()   const { return flags & IsReplacement; }
+    bool dyldCategoriesOptimized() const { return flags & DyldCategoriesOptimized; }
     bool supportsGC()      const { return flags & SupportsGC; }
     bool requiresGC()      const { return flags & RequiresGC; }
     bool optimizedByDyld() const { return flags & OptimizedByDyld; }
     bool hasCategoryClassProperties() const { return flags & HasCategoryClassProperties; }
-    bool optimizedByDyldClosure() const { return flags & OptimizedByDyldClosure; }
     bool containsSwift()   const { return (flags & SwiftUnstableVersionMask) != 0; }
     bool shouldEnforceClassRoSigning() const { return flags & SignedClassRO; }
     uint32_t swiftUnstableVersion() const { return (flags & SwiftUnstableVersionMask) >> SwiftUnstableVersionMaskShift; }
 #endif
 } objc_image_info;
 
-/* 
-IsReplacement:
-   Once used for Fix&Continue in old OS X object files (not final linked images)
-   Not currently used.
+/*
+DyldCategoriesOptimized:
+   Indicates that dyld preattached categories from this image in the shared
+   cache and we don't need to scan those categories ourselves. Note: this bit
+   used to be used for the IsReplacement flag used for Fix & Continue. That
+   usage is obsolete.
 
 SupportsGC:
    App: GC is required. Framework: GC is supported but not required.

@@ -56,7 +56,9 @@ bool bad_magic(const headerType *mhdr)
 }
 
 
-static header_info * addHeader(const headerType *mhdr, const char *path, int &totalClasses, int &unoptimizedTotalClasses)
+static header_info * addHeader(const headerType *mhdr, const char *path,
+                               const _dyld_section_location_info_t dyldObjCInfo,
+                               int &totalClasses, int &unoptimizedTotalClasses)
 {
     header_info *hi;
 
@@ -87,7 +89,7 @@ static header_info * addHeader(const headerType *mhdr, const char *path, int &to
 #if DEBUG
         // Verify image_info
         size_t info_size = 0;
-        const objc_image_info *image_info = _getObjcImageInfo(mhdr,&info_size);
+        const objc_image_info *image_info = _getObjcImageInfo(mhdr, dyldObjCInfo, &info_size);
         ASSERT(image_info == hi->info());
 #endif
     }
@@ -98,7 +100,7 @@ static header_info * addHeader(const headerType *mhdr, const char *path, int &to
         // Locate the __OBJC segment
         size_t info_size = 0;
         unsigned long seg_size;
-        const objc_image_info *image_info = _getObjcImageInfo(mhdr,&info_size);
+        const objc_image_info *image_info = _getObjcImageInfo(mhdr, dyldObjCInfo, &info_size);
         const uint8_t *objc_segment = getsegmentdata(mhdr,SEG_OBJC,&seg_size);
         if (!objc_segment  &&  !image_info) return NULL;
 
@@ -112,14 +114,14 @@ static header_info * addHeader(const headerType *mhdr, const char *path, int &to
         // Install a placeholder image_info if absent to simplify code elsewhere
         static const objc_image_info emptyInfo = {0, 0};
         hi->setinfo(image_info ?: &emptyInfo);
+        hi->setdyldInfo(dyldObjCInfo);
 
         hi->setLoaded(true);
-        hi->setAllClassesRealized(NO);
     }
 
     {
         size_t count = 0;
-        if (_getObjc2ClassList(hi, &count)) {
+        if (hi->classlist(&count)) {
             totalClasses += (int)count;
             if (!inSharedCache) unoptimizedTotalClasses += count;
         }
@@ -179,8 +181,8 @@ static bool shouldRejectGCApp(const header_info *hi)
     // Note that objc_appRequiresGC() also knows about this.
     size_t classcount = 0;
     size_t refcount = 0;
-    _getObjc2ClassList(hi, &classcount);
-    _getObjc2ClassRefs(hi, &refcount);
+    hi->classlist(&classcount);
+    hi->classrefs(&refcount);
     if (classcount == 0  &&  refcount == 1  &&  
         linksToLibrary(hi, "/System/Library/Frameworks"
                        "/AppleScriptObjC.framework/Versions/A"
@@ -209,7 +211,7 @@ static bool shouldRejectGCImage(const headerType *mhdr)
     size_t size;
 
     // 64-bit: no image_info means no objc at all
-    image_info = _getObjcImageInfo(mhdr, &size);
+    image_info = _getObjcImageInfo(mhdr, nullptr, &size);
     if (!image_info) {
         // Not objc, therefore not GC. Don't reject it.
         return NO;
@@ -225,10 +227,10 @@ static bool shouldRejectGCImage(const headerType *mhdr)
 * hasSignedClassROPointers
 * Test if an image has signed class_ro_t pointers.
 **********************************************************************/
-static bool hasSignedClassROPointers(const headerType *h)
+static bool hasSignedClassROPointers(const headerType *h, _dyld_section_location_info_t dyldObjCInfo)
 {
     size_t infoSize = 0;
-    objc_image_info *info = _getObjcImageInfo(h, &infoSize);
+    objc_image_info *info = _getObjcImageInfo(h, dyldObjCInfo, &infoSize);
     if (!info) {
         // If there's no ObjC in an image, return true; if there really are
         // classes in the image anyway, we'll die with a pointer auth failure
@@ -239,11 +241,18 @@ static bool hasSignedClassROPointers(const headerType *h)
 }
 
 static bool hasSignedClassROPointers(const header_info *hi) {
-    return hasSignedClassROPointers(hi->mhdr());
+    return hasSignedClassROPointers(hi->mhdr(), hi->dyldInfo());
 }
 
 // Swift currently adds 4 callbacks.
-static GlobalSmallVector<objc_func_loadImage, 4> loadImageFuncs;
+struct loadImageCallback {
+    union {
+        objc_func_loadImage func;
+        objc_func_loadImage2 func2;
+    };
+    uint8_t kind;
+};
+static GlobalSmallVector<loadImageCallback, 4> loadImageCallbacks;
 
 void objc_addLoadImageFunc(objc_func_loadImage _Nonnull func) {
     // Not supported on the old runtime. Not that the old runtime is supported anyway.
@@ -255,7 +264,27 @@ void objc_addLoadImageFunc(objc_func_loadImage _Nonnull func) {
     }
 
     // Add it to the vector for future loads.
-    loadImageFuncs.append(func);
+    loadImageCallback callback = {
+        .func = func,
+        .kind = 1
+    };
+    loadImageCallbacks.append(callback);
+}
+
+void objc_addLoadImageFunc2(objc_func_loadImage2 _Nonnull func) {
+    mutex_locker_t lock(runtimeLock);
+
+    // Call it with all the existing images first.
+    for (auto header = FirstHeader; header; header = header->getNext()) {
+        func((const mach_header *)header->mhdr(), header->dyldInfo());
+    }
+
+    // Add it to the vector for future loads.
+    loadImageCallback callback = {
+        .func2 = func,
+        .kind = 2,
+    };
+    loadImageCallbacks.append(callback);
 }
 
 
@@ -273,15 +302,14 @@ void objc_addLoadImageFunc(objc_func_loadImage _Nonnull func) {
 #include "objc-file.h"
 
 void 
-map_images_nolock(unsigned mhCount, const char * const mhPaths[],
-                  const struct mach_header * const mhdrs[],
+map_images_nolock(unsigned mhCount, const struct _dyld_objc_notify_mapped_info infos[],
                   bool *disabledClassROEnforcement)
 {
     static bool firstTime = YES;
     static bool executableHasClassROSigning = false;
     static bool executableIsARM64e = false;
 
-    header_info *hList[mhCount];
+    mapped_image_info mappedInfos[mhCount];
     uint32_t hCount;
     size_t selrefCount = 0;
 
@@ -292,6 +320,33 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
     // fixme defer initialization until an objc-using image is found?
     if (firstTime) {
         preopt_init();
+    } else {
+        // If map_images is called twice in a row with no load_images in between
+        // then we need to attach categories in that second map_images call.
+        // Early code in places like libxpc is already using NSObject and has
+        // probably caused its preattached categories to be copied, without this
+        // new batch of images loaded. If we don't attach categories now, then
+        // we'll skip scanning the categories in the new batch of images,
+        // resulting in missing methods. An example problematic scenario:
+        //
+        // 1. map_images for a handful of low-level dylibs.
+        // 2. libxpc initializes, triggers methodization of NSObject, copies
+        //    NSObject's methods.
+        // 3. CoreFoundation is loaded.
+        // 4. map_images for CoreFoundation. Skip preattached categories.
+        // 5. NSObject is missing CF category methods.
+        //
+        // By attaching categories now, we ensure that CF's preattached
+        // categories are still scanned in this scenario.
+        //
+        // NOTE: this scenario is extremely uncommon and should never happen in
+        // normal programs. It does happen in WINE, because WINE uses an old
+        // x86-64 executable type that gives it control directly instead of
+        // through dyld. It then calls dlopen which eventually triggers our
+        // initializers. This causes map_images and load_images to happen in a
+        // weird sequence, where we get map_images twice in a row.
+        // rdar://109496408
+        loadAllCategoriesIfNeeded();
     }
 
     if (PrintImages) {
@@ -308,25 +363,28 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
     {
         uint32_t i = mhCount;
         while (i--) {
-            const headerType *mhdr = (const headerType *)mhdrs[i];
+            const headerType *mhdr = (const headerType *)infos[i].mh;
 
-            auto hi = addHeader(mhdr, mhPaths[i], totalClasses, unoptimizedTotalClasses);
+            auto hi = addHeader(mhdr, infos[i].path, infos[i].sectionLocationMetadata,
+                                totalClasses, unoptimizedTotalClasses);
             if (!hi) {
                 // no objc data in this entry
                 continue;
             }
-            
+
+            mapped_image_info mappedInfo{hi, infos[i]};
+
             if (mhdr->filetype == MH_EXECUTE) {
                 // Size some data structures based on main executable's size
 
                 // If dyld3 optimized the main executable, then there shouldn't
                 // be any selrefs needed in the dynamic map so we can just init
                 // to a 0 sized map
-                if ( !hi->hasPreoptimizedSelectors() ) {
+                if (mappedInfo.dyldObjCRefsOptimized()) {
                   size_t count;
-                  _getObjc2SelectorRefs(hi, &count);
+                  hi->selrefs(&count);
                   selrefCount += count;
-                  _getObjc2MessageRefs(hi, &count);
+                  hi->messagerefs(&count);
                   selrefCount += count;
                 }
 
@@ -346,16 +404,21 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
                 }
             }
 
-            hList[hCount++] = hi;
+            mappedInfos[hCount++] = mappedInfo;
 
             if (PrintImages) {
-                _objc_inform("IMAGES: loading image for %s%s%s%s%s\n", 
+                _objc_inform("IMAGES: loading image for %s%s%s%s\n",
                              hi->fname(),
                              mhdr->filetype == MH_BUNDLE ? " (bundle)" : "",
-                             hi->info()->isReplacement() ? " (replacement)" : "",
                              hi->info()->hasCategoryClassProperties() ? " (has class properties)" : "",
                              hi->info()->optimizedByDyld()?" (preoptimized)":"");
             }
+
+            // dtrace probe
+            OBJC_RUNTIME_LOAD_IMAGE(hi->fname(),
+                                    mhdr->filetype == MH_BUNDLE,
+                                    hi->info()->hasCategoryClassProperties(),
+                                    hi->info()->optimizedByDyld());
         }
     }
 
@@ -375,7 +438,7 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
         // Images loaded after launch will be rejected by dyld.
 
         for (uint32_t i = 0; i < hCount; i++) {
-            auto hi = hList[i];
+            auto hi = mappedInfos[i].hi;
             auto mh = hi->mhdr();
             if (mh->filetype != MH_EXECUTE  &&  shouldRejectGCImage(mh)) {
                 _objc_fatal_with_reason
@@ -403,11 +466,11 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
         }
 
         for (uint32_t i = 0; i < hCount; i++) {
-            auto hi = hList[i];
+            auto hi = mappedInfos[i].hi;
             auto mh = hi->mhdr();
             if (mh->filetype != MH_EXECUTE) continue;
             unsigned long size;
-            if (getsectiondata(hi->mhdr(), "__DATA", "__objc_fork_ok", &size)) {
+            if (hi->hasForkOkSection()) {
                 DisableInitializeForkSafety = On;
                 if (PrintInitializing) {
                     _objc_inform("INITIALIZE: disabling +initialize fork "
@@ -439,7 +502,7 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
         bool shouldWarn = (executableHasClassROSigning
                            && DebugClassRXSigning);
         for (uint32_t i = 0; i < hCount; ++i) {
-            auto hi = hList[i];
+            auto hi = mappedInfos[i].hi;
             if (!hasSignedClassROPointers(hi)) {
                 if (!objc::disableEnforceClassRXPtrAuth) {
                     *disabledClassROEnforcement = true;
@@ -469,15 +532,24 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
     }
 
     if (hCount > 0) {
-        _read_images(hList, hCount, totalClasses, unoptimizedTotalClasses);
+        _read_images(mappedInfos, hCount, totalClasses, unoptimizedTotalClasses);
     }
 
     firstTime = NO;
 
     // Call image load funcs after everything is set up.
-    for (auto func : loadImageFuncs) {
+    for (auto callback : loadImageCallbacks) {
         for (uint32_t i = 0; i < mhCount; i++) {
-            func(mhdrs[i]);
+            switch (callback.kind) {
+                case 1:
+                    callback.func(infos[i].mh);
+                    break;
+                case 2:
+                    callback.func2(infos[i].mh, infos[i].sectionLocationMetadata);
+                    break;
+                default:
+                    _objc_fatal("Corrupt load image callback, unknown kind %u, func %p", callback.kind, callback.func);
+            }
         }
     }
 }
@@ -510,10 +582,9 @@ unmap_image_nolock(const struct mach_header *mh)
     if (!hi) return;
 
     if (PrintImages) {
-        _objc_inform("IMAGES: unloading image for %s%s%s\n",
+        _objc_inform("IMAGES: unloading image for %s%s\n",
                      hi->fname(),
-                     hi->mhdr()->filetype == MH_BUNDLE ? " (bundle)" : "",
-                     hi->info()->isReplacement() ? " (replacement)" : "");
+                     hi->mhdr()->filetype == MH_BUNDLE ? " (bundle)" : "");
     }
 
     _unload_image(hi);
@@ -555,7 +626,7 @@ patch_root_of_class_nolock(const struct mach_header *originalMH, void* originalC
     originalCls->setSuperclass(replacementCls->getSuperclass());
     originalCls->cache.initializeToEmpty();
 
-    bool authRO = hasSignedClassROPointers((const headerType *)replacementMH);
+    bool authRO = hasSignedClassROPointers((const headerType *)replacementMH, nullptr);
     originalCls->bits.copyROFrom(replacementCls->bits, authRO);
 }
 
@@ -575,6 +646,36 @@ _objc_patch_root_of_class(const struct mach_header *originalMH, void* originalCl
     return patch_root_of_class_nolock(originalMH, originalClass, replacementMH, replacementClass);
 }
 
+// FIXME: rdar://29241917&33734254 clang doesn't sign static initializers.
+struct UnsignedInitializer {
+private:
+    uintptr_t storage;
+public:
+    UnsignedInitializer(uint32_t offset) {
+#if TARGET_OS_EXCLAVEKIT
+        extern const struct mach_header_64 _mh_dylib_header;
+#endif
+        storage = (uintptr_t)&_mh_dylib_header + offset;
+    }
+
+    void operator () () const {
+        using Initializer = void(*)();
+        // Note: we use a hardcoded 0 discriminator even with
+        // ptrauth_function_pointer_type_discrimination, as non-function types
+        // storing function pointers are always signed with a 0 discriminator.
+        Initializer init = (Initializer)ptrauth_sign_unauthenticated((void *)storage,
+                                                                     ptrauth_key_function_pointer, 0);
+        init();
+    }
+};
+
+static const uint32_t *getLibobjcInitializerOffsets(size_t *outCount) {
+    extern const uint32_t sectionStart  __asm("section$start$__TEXT$__init_offsets");
+    extern const uint32_t sectionEnd  __asm("section$end$__TEXT$__init_offsets");
+    *outCount = &sectionEnd - &sectionStart;
+    return &sectionStart;
+}
+
 
 /***********************************************************************
 * static_init
@@ -582,24 +683,17 @@ _objc_patch_root_of_class(const struct mach_header *originalMH, void* originalCl
 * libc calls _objc_init() before dyld would call our static constructors, 
 * so we have to do it ourselves.
 **********************************************************************/
+__attribute__((noinline))
 static void static_init()
 {
-#if TARGET_OS_EXCLAVEKIT
-    extern const struct mach_header_64 _mh_dylib_header;
-#endif
-    size_t count1;
-    auto inits = getLibobjcInitializers(&_mh_dylib_header, &count1);
-    for (size_t i = 0; i < count1; i++) {
-        inits[i]();
-    }
-    size_t count2;
-    auto offsets = getLibobjcInitializerOffsets(&_mh_dylib_header, &count2);
-    for (size_t i = 0; i < count2; i++) {
+    size_t count;
+    auto offsets = getLibobjcInitializerOffsets(&count);
+    for (size_t i = 0; i < count; i++) {
         UnsignedInitializer init(offsets[i]);
         init();
     }
 #if DEBUG
-    if (count1 == 0 && count2 == 0)
+    if (count == 0)
         _objc_inform("No static initializers found in libobjc. This is unexpected for a debug build. Make sure the 'markgc' build phase ran on this dylib. This process is probably going to crash momentarily due to using uninitialized global data.");
 #endif
 }
@@ -626,6 +720,7 @@ static void defineLockOrder()
     // on the assumption that fatal errors could be anywhere.
     lockdebug::lock_precedes_lock(&loadMethodLock, &crashlog_lock);
     lockdebug::lock_precedes_lock(&classInitLock, &crashlog_lock);
+    lockdebug::lock_precedes_lock(&pendingInitializeMapLock, &crashlog_lock);
     lockdebug::lock_precedes_lock(&runtimeLock, &crashlog_lock);
     lockdebug::lock_precedes_lock(&DemangleCacheLock, &crashlog_lock);
     lockdebug::lock_precedes_lock(&selLock, &crashlog_lock);
@@ -643,6 +738,7 @@ static void defineLockOrder()
     // loadMethodLock precedes everything
     // because it is held while +load methods run
     lockdebug::lock_precedes_lock(&loadMethodLock, &classInitLock);
+    lockdebug::lock_precedes_lock(&loadMethodLock, &pendingInitializeMapLock);
     lockdebug::lock_precedes_lock(&loadMethodLock, &runtimeLock);
     lockdebug::lock_precedes_lock(&loadMethodLock, &DemangleCacheLock);
     lockdebug::lock_precedes_lock(&loadMethodLock, &selLock);
@@ -684,6 +780,7 @@ static void defineLockOrder()
     CppObjectLocks.precedeLock(&AssociationsManagerLock);
 
     lockdebug::lock_precedes_lock(&classInitLock, &runtimeLock);
+    lockdebug::lock_precedes_lock(&pendingInitializeMapLock, &runtimeLock);
 
     // Runtime operations may occur inside SideTable locks
     // (such as storeWeak calling getMethodImplementation)
@@ -714,12 +811,17 @@ void _objc_atfork_prepare()
     lockdebug::assert_no_locks_locked();
     lockdebug::set_in_fork_prepare(true);
 
+    classInitializeAtforkPrepare();
+
+    _objc_sync_lock_atfork_prepare();
+
     loadMethodLock.lock();
     PropertyLocks.lockAll();
     CppObjectLocks.lockAll();
     AssociationsManagerLock.lock();
     SideTableLockAll();
-    classInitLock.enter();
+    classInitLock.lock();
+    pendingInitializeMapLock.lock();
     runtimeLock.lock();
     DemangleCacheLock.lock();
     selLock.lock();
@@ -754,7 +856,12 @@ void _objc_atfork_parent()
     SideTableUnlockAll();
     DemangleCacheLock.unlock();
     runtimeLock.unlock();
-    classInitLock.leave();
+    classInitLock.unlock();
+    pendingInitializeMapLock.unlock();
+
+    _objc_sync_lock_atfork_parent();
+
+    classInitializeAtforkParent();
 
     lockdebug::assert_no_locks_locked();
 }
@@ -784,6 +891,11 @@ void _objc_atfork_child()
     DemangleCacheLock.reset();
     runtimeLock.reset();
     classInitLock.reset();
+    pendingInitializeMapLock.reset();
+
+    _objc_sync_lock_atfork_child();
+
+    classInitializeAtforkChild();
 
     lockdebug::assert_no_locks_locked();
 }
@@ -812,10 +924,10 @@ void _objc_init(void)
     _imp_implementationWithBlock_init();
 #endif
 
-    _dyld_objc_callbacks_v1 callbacks = {
-        1, // version
+    _dyld_objc_callbacks_v2 callbacks = {
+        2, // version
         &map_images,
-        load_images,
+        &load_images,
         unmap_image,
         _objc_patch_root_of_class
     };

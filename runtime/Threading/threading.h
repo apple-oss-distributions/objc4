@@ -60,7 +60,6 @@ enum class tls_key {
 using objc_lock_t = locker_mixin<lockdebug::lock_mixin<objc_lock_base_t>>;
 using objc_recursive_lock_t =
     locker_mixin<lockdebug::lock_mixin<objc_recursive_lock_base_t>>;
-using objc_monitor_t = lockdebug::monitor_mixin<objc_monitor_base_t>;
 using objc_nodebug_lock_t = locker_mixin<objc_lock_base_t>;
 
 #endif // _OBJC_THREADING_H

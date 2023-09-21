@@ -378,9 +378,9 @@ void objc_exception_throw(id obj)
         int frameCount = backtrace(callstack, 500);
         backtrace_symbols_fd(callstack, frameCount, fileno(stderr));
     }
+#endif
 
     OBJC_RUNTIME_OBJC_EXCEPTION_THROW(obj);  // dtrace probe to log throw activity
-#endif
 
     __cxa_throw(exc, &exc->tinfo, &_objc_exception_destructor);
     __builtin_trap();
@@ -394,9 +394,7 @@ void objc_exception_rethrow(void)
         _objc_inform("EXCEPTIONS: rethrowing current exception");
     }
 
-#if !TARGET_OS_EXCLAVEKIT
     OBJC_RUNTIME_OBJC_EXCEPTION_RETHROW(); // dtrace probe to log throw activity.
-#endif
 
     __cxa_rethrow();
     __builtin_trap();

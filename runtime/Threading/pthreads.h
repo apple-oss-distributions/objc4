@@ -183,9 +183,17 @@ public:
         return pthread_mutex_unlock(&lock_) == 0;
     }
 
+    void unlockForkedChild() {
+        unlock();
+    }
+
     void reset() {
         memset(&lock_, 0, sizeof(lock_));
-        lock_ = PTHREAD_MUTEX_INIT;
+        lock_ = PTHREAD_MUTEX_INITIALIZER;
+    }
+
+    void hardReset() {
+        reset();
     }
 };
 #endif // !_OBJC_PTHREAD_IS_DARWIN
@@ -233,48 +241,5 @@ public:
     }
 };
 #endif // !_OBJC_PTHREAD_IS_DARWIN
-
-// .. objc_monitor_t ...................................................
-
-class objc_monitor_base_t : nocopy_t {
-    pthread_mutex_t mutex_;
-    pthread_cond_t  cond_;
-
-public:
-    objc_monitor_base_t() : mutex_(PTHREAD_MUTEX_INITIALIZER),
-                            cond_(PTHREAD_COND_INITIALIZER)
-    {}
-    ~objc_monitor_base_t() {
-        pthread_mutex_destroy(&mutex_);
-        pthread_cond_destroy(&cond_);
-    }
-
-    void enter() {
-        pthread_mutex_lock(&mutex_);
-    }
-
-    void leave() {
-        pthread_mutex_unlock(&mutex_);
-    }
-
-    void wait() {
-        pthread_cond_wait(&cond_, &mutex_);
-    }
-
-    void notify() {
-        pthread_cond_signal(&cond_);
-    }
-
-    void notifyAll() {
-        pthread_cond_broadcast(&cond_);
-    }
-
-    void reset() {
-        memset(&mutex_, 0, sizeof(mutex_));
-        memset(&cond_, 0, sizeof(cond_));
-        mutex_ = PTHREAD_MUTEX_INITIALIZER;
-        cond_ = PTHREAD_COND_INITIALIZER;
-    }
-};
 
 #endif // _OBJC_PTHREAD_H

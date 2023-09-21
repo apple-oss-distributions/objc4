@@ -246,9 +246,18 @@ public:
         return os_unfair_recursive_lock_tryunlock4objc(&lock_);
     }
 
+    ALWAYS_INLINE void unlockForkedChild() {
+        os_unfair_recursive_lock_unlock_forked_child(&lock_);
+    }
+
     ALWAYS_INLINE void reset() {
         memset(&lock_, 0, sizeof(lock_));
         lock_ = os_unfair_recursive_lock OS_UNFAIR_RECURSIVE_LOCK_INIT;
+    }
+
+    // Same as reset, but avoids any troublesome lockdebug overrides.
+    ALWAYS_INLINE void hardReset() {
+        reset();
     }
 };
 

@@ -118,10 +118,16 @@ int main(int argc __unused, char **argv)
     meth = class_getInstanceMethod(cls, @selector(init));
     _method_setImplementationRawUnsafe(meth, (IMP)HackInit);
 
-    // Verify that the swizzles occurred before +initialize by provoking it now
-    testassert(PlusInitializes == 0);
+    // Ensure NSObject has been initialized. The first message to an
+    // uninitialized class takes the msgSend path regardless of overrides, so
+    // objc_alloc on an uninitialized class can will call HackAlloc even when we
+    // use _method_setImplementationRawUnsafe.
     [NSObject self];
-    testassert(PlusInitializes == 1);
+
+    // If something previously messaged NSObject,
+    // _method_setImplementationRawUnsafe could leave us with stale cache
+    // entries. Flush method caches before proceeding.
+    _objc_flush_caches(cls);
 
     id obj;
     id result;
@@ -132,14 +138,14 @@ int main(int argc __unused, char **argv)
     obj = objc_alloc(cls);
 #if SWIZZLE_AWZ
     testprintf("swizzled AWZ should be called\n");
-    testassert(Allocs == 1);
-    testassert(AllocWithZones == 1);
-    testassert(Inits == 0);
+    testassertequal(Allocs, 1);
+    testassertequal(AllocWithZones, 1);
+    testassertequal(Inits, 0);
 #else
     testprintf("unswizzled AWZ should be bypassed\n");
-    testassert(Allocs == 0);
-    testassert(AllocWithZones == 0);
-    testassert(Inits == 0);
+    testassertequal(Allocs, 0);
+    testassertequal(AllocWithZones, 0);
+    testassertequal(Inits, 0);
 #endif
     testassert([obj isKindOfClass:[NSObject class]]);
 
@@ -149,14 +155,14 @@ int main(int argc __unused, char **argv)
     obj = [NSObject alloc];
 #if SWIZZLE_AWZ
     testprintf("swizzled AWZ should be called\n");
-    testassert(Allocs == 1);
-    testassert(AllocWithZones == 1);
-    testassert(Inits == 0);
+    testassertequal(Allocs, 1);
+    testassertequal(AllocWithZones, 1);
+    testassertequal(Inits, 0);
 #else
     testprintf("unswizzled AWZ should be bypassed\n");
-    testassert(Allocs == 1);
-    testassert(AllocWithZones == 0);
-    testassert(Inits == 0);
+    testassertequal(Allocs, 1);
+    testassertequal(AllocWithZones, 0);
+    testassertequal(Inits, 0);
 #endif
     testassert([obj isKindOfClass:[NSObject class]]);
 
@@ -166,14 +172,14 @@ int main(int argc __unused, char **argv)
     obj = objc_alloc_init(cls);
 #if SWIZZLE_AWZ
     testprintf("swizzled AWZ should be called\n");
-    testassert(Allocs == 1);
-    testassert(AllocWithZones == 1);
-    testassert(Inits == 1);
+    testassertequal(Allocs, 1);
+    testassertequal(AllocWithZones, 1);
+    testassertequal(Inits, 1);
 #else
     testprintf("unswizzled AWZ should be bypassed\n");
-    testassert(Allocs == 0);
-    testassert(AllocWithZones == 0);
-    testassert(Inits == 1);  // swizzled init is still called
+    testassertequal(Allocs, 0);
+    testassertequal(AllocWithZones, 0);
+    testassertequal(Inits, 1);  // swizzled init is still called
 #endif
     testassert([obj isKindOfClass:[NSObject class]]);
 
@@ -181,12 +187,12 @@ int main(int argc __unused, char **argv)
     result = objc_retain(obj);
 #if SWIZZLE_RELEASE
     testprintf("swizzled release should force retain\n");
-    testassert(Retains == 1);
+    testassertequal(Retains, 1);
 #else
     testprintf("unswizzled release should bypass retain\n");
-    testassert(Retains == 0);
+    testassertequal(Retains, 0);
 #endif
-    testassert(result == obj);
+    testassertequal(result, obj);
 
     Releases = 0;
     Autoreleases = 0;
@@ -194,20 +200,20 @@ int main(int argc __unused, char **argv)
         result = objc_autorelease(obj);
 #if SWIZZLE_RELEASE
         testprintf("swizzled release should force autorelease\n");
-        testassert(Autoreleases == 1);
+        testassertequal(Autoreleases, 1);
 #else
         testprintf("unswizzled release should bypass autorelease\n");
-        testassert(Autoreleases == 0);
+        testassertequal(Autoreleases, 0);
 #endif
-        testassert(result == obj);
+        testassertequal(result, obj);
     } POP_POOL
 
 #if SWIZZLE_RELEASE
     testprintf("swizzled release should be called\n");
-    testassert(Releases == 1);
+    testassertequal(Releases, 1);
 #else
     testprintf("unswizzled release should be bypassed\n");
-    testassert(Releases == 0);
+    testassertequal(Releases, 0);
 #endif
 
     PlusNew = 0;
@@ -218,14 +224,14 @@ int main(int argc __unused, char **argv)
     obj = objc_opt_self(obj);
 #if SWIZZLE_CORE
     testprintf("swizzled Core should be called\n");
-    testassert(PlusNew == 1);
-    testassert(Self == 1);
-    testassert(PlusSelf == 1);
+    testassertequal(PlusNew, 1);
+    testassertequal(Self, 1);
+    testassertequal(PlusSelf, 1);
 #else
     testprintf("unswizzled CORE should be bypassed\n");
-    testassert(PlusNew == 0);
-    testassert(Self == 0);
-    testassert(PlusSelf == 0);
+    testassertequal(PlusNew, 0);
+    testassertequal(Self, 0);
+    testassertequal(PlusSelf, 0);
 #endif
     testassert([obj isKindOfClass:nso]);
 

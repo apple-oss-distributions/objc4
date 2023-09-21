@@ -22,6 +22,8 @@
  */
 
 #include "objc-test-env.h"
+
+#include <stddef.h>
 #include <stdlib.h>
 
 // This is a dummy placeholder, so we can link

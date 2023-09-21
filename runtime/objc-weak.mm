@@ -37,6 +37,12 @@ BREAKPOINT_FUNCTION(
     void objc_weak_error(void)
 );
 
+#define REPORT_WEAK_ERROR(format, ...) do { \
+    const char *breakMessage = DebugWeakErrors == Fatal ? "" : " Break on objc_weak_error to debug."; \
+    OBJC_DEBUG_OPTION_REPORT_ERROR(DebugWeakErrors, format "%s", __VA_ARGS__, breakMessage); \
+    objc_weak_error(); \
+} while(0)
+
 static void bad_weak_table(weak_entry_t *entries)
 {
     _objc_fatal("bad weak table at %p. This may be a runtime bug or a "
@@ -173,12 +179,10 @@ static void remove_referrer(weak_entry_t *entry, objc_object **old_referrer)
                 return;
             }
         }
-        _objc_inform("Attempted to unregister unknown __weak variable "
-                     "at %p. This is probably incorrect use of "
-                     "objc_storeWeak() and objc_loadWeak(). "
-                     "Break on objc_weak_error to debug.\n", 
-                     old_referrer);
-        objc_weak_error();
+        REPORT_WEAK_ERROR("Attempted to unregister unknown __weak variable "
+                          "at %p. This is probably incorrect use of "
+                          "objc_storeWeak() and objc_loadWeak().",
+                          old_referrer);
         return;
     }
 
@@ -190,12 +194,10 @@ static void remove_referrer(weak_entry_t *entry, objc_object **old_referrer)
         if (index == begin) bad_weak_table(entry);
         hash_displacement++;
         if (hash_displacement > entry->max_hash_displacement) {
-            _objc_inform("Attempted to unregister unknown __weak variable "
-                         "at %p. This is probably incorrect use of "
-                         "objc_storeWeak() and objc_loadWeak(). "
-                         "Break on objc_weak_error to debug.\n", 
-                         old_referrer);
-            objc_weak_error();
+            REPORT_WEAK_ERROR("Attempted to unregister unknown __weak variable "
+                              "at %p. This is probably incorrect use of "
+                              "objc_storeWeak() and objc_loadWeak().",
+                              old_referrer);
             return;
         }
     }
@@ -494,12 +496,10 @@ weak_clear_no_lock(weak_table_t *weak_table, id referent_id)
                 *referrer = nil;
             }
             else if (*referrer) {
-                _objc_inform("__weak variable at %p holds %p instead of %p. "
-                             "This is probably incorrect use of "
-                             "objc_storeWeak() and objc_loadWeak(). "
-                             "Break on objc_weak_error to debug.\n", 
-                             referrer, (void*)*referrer, (void*)referent);
-                objc_weak_error();
+                REPORT_WEAK_ERROR("__weak variable at %p holds %p instead of %p. "
+                                  "This is probably incorrect use of "
+                                  "objc_storeWeak() and objc_loadWeak().",
+                                  referrer, (void*)*referrer, (void*)referent);
             }
         }
     }
