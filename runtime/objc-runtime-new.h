@@ -370,7 +370,7 @@ private:
             // location of _flags and the
             // FAST_CACHE_HAS_CUSTOM_DEALLOC_INITIATION flag within. Any changes
             // must be applied there as well.
-            uint32_t                   _unused;
+            uint32_t                   _disguisedPreoptCacheSignature;
             uint16_t                   _occupied;
             uint16_t                   _flags;
 #   define CACHE_T_HAS_FLAGS 1
@@ -382,7 +382,7 @@ private:
 #endif
 
         };
-        explicit_atomic<preopt_cache_t *> _originalPreoptCache;
+        explicit_atomic<preopt_cache_t *, PTRAUTH_STR(originalPreoptCache, ptrauth_key_process_independent_data)> _originalPreoptCache;
     };
 
     // Simple constructor for testing purposes only.
@@ -557,6 +557,8 @@ public:
 #       define FAST_CACHE_ALLOC_MASK         0x0ff8
 #       define FAST_CACHE_ALLOC_MASK16       0x0ff0
 #       define FAST_CACHE_ALLOC_DELTA16      0x0008
+        // All flags fit within this mask.
+#       define FAST_CACHE_FLAGS_MASK         0xf000
 #   endif
 
 #   define FAST_CACHE_HAS_CUSTOM_DEALLOC_INITIATION (1<<12)

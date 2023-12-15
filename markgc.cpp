@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -341,13 +342,27 @@ private:
 
 
 static bool debug = true;
+static bool forbidStaticInitializers = true;
 
 bool processFile(const char *filename);
 
 int main(int argc, const char *argv[]) {
-    for (int i = 1; i < argc; ++i) {
-        if (!processFile(argv[i])) return 1;
+    if (argc != 3) {
+        printf("usage: %s <dylib> <build configuration>\n", argv[0]);
+        return 1;
     }
+
+    const char *dylib = argv[1];
+    const char *configuration = argv[2];
+    if (debug) printf("configuration: %s\n", configuration);
+
+    if (strcasecmp(configuration, "debug") == 0) {
+        forbidStaticInitializers = false;
+        if (debug) printf("Allowing static initializers in debug build.\n");
+    }
+
+
+    if (!processFile(dylib)) return 1;
     return 0;
 }
 
@@ -377,8 +392,8 @@ bool sectnameEquals(const char *lhs, const char *rhs)
 template <typename P>
 void dosect(uint8_t *start, macho_section<P> *sect)
 {
-    if (debug) printf("section %.16s from segment %.16s\n",
-                      sect->sectname(), sect->segname());
+    if (debug) printf("section %.16s from segment %.16s - %" PRIu64 " bytes\n",
+                      sect->sectname(), sect->segname(), sect->size());
 
     // Strip S_MOD_INIT/TERM_FUNC_POINTERS. We don't want dyld to call 
     // our init funcs because it is too late, and we don't want anyone to 
@@ -386,6 +401,10 @@ void dosect(uint8_t *start, macho_section<P> *sect)
     if (segnameStartsWith(sect->segname(), "__DATA")  &&  
         sectnameEquals(sect->sectname(), "__mod_init_func"))
     {
+        if (forbidStaticInitializers && sect->size() > 0) {
+            fprintf(stderr, "error: static initializers are forbidden, found non-empty static initializers section.\n");
+            exit(1);
+        }
         // section type 0 is S_REGULAR
         sect->set_flags(sect->flags() & ~SECTION_TYPE);
         sect->set_sectname("__objc_init_func");
@@ -394,6 +413,10 @@ void dosect(uint8_t *start, macho_section<P> *sect)
     if (segnameStartsWith(sect->segname(), "__TEXT")  &&
         sectnameEquals(sect->sectname(), "__init_offsets"))
     {
+        if (forbidStaticInitializers && sect->size() > 0) {
+            fprintf(stderr, "error: static initializers are forbidden, found non-empty static initializers section.\n");
+            exit(1);
+        }
         // section type 0 is S_REGULAR
         sect->set_flags(sect->flags() & ~SECTION_TYPE);
         sect->set_sectname("__objc_init_offs");

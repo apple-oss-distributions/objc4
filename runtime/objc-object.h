@@ -29,6 +29,7 @@
 #ifndef _OBJC_OBJCOBJECT_H_
 #define _OBJC_OBJCOBJECT_H_
 
+#include "InitWrappers.h"
 #include "objc-private.h"
 
 
@@ -1531,16 +1532,16 @@ struct ReturnAutoreleaseInfo {
     };
 
     // The actual TLS storage
-    static tls_direct(uintptr_t, tls_key::return_autorelease_object, TlsDealloc) tlsFirstWord;
-    static tls_direct(const void *, tls_key::return_autorelease_address) tlsReturnAddress;
+    static objc::ExplicitInit<tls_direct(uintptr_t, tls_key::return_autorelease_object, TlsDealloc)> tlsFirstWord;
+    static objc::ExplicitInit<tls_direct(const void *, tls_key::return_autorelease_address)> tlsReturnAddress;
 };
 
 static ALWAYS_INLINE ReturnAutoreleaseInfo
 getReturnAutoreleaseInfo()
 {
     ReturnAutoreleaseInfo info;
-    info.firstWord = ReturnAutoreleaseInfo::tlsFirstWord;
-    info.returnAddress = ReturnAutoreleaseInfo::tlsReturnAddress;
+    info.firstWord = ReturnAutoreleaseInfo::tlsFirstWord.get();
+    info.returnAddress = ReturnAutoreleaseInfo::tlsReturnAddress.get();
     return info;
 }
 
@@ -1548,8 +1549,8 @@ getReturnAutoreleaseInfo()
 static ALWAYS_INLINE void 
 setReturnAutoreleaseInfo(ReturnAutoreleaseInfo info)
 {
-    ReturnAutoreleaseInfo::tlsFirstWord = info.firstWord;
-    ReturnAutoreleaseInfo::tlsReturnAddress = info.returnAddress;
+    ReturnAutoreleaseInfo::tlsFirstWord.get() = info.firstWord;
+    ReturnAutoreleaseInfo::tlsReturnAddress.get() = info.returnAddress;
 }
 
 // If there's an object in the return autorelease TLS, move it into the current

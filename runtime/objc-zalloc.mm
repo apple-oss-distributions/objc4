@@ -47,7 +47,7 @@ void *AtomicQueue::pop()
         }
         l2.head = l1.head->next;
         l2.gen  = l1.gen + 1;
-    } while (!atomic_pair.compare_exchange_weak(l1.pair, l2.pair, relaxed, relaxed));
+    } while (!atomicPair()->compare_exchange_weak(l1.pair, l2.pair, relaxed, relaxed));
 
     return reinterpret_cast<void *>(l1.head);
 }
@@ -63,7 +63,7 @@ void AtomicQueue::push_list(void *_head, void *_tail)
         tail->next = l1.head;
         l2.head = head;
         l2.gen = l1.gen + 1;
-    } while (!atomic_pair.compare_exchange_weak(l1.pair, l2.pair, release, relaxed));
+    } while (!atomicPair()->compare_exchange_weak(l1.pair, l2.pair, release, relaxed));
 }
 
 template<class T>

@@ -25,7 +25,7 @@
 #include "NSObject.h"
 
 #include "objc-weak.h"
-#include "DenseMapExtras.h"
+#include "InitWrappers.h"
 
 #include <malloc/malloc.h>
 #include <stdint.h>
@@ -646,10 +646,10 @@ retry:
 **********************************************************************/
 
 // The TLS for ReturnAutoreleaseInfo
-tls_direct(uintptr_t, tls_key::return_autorelease_object,
-           ReturnAutoreleaseInfo::TlsDealloc)
+objc::ExplicitInit<tls_direct(uintptr_t, tls_key::return_autorelease_object,
+           ReturnAutoreleaseInfo::TlsDealloc)>
 	ReturnAutoreleaseInfo::tlsFirstWord;
-tls_direct(const void *, tls_key::return_autorelease_address)
+objc::ExplicitInit<tls_direct(const void *, tls_key::return_autorelease_address)>
 	ReturnAutoreleaseInfo::tlsReturnAddress;
 
 BREAKPOINT_FUNCTION(void objc_autoreleaseNoPool(id obj));
@@ -677,7 +677,7 @@ private:
 #   define POOL_BOUNDARY nil
 
     class HotPageDealloc;
-    static tls_direct(AutoreleasePoolPage *, tls_key::autorelease_pool, HotPageDealloc)
+    static objc::ExplicitInit<tls_direct(AutoreleasePoolPage *, tls_key::autorelease_pool, HotPageDealloc)>
         hotPage_;
 	static uint8_t const SCRIBBLE = 0xA3;  // 0xA3A3A3A3 after releasing
 	static size_t const COUNT = SIZE / sizeof(id);
@@ -998,18 +998,18 @@ private:
 
     static inline bool haveEmptyPoolPlaceholder()
     {
-        return hotPage_ == EMPTY_POOL_PLACEHOLDER;
+        return hotPage_.get() == EMPTY_POOL_PLACEHOLDER;
     }
 
     static inline id* setEmptyPoolPlaceholder()
     {
-        hotPage_ = EMPTY_POOL_PLACEHOLDER;
+        hotPage_.get() = EMPTY_POOL_PLACEHOLDER;
         return (id *)EMPTY_POOL_PLACEHOLDER;
     }
 
     static inline AutoreleasePoolPage *hotPage() 
     {
-        AutoreleasePoolPage *result = hotPage_;
+        AutoreleasePoolPage *result = hotPage_.get();
         if (result == EMPTY_POOL_PLACEHOLDER) return nil;
         if (result) result->fastcheck();
         return result;
@@ -1018,7 +1018,7 @@ private:
     static inline void setHotPage(AutoreleasePoolPage *page) 
     {
         if (page) page->fastcheck();
-        hotPage_ = page;
+        hotPage_.get() = page;
     }
 
     static inline AutoreleasePoolPage *coldPage() 
@@ -1133,6 +1133,10 @@ private:
     }
 
 public:
+    static void initTLS(void) {
+        hotPage_.init();
+    }
+
     static inline id autorelease(id obj)
     {
         ASSERT(!_objc_isTaggedPointerOrNil(obj));
@@ -1464,8 +1468,8 @@ public:
     }
 };
 
-tls_direct(AutoreleasePoolPage *, tls_key::autorelease_pool,
-           AutoreleasePoolPage::HotPageDealloc) AutoreleasePoolPage::hotPage_;
+objc::ExplicitInit<tls_direct(AutoreleasePoolPage *, tls_key::autorelease_pool,
+                              AutoreleasePoolPage::HotPageDealloc)> AutoreleasePoolPage::hotPage_;
 
 /***********************************************************************
 * Slow paths for inline control
@@ -2368,10 +2372,17 @@ static void startWeakTableScan() {
 }
 #endif
 
-void arr_init(void) 
+void side_tables_init(void)
 {
     SideTablesMap.init();
+}
+
+void arr_init(void)
+{
     _objc_associations_init();
+    ReturnAutoreleaseInfo::tlsFirstWord.init();
+    ReturnAutoreleaseInfo::tlsReturnAddress.init();
+    AutoreleasePoolPage::initTLS();
 
 #if !TARGET_OS_EXCLAVEKIT
     if (DebugScanWeakTables)

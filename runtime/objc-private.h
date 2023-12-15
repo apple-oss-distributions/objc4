@@ -656,6 +656,8 @@ extern void gdb_objc_class_changed(Class cls, unsigned long changes, const char 
     __attribute__((noinline));
 
 
+extern void accessors_init(void);
+extern void runtime_tls_init(void);
 extern void environ_init(void);
 extern void runtime_init(void);
 
@@ -696,6 +698,7 @@ enum class SyncKind {
     atSynchronize, // Used for @synchronize/objc_sync_enter/exit.
     classInitialize, // Used for +initialize machinery.
 };
+extern void _objc_sync_init(void);
 extern void _destroySyncCache(struct SyncCache *cache);
 extern void _objc_sync_exit_forked_child(id obj, SyncKind kind);
 extern void _objc_sync_assert_locked(id obj, SyncKind kind);
@@ -706,6 +709,8 @@ extern void _objc_sync_lock_atfork_parent(void);
 extern void _objc_sync_lock_atfork_child(void);
 extern int _objc_sync_enter_kind(id obj, SyncKind kind);
 extern int _objc_sync_exit_kind(id obj, SyncKind kind);
+
+void side_tables_init(void);
 
 // arr
 extern void arr_init(void);

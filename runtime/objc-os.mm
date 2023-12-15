@@ -26,6 +26,7 @@
 * OS portability layer.
 **********************************************************************/
 
+#include "InitWrappers.h"
 #include "objc-private.h"
 #include "objc-loadmethod.h"
 
@@ -667,6 +668,17 @@ public:
                                                                      ptrauth_key_function_pointer, 0);
         init();
     }
+
+    const void *address() const {
+        return (void *)storage;
+    }
+
+    const char *debugName() const {
+        Dl_info info;
+        int result = dladdr(address(), &info);
+        if (result && info.dli_sname && info.dli_sname[0]) return info.dli_sname;
+        else return "??";
+    }
 };
 
 static const uint32_t *getLibobjcInitializerOffsets(size_t *outCount) {
@@ -690,14 +702,20 @@ static void static_init()
     auto offsets = getLibobjcInitializerOffsets(&count);
     for (size_t i = 0; i < count; i++) {
         UnsignedInitializer init(offsets[i]);
+#if DEBUG
         init();
+#else
+        _objc_inform("libobjc static initializer found: %p %s at libobjc + %" PRIu32, init.address(), init.debugName(), offsets[i]);
+#endif
     }
 #if DEBUG
     if (count == 0)
         _objc_inform("No static initializers found in libobjc. This is unexpected for a debug build. Make sure the 'markgc' build phase ran on this dylib. This process is probably going to crash momentarily due to using uninitialized global data.");
+#else
+    if (count != 0)
+        _objc_fatal("error: libobjc release build forbids static initializers, found %zu.", count);
 #endif
 }
-
 
 /***********************************************************************
 * _objc_atfork_prepare
@@ -731,9 +749,9 @@ static void defineLockOrder()
     lockdebug::lock_precedes_lock(&AltHandlerDebugLock, &crashlog_lock);
     lockdebug::lock_precedes_lock(&AssociationsManagerLock, &crashlog_lock);
     SideTableLocksPrecedeLock(&crashlog_lock);
-    PropertyLocks.precedeLock(&crashlog_lock);
-    StructLocks.precedeLock(&crashlog_lock);
-    CppObjectLocks.precedeLock(&crashlog_lock);
+    PropertyLocks.get().precedeLock(&crashlog_lock);
+    StructLocks.get().precedeLock(&crashlog_lock);
+    CppObjectLocks.get().precedeLock(&crashlog_lock);
 
     // loadMethodLock precedes everything
     // because it is held while +load methods run
@@ -749,17 +767,17 @@ static void defineLockOrder()
     lockdebug::lock_precedes_lock(&loadMethodLock, &AltHandlerDebugLock);
     lockdebug::lock_precedes_lock(&loadMethodLock, &AssociationsManagerLock);
     SideTableLocksSucceedLock(&loadMethodLock);
-    PropertyLocks.succeedLock(&loadMethodLock);
-    StructLocks.succeedLock(&loadMethodLock);
-    CppObjectLocks.succeedLock(&loadMethodLock);
+    PropertyLocks.get().succeedLock(&loadMethodLock);
+    StructLocks.get().succeedLock(&loadMethodLock);
+    CppObjectLocks.get().succeedLock(&loadMethodLock);
 
     // PropertyLocks and CppObjectLocks and AssociationManagerLock 
     // precede everything because they are held while objc_retain() 
     // or C++ copy are called.
     // (StructLocks do not precede everything because it calls memmove only.)
     auto PropertyAndCppObjectAndAssocLocksPrecedeLock = [&](const void *lock) {
-        PropertyLocks.precedeLock(lock);
-        CppObjectLocks.precedeLock(lock);
+        PropertyLocks.get().precedeLock(lock);
+        CppObjectLocks.get().precedeLock(lock);
         lockdebug::lock_precedes_lock(&AssociationsManagerLock, lock);
     };
     PropertyAndCppObjectAndAssocLocksPrecedeLock(&runtimeLock);
@@ -772,12 +790,12 @@ static void defineLockOrder()
     PropertyAndCppObjectAndAssocLocksPrecedeLock(&objcMsgLogLock);
     PropertyAndCppObjectAndAssocLocksPrecedeLock(&AltHandlerDebugLock);
 
-    SideTableLocksSucceedLocks(PropertyLocks);
-    SideTableLocksSucceedLocks(CppObjectLocks);
+    SideTableLocksSucceedLocks(PropertyLocks.get());
+    SideTableLocksSucceedLocks(CppObjectLocks.get());
     SideTableLocksSucceedLock(&AssociationsManagerLock);
 
-    PropertyLocks.precedeLock(&AssociationsManagerLock);
-    CppObjectLocks.precedeLock(&AssociationsManagerLock);
+    PropertyLocks.get().precedeLock(&AssociationsManagerLock);
+    CppObjectLocks.get().precedeLock(&AssociationsManagerLock);
 
     lockdebug::lock_precedes_lock(&classInitLock, &runtimeLock);
     lockdebug::lock_precedes_lock(&pendingInitializeMapLock, &runtimeLock);
@@ -795,9 +813,9 @@ static void defineLockOrder()
 
     // Striped locks use address order internally.
     SideTableDefineLockOrder();
-    PropertyLocks.defineLockOrder();
-    StructLocks.defineLockOrder();
-    CppObjectLocks.defineLockOrder();
+    PropertyLocks.get().defineLockOrder();
+    StructLocks.get().defineLockOrder();
+    CppObjectLocks.get().defineLockOrder();
 }
 // LOCKDEBUG
 #endif
@@ -816,8 +834,8 @@ void _objc_atfork_prepare()
     _objc_sync_lock_atfork_prepare();
 
     loadMethodLock.lock();
-    PropertyLocks.lockAll();
-    CppObjectLocks.lockAll();
+    PropertyLocks.get().lockAll();
+    CppObjectLocks.get().lockAll();
     AssociationsManagerLock.lock();
     SideTableLockAll();
     classInitLock.lock();
@@ -830,7 +848,7 @@ void _objc_atfork_prepare()
 #endif
     objcMsgLogLock.lock();
     AltHandlerDebugLock.lock();
-    StructLocks.lockAll();
+    StructLocks.get().lockAll();
     crashlog_lock.lock();
 
     lockdebug::assert_all_locks_locked();
@@ -841,9 +859,9 @@ void _objc_atfork_parent()
 {
     lockdebug::assert_all_locks_locked();
 
-    CppObjectLocks.unlockAll();
-    StructLocks.unlockAll();
-    PropertyLocks.unlockAll();
+    CppObjectLocks.get().unlockAll();
+    StructLocks.get().unlockAll();
+    PropertyLocks.get().unlockAll();
     AssociationsManagerLock.unlock();
     AltHandlerDebugLock.unlock();
     objcMsgLogLock.unlock();
@@ -875,9 +893,9 @@ void _objc_atfork_child()
 
     lockdebug::assert_all_locks_locked();
 
-    CppObjectLocks.forceResetAll();
-    StructLocks.forceResetAll();
-    PropertyLocks.forceResetAll();
+    CppObjectLocks.get().forceResetAll();
+    StructLocks.get().forceResetAll();
+    PropertyLocks.get().forceResetAll();
     AssociationsManagerLock.reset();
     AltHandlerDebugLock.reset();
     objcMsgLogLock.reset();
@@ -900,6 +918,22 @@ void _objc_atfork_child()
     lockdebug::assert_no_locks_locked();
 }
 
+static void locks_init(void)
+{
+    classInitLock.init();
+    pendingInitializeMapLock.init();
+    selLock.init();
+    #if CONFIG_USE_CACHE_LOCK
+    cacheUpdateLock.init();
+    #endif
+    loadMethodLock.init();
+    crashlog_lock.init();
+    objcMsgLogLock.init();
+    AltHandlerDebugLock.init();
+    AssociationsManagerLock.init();
+    runtimeLock.init();
+    DemangleCacheLock.init();
+}
 
 /***********************************************************************
 * _objc_init
@@ -914,7 +948,12 @@ void _objc_init(void)
     initialized = true;
     
     // fixme defer initialization until an objc-using image is found?
+    locks_init();
     environ_init();
+    runtime_tls_init();
+    _objc_sync_init();
+    accessors_init();
+    side_tables_init();
     static_init();
     runtime_init();
     exception_init();

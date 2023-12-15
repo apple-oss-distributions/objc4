@@ -150,12 +150,12 @@ public:
 // A "ptrauth" struct that just passes pointers through unchanged.
 struct PtrauthRaw {
     template <typename T>
-    static T *sign(T *ptr, __unused const void *address) {
+    static T sign(T ptr, __unused const void *address) {
         return ptr;
     }
 
     template <typename T>
-    static T *auth(T *ptr, __unused const void *address) {
+    static T auth(T ptr, __unused const void *address) {
         return ptr;
     }
 };
@@ -176,20 +176,20 @@ struct PtrauthStrip {
 
 // A ptrauth struct that signs and authenticates pointers using the
 // DB key with the given discriminator and address diversification.
-template <unsigned discriminator>
+template <unsigned discriminator, ptrauth_key key = ptrauth_key_process_dependent_data>
 struct Ptrauth {
     template <typename T>
     static T *sign(T *ptr, UNUSED_WITHOUT_PTRAUTH const void *address) {
         if (!ptr)
             return nullptr;
-        return ptrauth_sign_unauthenticated(ptr, ptrauth_key_process_dependent_data, ptrauth_blend_discriminator(address, discriminator));
+        return ptrauth_sign_unauthenticated(ptr, key, ptrauth_blend_discriminator(address, discriminator));
     }
 
     template <typename T>
     static T *auth(T *ptr, UNUSED_WITHOUT_PTRAUTH const void *address) {
         if (!ptr)
             return nullptr;
-        return ptrauth_auth_data(ptr, ptrauth_key_process_dependent_data, ptrauth_blend_discriminator(address, discriminator));
+        return ptrauth_auth_data(ptr, key, ptrauth_blend_discriminator(address, discriminator));
     }
 };
 
@@ -200,9 +200,9 @@ template <typename T> using RawPtr = WrappedPtr<T, PtrauthRaw>;
 #if __has_feature(ptrauth_calls)
 // Get a ptrauth type that uses a string discriminator.
 #if __BUILDING_OBJCDT__
-#define PTRAUTH_STR(name) PtrauthStrip
+#define PTRAUTH_STR(name, ...) PtrauthStrip
 #else
-#define PTRAUTH_STR(name) Ptrauth<ptrauth_string_discriminator(#name)>
+#define PTRAUTH_STR(name, ...) Ptrauth<ptrauth_string_discriminator(#name) __VA_OPT__(,) __VA_ARGS__>
 #endif
 
 // When ptrauth is available, declare a template that wraps a type
@@ -215,7 +215,7 @@ template <typename T> using RawPtr = WrappedPtr<T, PtrauthRaw>;
     template <typename T> using name ## _authed_ptr            \
         = WrappedPtr<T, PTRAUTH_STR(name)>;
 #else
-#define PTRAUTH_STR(name) PtrauthRaw
+#define PTRAUTH_STR(name, ...) PtrauthRaw
 #define DECLARE_AUTHED_PTR_TEMPLATE(name)                      \
     template <typename T> using name ## _authed_ptr = RawPtr<T>;
 #endif

@@ -727,7 +727,7 @@ IMP class_getMethodImplementation_stret(Class cls, SEL sel)
 * instrumentObjcMessageSends
 **********************************************************************/
 // Define this everywhere even if it isn't used to simplify fork() safety code.
-spinlock_t objcMsgLogLock;
+ExplicitInitLock<spinlock_t> objcMsgLogLock;
 
 #if !SUPPORT_MESSAGE_LOGGING
 

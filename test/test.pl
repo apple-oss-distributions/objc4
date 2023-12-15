@@ -1546,7 +1546,7 @@ sub make_one_config {
 
     # Populate cflags
 
-    my $cflags = "-I$DIR -W -Wall -Wno-deprecated-volatile -Wno-undef-prefix -Wno-unknown-warning-option -Wno-objc-load-method -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -nostdlib -lSystem -Os -arch $C{ARCH} ";
+    my $cflags = "-I$DIR -W -Wall -Wno-deprecated-volatile -Wno-undef-prefix -Wno-unknown-warning-option -Wno-objc-load-method -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wno-missing-field-initializers -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -nostdlib -lSystem -Os -arch $C{ARCH} ";
     if (!$BATS) {
         # Debug info disabled in BATS to save disk space.
         $cflags .= "-g ";

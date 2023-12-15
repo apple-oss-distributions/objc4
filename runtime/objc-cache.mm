@@ -234,7 +234,7 @@ asm("\n .section __TEXT,__const"
 
 #if CONFIG_USE_PREOPT_CACHES
 __attribute__((used, section("__DATA_CONST,__objc_scoffs")))
-const int objc_opt_preopt_caches_version = 3;
+const int objc_opt_preopt_caches_version = 4;
 __attribute__((used, section("__DATA_CONST,__objc_scoffs")))
 const uintptr_t objc_opt_offsets[__OBJC_OPT_OFFSETS_COUNT] = {0};
 #endif
@@ -382,6 +382,12 @@ void cache_t::initializeToEmpty()
 }
 
 #if CONFIG_USE_PREOPT_CACHES
+
+static uint32_t disguisedPreoptCacheSignature(const bucket_t *disguised, const cache_t *cache) {
+    uintptr_t signature = ptrauth_sign_generic_data(disguised, cache);
+    return (uint32_t)signature ^ (uint32_t)(signature >> 32);
+}
+
 /*
  * The shared cache builder will sometimes have prebuilt an IMP cache
  * for the class and left a `preopt_cache_t` pointer in _originalPreoptCache.
@@ -416,9 +422,11 @@ void cache_t::initializeToPreoptCacheInDisguise(const preopt_cache_t *cache)
 
     uintptr_t value = (uintptr_t)cache + sizeof(preopt_cache_t) -
             (bucket_t::offsetOfSel() + sizeof(SEL));
+    bucket_t *disguised = (bucket_t *)value;
 
     _originalPreoptCache.store(nullptr, std::memory_order_relaxed);
-    setBucketsAndMask((bucket_t *)value, 0);
+    setBucketsAndMask(disguised, 0);
+    _disguisedPreoptCacheSignature = disguisedPreoptCacheSignature(disguised, this);
     _occupied = cache->occupied;
 }
 
@@ -499,6 +507,10 @@ const preopt_cache_t *cache_t::disguised_preopt_cache() const
 {
     bucket_t *b = buckets();
     if ((intptr_t)b->sel() >= 0) return nil;
+
+    uint32_t signature = disguisedPreoptCacheSignature(b, this);
+    if (slowpath(_disguisedPreoptCacheSignature != signature))
+        __builtin_trap();
 
     uintptr_t value = (uintptr_t)b + bucket_t::offsetOfSel() + sizeof(SEL);
     return (preopt_cache_t *)(value - sizeof(preopt_cache_t));
@@ -715,7 +727,7 @@ bucket_t *cache_t::emptyBucketsForCapacity(mask_t capacity, bool allocate)
 #if CONFIG_USE_CACHE_LOCK
     lockdebug::assert_locked(&cacheUpdateLock);
 #else
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 #endif
 
     size_t bytes = bytesForCapacity(capacity);
@@ -833,7 +845,7 @@ void cache_t::bad_cache(id receiver, SEL sel)
 
 void cache_t::insert(SEL sel, IMP imp, id receiver)
 {
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 
     // Never cache before +initialize is done
     if (slowpath(!cls()->isInitialized())) {
@@ -907,7 +919,7 @@ void cache_t::copyCacheNolock(objc_imp_cache_entry *buffer, int len)
 #if CONFIG_USE_CACHE_LOCK
     lockdebug::assert_locked(&cacheUpdateLock);
 #else
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 #endif
     int wpos = 0;
 
@@ -950,7 +962,7 @@ void cache_t::eraseNolock(const char *func)
 #if CONFIG_USE_CACHE_LOCK
     lockdebug::assert_locked(&cacheUpdateLock);
 #else
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 #endif
 
     if (isConstantOptimizedCache()) {
@@ -978,7 +990,7 @@ void cache_t::destroy()
 #if CONFIG_USE_CACHE_LOCK
     mutex_locker_t lock(cacheUpdateLock);
 #else
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 #endif
     if (canBeFreed()) {
         if (PrintCaches) recordDeadCache(capacity());
@@ -1074,7 +1086,7 @@ void cache_t::init()
 
     cache_t testCache;
     testCache._originalPreoptCache.store((preopt_cache_t *)maxPtr, std::memory_order_relaxed);
-    ASSERT(testCache._flags == 0);
+    ASSERT((testCache._flags & FAST_CACHE_FLAGS_MASK) == 0);
 #endif
 
 #if HAVE_TASK_RESTARTABLE_RANGES
@@ -1252,7 +1264,7 @@ void cache_t::collect_free(bucket_t *data, mask_t capacity)
 #if CONFIG_USE_CACHE_LOCK
     lockdebug::assert_locked(&cacheUpdateLock);
 #else
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 #endif
 
     if (PrintCaches) recordDeadCache(capacity);
@@ -1274,7 +1286,7 @@ void cache_t::collectNolock(bool collectALot)
 #if CONFIG_USE_CACHE_LOCK
     lockdebug::assert_locked(&cacheUpdateLock);
 #else
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 #endif
 
     // Done if the garbage is not full
