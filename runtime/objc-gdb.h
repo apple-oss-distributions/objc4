@@ -99,8 +99,14 @@ OBJC_EXPORT uintptr_t objc_debug_realized_class_generation_count;
 
 // Extract isa pointer from an isa field.
 // (Class)(isa & mask) == class pointer
+#if TARGET_OS_EXCLAVEKIT
+// Not const because it needs to be computed at startup, but don't modify it!
+OBJC_EXPORT uintptr_t objc_debug_isa_class_mask
+    OBJC_AVAILABLE(10.10, 7.0, 9.0, 1.0, 2.0);
+#else
 OBJC_EXPORT const uintptr_t objc_debug_isa_class_mask
     OBJC_AVAILABLE(10.10, 7.0, 9.0, 1.0, 2.0);
+#endif
 
 // Extract magic cookie from an isa field.
 // (isa & magic_mask) == magic_value

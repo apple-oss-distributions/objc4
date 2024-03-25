@@ -133,13 +133,26 @@ class AutoreleasePoolPage;
 struct AutoreleasePoolPageData
 {
 #if SUPPORT_AUTORELEASEPOOL_DEDUP_PTRS
-    struct AutoreleasePoolEntry {
-        uintptr_t ptr: 48;
-        uintptr_t count: 16;
+    #define MASK(N) (((uintptr_t)1 << (N)) - 1)
 
-        static const uintptr_t maxCount = 65535; // 2^16 - 1
+    struct AutoreleasePoolEntry {
+        static constexpr uintptr_t pointerBits = 48;
+        static constexpr uintptr_t countBits = 16;
+
+        static constexpr uintptr_t pointerMask = MASK(pointerBits);
+        static constexpr uintptr_t maxCount = MASK(countBits);
+
+        uintptr_t ptr: pointerBits;
+        uintptr_t count: countBits;
+
+        ALWAYS_INLINE uintptr_t getPointer() const { return ptr; }
+        ALWAYS_INLINE uintptr_t getCount() const { return count; }
+        ALWAYS_INLINE void incrementCount() { count++; }
     };
-    static_assert((AutoreleasePoolEntry){ .ptr = OBJC_VM_MAX_ADDRESS }.ptr == OBJC_VM_MAX_ADDRESS, "OBJC_VM_MAX_ADDRESS doesn't fit into AutoreleasePoolEntry::ptr!");
+    static_assert(sizeof(AutoreleasePoolEntry) == sizeof(uintptr_t), "sizeof(AutoreleasePoolEntry) != sizeof(uintptr_t)");
+    static_assert((OBJC_VM_MAX_ADDRESS & AutoreleasePoolEntry::pointerMask) == OBJC_VM_MAX_ADDRESS, "OBJC_VM_MAX_ADDRESS doesn't fit into AutoreleasePoolEntry::ptr!");
+
+    #undef MASK
 #endif
 
 	magic_t const magic;

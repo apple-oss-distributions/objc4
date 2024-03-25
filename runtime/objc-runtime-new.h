@@ -130,8 +130,9 @@
 #define FAST_HAS_DEFAULT_RR     (1UL<<2)
 // data pointer
 #if TARGET_OS_EXCLAVEKIT
-#define FAST_DATA_MASK          0x0000001ffffffff8UL
-#define DEBUG_DATA_MASK         0x0000001ffffffff8UL
+// The mask has to be computed at startup, so defer to the global variable.
+#define FAST_DATA_MASK          objc_debug_isa_class_mask
+#define DEBUG_DATA_MASK         objc_debug_isa_class_mask
 #elif TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
 #define FAST_DATA_MASK          0x0f00007ffffffff8UL
 #define DEBUG_DATA_MASK         0x0000007ffffffff8UL
@@ -140,9 +141,11 @@
 #define DEBUG_DATA_MASK         0x00007ffffffffff8UL
 #endif
 
+#if !TARGET_OS_EXCLAVEKIT
 static_assert((OBJC_VM_MAX_ADDRESS & FAST_DATA_MASK)
               == (OBJC_VM_MAX_ADDRESS & ~7UL),
               "FAST_DATA_MASK must not mask off pointer bits");
+#endif
 
 // just the flags
 #define FAST_FLAGS_MASK         0x0000000000000007UL
@@ -370,7 +373,7 @@ private:
             // location of _flags and the
             // FAST_CACHE_HAS_CUSTOM_DEALLOC_INITIATION flag within. Any changes
             // must be applied there as well.
-            uint32_t                   _unused;
+            uint32_t                   _disguisedPreoptCacheSignature;
             uint16_t                   _occupied;
             uint16_t                   _flags;
 #   define CACHE_T_HAS_FLAGS 1
@@ -382,7 +385,7 @@ private:
 #endif
 
         };
-        explicit_atomic<preopt_cache_t *> _originalPreoptCache;
+        explicit_atomic<preopt_cache_t *, PTRAUTH_STR(originalPreoptCache, ptrauth_key_process_independent_data)> _originalPreoptCache;
     };
 
     // Simple constructor for testing purposes only.
@@ -476,6 +479,7 @@ private:
     void collect_free(bucket_t *oldBuckets, mask_t oldCapacity);
 
     static bucket_t *emptyBuckets();
+    static bucket_t *mallocBuckets(mask_t newCapacity);
     static bucket_t *allocateBuckets(mask_t newCapacity);
     static bucket_t *emptyBucketsForCapacity(mask_t capacity, bool allocate = true);
     static struct bucket_t * endMarker(struct bucket_t *b, uint32_t cap);
@@ -557,6 +561,8 @@ public:
 #       define FAST_CACHE_ALLOC_MASK         0x0ff8
 #       define FAST_CACHE_ALLOC_MASK16       0x0ff0
 #       define FAST_CACHE_ALLOC_DELTA16      0x0008
+        // All flags fit within this mask.
+#       define FAST_CACHE_FLAGS_MASK         0xf000
 #   endif
 
 #   define FAST_CACHE_HAS_CUSTOM_DEALLOC_INITIATION (1<<12)
@@ -2189,6 +2195,9 @@ public:
                 newArray->lists[i] = addedLists[i];
             }
             for (; i < newCount; i++) {
+                if (slowpath(logKind)) {
+                    _objc_inform("PREOPTIMIZATION: copying preoptimized %s list %p", logKind, *listListBegin);
+                }
                 newArray->lists[i] = *listListBegin;
                 ++listListBegin;
             }

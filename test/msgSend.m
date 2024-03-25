@@ -2,7 +2,7 @@
 asm-placeholder.exe is used below to disassemble objc_msgSend
 
 TEST_BUILD
-    $C{COMPILE} -x assembler $DIR/asm-placeholder.s -o asm-placeholder.exe
+    $C{COMPILE} -x assembler-with-cpp $DIR/asm-placeholder.s -o asm-placeholder.exe
     $C{COMPILE} $DIR/msgSend.m -o msgSend.exe -Wno-unused-parameter -Wundeclared-selector -D__DARWIN_OPAQUE_ARM_THREAD_STATE64=1
 END
 */

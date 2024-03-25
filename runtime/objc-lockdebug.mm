@@ -34,27 +34,6 @@
 
 
 /***********************************************************************
-* Thread-local bool set during _objc_atfork_prepare().
-* That function is allowed to break some lock ordering rules.
-**********************************************************************/
-
-static tls_fast(bool) in_fork_prepare;
-
-void
-lockdebug::set_in_fork_prepare(bool inForkPrepare)
-{
-    in_fork_prepare = inForkPrepare;
-}
-
-static bool
-inForkPrepare()
-{
-    return in_fork_prepare;
-}
-
-
-
-/***********************************************************************
 * Lock order graph.
 * "lock X precedes lock Y" means that X must be acquired first.
 * This property is transitive.
@@ -72,81 +51,6 @@ struct lockorder {
 static std::unordered_map<const void*, lockorder *> lockOrderList;
 
 static objc_nodebug_lock_t lockOrderLock;
-
-static bool 
-lockPrecedesLock(const lockorder *oldlock, const lockorder *newlock)
-{
-    auto memoed = newlock->memo.find(oldlock);
-    if (memoed != newlock->memo.end()) {
-        return memoed->second;
-    }
-
-    bool result = false;
-    for (const auto *pre : newlock->predecessors) {
-        if (oldlock == pre  ||  lockPrecedesLock(oldlock, pre)) {
-            result = true;
-            break;
-        }
-    }
-
-    newlock->memo[oldlock] = result;
-    return result;
-}
-
-static bool 
-lockPrecedesLock(const void *oldlock, const void *newlock)
-{
-    objc_nodebug_lock_t::locker lock(lockOrderLock);
-
-    auto oldorder = lockOrderList.find(oldlock);
-    auto neworder = lockOrderList.find(newlock);
-    if (neworder == lockOrderList.end() || oldorder == lockOrderList.end()) {
-        return false;
-    }
-    return lockPrecedesLock(oldorder->second, neworder->second);
-}
-
-static bool
-lockUnorderedWithLock(const void *oldlock, const void *newlock)
-{
-    objc_nodebug_lock_t::locker lock(lockOrderLock);
-    
-    auto oldorder = lockOrderList.find(oldlock);
-    auto neworder = lockOrderList.find(newlock);
-    if (neworder == lockOrderList.end() || oldorder == lockOrderList.end()) {
-        return true;
-    }
-    
-    if (lockPrecedesLock(oldorder->second, neworder->second) ||
-        lockPrecedesLock(neworder->second, oldorder->second))
-    {
-        return false;
-    }
-
-    return true;
-}
-
-void lockdebug::lock_precedes_lock(const void *oldlock, const void *newlock)
-{
-    if (lockPrecedesLock(newlock, oldlock)) {
-        _objc_fatal("contradiction in lock order declaration");
-    }
-
-    objc_nodebug_lock_t::locker lock(lockOrderLock);
-
-    auto oldorder = lockOrderList.find(oldlock);
-    auto neworder = lockOrderList.find(newlock);
-    if (oldorder == lockOrderList.end()) {
-        lockOrderList[oldlock] = new lockorder(oldlock);
-        oldorder = lockOrderList.find(oldlock);
-    }
-    if (neworder == lockOrderList.end()) {
-        lockOrderList[newlock] = new lockorder(newlock);
-        neworder = lockOrderList.find(newlock);
-    }
-
-    neworder->second->predecessors.push_back(oldorder->second);
-}
 
 
 /***********************************************************************
@@ -233,17 +137,8 @@ setLock(objc_lock_list& locks, const void *lock, lockkind kind)
                 continue;
             }
 
-            if (lockPrecedesLock(lock, oldlock.first)) {
+            if (lockdebug::lock_precedes_lock(lock, oldlock.first)) {
                 _objc_fatal("lock %p (%s) incorrectly acquired before %p (%s)",
-                            oldlock.first, sym(oldlock.first), lock, sym(lock));
-            }
-            if (!inForkPrepare() &&
-                lockUnorderedWithLock(lock, oldlock.first))
-            {
-                // _objc_atfork_prepare is allowed to acquire
-                // otherwise-unordered locks, but nothing else may.
-                _objc_fatal("lock %p (%s) acquired before %p (%s) "
-                            "with no defined lock order",
                             oldlock.first, sym(oldlock.first), lock, sym(lock));
             }
         }
@@ -306,17 +201,35 @@ lockdebug::assert_no_locks_locked()
 }
 
 void
-lockdebug::assert_no_locks_locked_except(std::initializer_list<void *> canBeLocked)
+lockdebug::assert_no_locks_locked_except(std::initializer_list<std::variant<void *, lock_enumerator>> canBeLocked)
 {
     auto& owned = ownedLocks();
 
-    for (const auto& l : AllLocks()) {
-        if (std::find(canBeLocked.begin(), canBeLocked.end(), l.first) != canBeLocked.end())
+    for (const auto &l : owned) {
+        // Only examine locks in AllLocks.
+        if (AllLocks().find(l.first) == AllLocks().end())
             continue;
 
-        if (hasLock(owned, l.first, l.second.k)) {
-            _objc_fatal("lock %p:%d is incorrectly owned", l.first, l.second.k);
+        bool thisCanBeLocked = false;
+        for (auto entry : canBeLocked) {
+            if (void **ptr = std::get_if<void *>(&entry)) {
+                if (l.first == *ptr) {
+                    thisCanBeLocked = true;
+                    break;
+                }
+            } else if (auto enumerator = std::get_if<lock_enumerator>(&entry)) {
+                for (unsigned i = 0; auto *lock = (*enumerator)(i); i++) {
+                    if (l.first == lock) {
+                        thisCanBeLocked = true;
+                        break;
+                    }
+                }
+            } else {
+                assert(false && "Unknown variant type.");
+            }
         }
+        if (!thisCanBeLocked)
+            _objc_fatal("lock %p:%d (%s) is incorrectly owned", l.first, l.second.k, sym(l.first));
     }
 }
 

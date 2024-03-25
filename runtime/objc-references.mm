@@ -42,7 +42,7 @@ enum {
     OBJC_ASSOCIATION_SYSTEM_OBJECT      = _OBJC_ASSOCIATION_SYSTEM_OBJECT, // 1 << 16
 };
 
-spinlock_t AssociationsManagerLock;
+ExplicitInitLock<spinlock_t> AssociationsManagerLock;
 
 namespace objc {
 

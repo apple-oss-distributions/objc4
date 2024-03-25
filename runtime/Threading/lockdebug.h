@@ -108,6 +108,8 @@ namespace lockdebug {
 #endif
     };
 
+    typedef locker_mixin<lockdebug::lock_mixin<objc_lock_base_t>> *(*lock_enumerator)(unsigned);
+
     // APIs
 #if LOCKDEBUG
     void assert_locked(objc_lock_base_t *lock);
@@ -118,10 +120,14 @@ namespace lockdebug {
 
     void assert_all_locks_locked();
     void assert_no_locks_locked();
-    void assert_no_locks_locked_except(std::initializer_list<void *> canBeLocked);
 
-    void set_in_fork_prepare(bool in_prepare);
-    void lock_precedes_lock(const void *old_lock, const void *new_lock);
+    // Assert that we hold no locks within the global set of known locks, except
+    // for the ones given in the list. A list entry may either be a lock pointer
+    // or a function that returns a sequence of locks. Functions are called
+    // repeatedly with 0, 1, 2, 3, etc. until they return nullptr.
+    void assert_no_locks_locked_except(std::initializer_list<std::variant<void *, lock_enumerator>> canBeLocked);
+
+    bool lock_precedes_lock(const void *old_lock, const void *new_lock);
 #else
     static inline void assert_locked(objc_lock_base_t *) {}
     static inline void assert_unlocked(objc_lock_base_t *) {}
@@ -131,10 +137,7 @@ namespace lockdebug {
 
     static inline void assert_all_locks_locked() {}
     static inline void assert_no_locks_locked() {}
-    static inline void assert_no_locks_locked_except(std::initializer_list<void *>) {}
-
-    static inline void set_in_fork_prepare(bool) {}
-    static inline void lock_precedes_lock(const void *, const void *) {}
+    static inline void assert_no_locks_locked_except(std::initializer_list<std::variant<void *, lock_enumerator>>) {}
 #endif
 }
 

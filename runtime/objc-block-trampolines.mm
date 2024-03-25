@@ -338,7 +338,7 @@ static TrampolineBlockPageGroup * ptrauth_trampoline_block_page_group HeadPageGr
 #pragma mark Trampoline Management Functions
 static TrampolineBlockPageGroup *_allocateTrampolinesAndData()
 {
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 
     vm_address_t dataAddress;
     
@@ -405,7 +405,7 @@ static TrampolineBlockPageGroup *_allocateTrampolinesAndData()
 static TrampolineBlockPageGroup *
 getOrAllocatePageGroupWithNextAvailable() 
 {
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 
     if (!HeadPageGroup)
         return _allocateTrampolinesAndData();
@@ -423,7 +423,7 @@ getOrAllocatePageGroupWithNextAvailable()
 static TrampolineBlockPageGroup *
 pageAndIndexContainingIMP(IMP anImp, uintptr_t *outIndex) 
 {
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 
     // Authenticate as a function pointer, returning an un-signed address.
     uintptr_t trampAddress =
@@ -490,7 +490,7 @@ _imp_implementationWithBlock_init(void)
 IMP 
 _imp_implementationWithBlockNoCopy(id block)
 {
-    lockdebug::assert_locked(&runtimeLock);
+    lockdebug::assert_locked(&runtimeLock.get());
 
     TrampolineBlockPageGroup *pageGroup = 
         getOrAllocatePageGroupWithNextAvailable();

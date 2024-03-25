@@ -21,6 +21,7 @@
  * @APPLE_LICENSE_HEADER_END@
  */
 
+#include "InitWrappers.h"
 #include "objc-private.h"
 #include "objc-sync.h"
 
@@ -79,7 +80,7 @@ struct SyncList {
     SyncData *_data;
     spinlock_t _lock;
 
-    SyncList() : _data(nil), _lock(fork_unsafe) { }
+    SyncList() : _data(nil), _lock() { }
 
     void lock() {
         _lock.lock();
@@ -95,10 +96,13 @@ struct SyncList {
 };
 
 // Use multiple parallel lists to decrease contention among unrelated objects.
-#define LOCK_FOR_OBJ(obj) sDataLists[obj]._lock
-#define LIST_FOR_OBJ(obj) sDataLists[obj]._data
-static StripedMap<SyncList> sDataLists;
+#define LOCK_FOR_OBJ(obj) sDataLists.get()[obj]._lock
+#define LIST_FOR_OBJ(obj) sDataLists.get()[obj]._data
+static objc::ExplicitInit<StripedMap<SyncList>> sDataLists;
 
+void _objc_sync_init(void) {
+    sDataLists.init();
+}
 
 enum usage { ACQUIRE, RELEASE, CHECK };
 
@@ -434,9 +438,9 @@ void _objc_sync_assert_unlocked(id obj, SyncKind kind)
 
 void _objc_sync_foreach_lock(void (^call)(id obj, SyncKind kind, recursive_mutex_t *mutex))
 {
-    sDataLists.lockAll();
+    sDataLists.get().lockAll();
 
-    sDataLists.forEach([&call](SyncList &list) {
+    sDataLists.get().forEach([&call](SyncList &list) {
         SyncData *data = list._data;
         while (data) {
             call((id)(objc_object *)data->object, data->kind, &data->mutex);
@@ -444,23 +448,11 @@ void _objc_sync_foreach_lock(void (^call)(id obj, SyncKind kind, recursive_mutex
         }
     });
 
-    sDataLists.unlockAll();
-}
-
-void _objc_sync_lock_atfork_prepare(void)
-{
-    sDataLists.lockAll();
-}
-
-void _objc_sync_lock_atfork_parent(void)
-{
-    sDataLists.unlockAll();
+    sDataLists.get().unlockAll();
 }
 
 void _objc_sync_lock_atfork_child(void)
 {
-    sDataLists.forceResetAll();
-
     // The per-thread cache could hold stale data, clear it.
     clearSyncCache();
 
@@ -473,7 +465,7 @@ void _objc_sync_lock_atfork_child(void)
     //    it's hard to safely deallocate these things. Fork is already
     //    inefficient and there are no other active threads in the child so safe
     //    deallocation is trivial.
-    sDataLists.forEach([](SyncList &list) {
+    sDataLists.get().forEach([](SyncList &list) {
         SyncData *data = list._data;
         while (data) {
             SyncData *next = data->nextData;
@@ -482,4 +474,10 @@ void _objc_sync_lock_atfork_child(void)
         }
         list._data = NULL;
     });
+}
+
+spinlock_t *_objc_sync_locks_get_lock(unsigned n) {
+    if (auto *list = sDataLists.get().getLock(n))
+        return &list->_lock;
+    return nullptr;
 }

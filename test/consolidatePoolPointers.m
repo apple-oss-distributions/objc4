@@ -112,29 +112,33 @@ int main()
     // Push a pool here so test() doesn't see a placeholder.
     objc_autoreleasePoolPush();
 
+    static const int limit = (1 << 16) - 1;
+    #define GAP(objCount, autoreleaseCount) \
+        ((((autoreleaseCount / limit) + 1) * objCount) + 1)
+
     test(1, 1, 2);
     test(1, 2, 2);
     test(1, 10, 2);
     test(1, 100, 2);
-    test(1, 70000, 3);
+    test(1, 70000, GAP(1, 70000));
 
     test(2, 1, 3);
     test(2, 2, 3);
     test(2, 10, 3);
     test(2, 100, 3);
-    test(2, 70000, 5);
+    test(2, 70000, GAP(2, 70000));
 
     test(3, 1, 4);
     test(3, 2, 4);
     test(3, 10, 4);
     test(3, 100, 4);
-    test(3, 70000, 7);
+    test(3, 70000, GAP(3, 70000));
 
     test(4, 1, 5);
     test(4, 2, 5);
     test(4, 10, 5);
     test(4, 100, 5);
-    test(4, 70000, 9);
+    test(4, 70000, GAP(4, 70000));
 
     test(5, 1, 6);
     test(5, 2, 11);

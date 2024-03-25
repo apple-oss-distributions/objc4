@@ -27,6 +27,7 @@
 
 void check_raw_pointer(id obj, Class cls)
 {
+    testprintf("%s(%p, %s)\n", __func__, obj, class_getName(cls));
     testassert(object_getClass(obj) == cls);
     testassert(!NONPOINTER(obj));
 
@@ -35,18 +36,23 @@ void check_raw_pointer(id obj, Class cls)
     testassertequal((Class)(isa & objc_debug_isa_class_mask), cls);
     testassertequal(ptrauth_strip((void *)(isa & ~objc_debug_isa_class_mask), ptrauth_key_process_independent_data), 0);
 
-    CFRetain(obj);
-    testassert(ISA(obj) == isa);
-    testassert([obj retainCount] == 2);
-    [obj retain];
-    testassert(ISA(obj) == isa);
-    testassert([obj retainCount] == 3);
-    CFRelease(obj);
-    testassert(ISA(obj) == isa);
-    testassert([obj retainCount] == 2);
-    [obj release];
-    testassert(ISA(obj) == isa);
-    testassert([obj retainCount] == 1);
+    // Don't bother testing retain/release of OS_objects. We'll just be testing
+    // libdispatch's implementation, not our own, and libdispatch doesn't like
+    // it when we retain objects with zeroed memory. rdar://114378385
+    if (![cls isSubclassOfClass: [OS_object class]]) {
+        CFRetain(obj);
+        testassert(ISA(obj) == isa);
+        testassert([obj retainCount] == 2);
+        [obj retain];
+        testassert(ISA(obj) == isa);
+        testassert([obj retainCount] == 3);
+        CFRelease(obj);
+        testassert(ISA(obj) == isa);
+        testassert([obj retainCount] == 2);
+        [obj release];
+        testassert(ISA(obj) == isa);
+        testassert([obj retainCount] == 1);
+    }
 }
 
 

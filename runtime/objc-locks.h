@@ -29,37 +29,63 @@
 #ifndef _OBJC_LOCKS_H
 #define _OBJC_LOCKS_H
 
+#include "objc-config.h"
+#include "InitWrappers.h"
+
 // fork() safety requires careful tracking of all locks used in the runtime.
 // Thou shalt not declare any locks outside this file.
 
 // Lock ordering is declared in _objc_fork_prepare()
 // and is enforced by lockdebug.
 
-extern mutex_t classInitLock;
-extern mutex_t pendingInitializeMapLock;
-extern mutex_t selLock;
+// ExplicitInit wrapper around a lock. Convertible to the underlying lock type
+// and forwards basic lock/unlock.
+template <typename Lock>
+class ExplicitInitLock: public objc::ExplicitInit<Lock> {
+public:
+    operator Lock &() {
+        return this->get();
+    }
+
+    void lock() {
+        this->get().lock();
+    }
+
+    void unlock() {
+        this->get().unlock();
+    }
+
+    void reset() {
+        this->get().reset();
+    }
+
+    bool tryLock() {
+        return this->get().tryLock();
+    }
+};
+
+
+extern ExplicitInitLock<mutex_t> classInitLock;
+extern ExplicitInitLock<mutex_t> pendingInitializeMapLock;
+extern ExplicitInitLock<mutex_t> selLock;
 #if CONFIG_USE_CACHE_LOCK
-extern mutex_t cacheUpdateLock;
+extern ExplicitInitLock<mutex_t> cacheUpdateLock;
 #endif
-extern recursive_mutex_t loadMethodLock;
-extern mutex_t crashlog_lock;
-extern spinlock_t objcMsgLogLock;
-extern mutex_t AltHandlerDebugLock;
-extern mutex_t AssociationsManagerLock;
-extern StripedMap<spinlock_t> PropertyLocks;
-extern StripedMap<spinlock_t> StructLocks;
-extern StripedMap<spinlock_t> CppObjectLocks;
+extern ExplicitInitLock<recursive_mutex_t> loadMethodLock;
+extern ExplicitInitLock<mutex_t> crashlog_lock;
+extern ExplicitInitLock<spinlock_t> objcMsgLogLock;
+extern ExplicitInitLock<mutex_t> AltHandlerDebugLock;
+extern ExplicitInitLock<mutex_t> AssociationsManagerLock;
+extern objc::ExplicitInit<StripedMap<spinlock_t>> PropertyLocks;
+extern objc::ExplicitInit<StripedMap<spinlock_t>> StructLocks;
+extern objc::ExplicitInit<StripedMap<spinlock_t>> CppObjectLocks;
+extern ExplicitInitLock<mutex_t> runtimeLock;
+extern ExplicitInitLock<mutex_t> DemangleCacheLock;
 
 // SideTable lock is buried awkwardly. Call a function to manipulate it.
 extern void SideTableLockAll();
 extern void SideTableUnlockAll();
 extern void SideTableForceResetAll();
-extern void SideTableDefineLockOrder();
-extern void SideTableLocksPrecedeLock(const void *newlock);
-extern void SideTableLocksSucceedLock(const void *oldlock);
-extern void SideTableLocksPrecedeLocks(StripedMap<spinlock_t>& newlocks);
-extern void SideTableLocksSucceedLocks(StripedMap<spinlock_t>& oldlocks);
-
-#include "objc-locks-new.h"
+extern spinlock_t *SideTableGetLock(unsigned n);
 
 #endif

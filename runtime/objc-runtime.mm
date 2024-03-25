@@ -46,6 +46,7 @@
 #include "objc-test-env.h"
 #endif
 
+#include "InitWrappers.h"
 #include "llvm-MathExtras.h"
 #include "objc-private.h"
 #include "objc-loadmethod.h"
@@ -105,7 +106,11 @@ namespace objc {
 }
 
 // objc's TLS
-static tls_autoptr_direct(_objc_pthread_data, tls_key::main) _objc_tls;
+static objc::ExplicitInit<tls_autoptr_direct(_objc_pthread_data, tls_key::main)> _objc_tls;
+
+void runtime_tls_init(void) {
+    _objc_tls.init();
+}
 
 // Selectors
 SEL SEL_cxx_construct = NULL;
@@ -572,7 +577,7 @@ logReplacedMethod(const char *className, SEL s,
 **********************************************************************/
 _objc_pthread_data *_objc_fetch_pthread_data(bool create)
 {
-    return _objc_tls.get(create);
+    return _objc_tls.get().get(create);
 }
 
 

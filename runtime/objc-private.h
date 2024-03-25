@@ -403,6 +403,12 @@ static inline bool inSharedCache(uintptr_t ptr) {
     return dataSegmentsRanges.inSharedCache(ptr);
 }
 
+// Check if a class is in the shared cache, considering inside-out patched
+// classes as NOT in the shared cache.
+static inline bool classInSharedCache(Class cls) {
+    return inSharedCache((uintptr_t)cls) && inSharedCache((uintptr_t)cls->safe_ro());
+}
+
 } // objc
 
 struct header_info;
@@ -533,9 +539,8 @@ struct mapped_image_info {
         return dyldInfo.dyldObjCRefsOptimized && isPreoptimized();
     }
 
-    // TODO: dyld will add a flag for this which we need to adopt.
     bool dyldCategoriesOptimized() {
-        return false;
+        return hi->info()->dyldCategoriesOptimized();
     }
 };
 
@@ -656,6 +661,9 @@ extern void gdb_objc_class_changed(Class cls, unsigned long changes, const char 
     __attribute__((noinline));
 
 
+extern void masks_init(void);
+extern void accessors_init(void);
+extern void runtime_tls_init(void);
 extern void environ_init(void);
 extern void runtime_init(void);
 
@@ -696,16 +704,18 @@ enum class SyncKind {
     atSynchronize, // Used for @synchronize/objc_sync_enter/exit.
     classInitialize, // Used for +initialize machinery.
 };
+extern void _objc_sync_init(void);
 extern void _destroySyncCache(struct SyncCache *cache);
 extern void _objc_sync_exit_forked_child(id obj, SyncKind kind);
 extern void _objc_sync_assert_locked(id obj, SyncKind kind);
 extern void _objc_sync_assert_unlocked(id obj, SyncKind kind);
 extern void _objc_sync_foreach_lock(void (^call)(id obj, SyncKind kind, recursive_mutex_t *mutex));
-extern void _objc_sync_lock_atfork_prepare(void);
-extern void _objc_sync_lock_atfork_parent(void);
 extern void _objc_sync_lock_atfork_child(void);
 extern int _objc_sync_enter_kind(id obj, SyncKind kind);
 extern int _objc_sync_exit_kind(id obj, SyncKind kind);
+extern spinlock_t *_objc_sync_locks_get_lock(unsigned n);
+
+void side_tables_init(void);
 
 // arr
 extern void arr_init(void);
@@ -744,14 +754,18 @@ extern bool MultithreadedForkChild;
 extern id objc_noop_imp(id self, SEL _cmd);
 extern Class look_up_class(const char *aClassName, bool includeUnconnected, bool includeClassHandler);
 extern bool is_root_ramdisk();
-extern "C" void map_images(unsigned count, const struct _dyld_objc_notify_mapped_info infos[]);
+extern "C" void map_images(unsigned count, const struct _dyld_objc_notify_mapped_info infos[],
+                           _dyld_objc_mark_image_mutable makeImageMutable);
 extern void map_images_nolock(unsigned count,
                               const struct _dyld_objc_notify_mapped_info infos[],
-                              bool *disabledClassROEnforcement);
+                              bool *disabledClassROEnforcement,
+                              _dyld_objc_mark_image_mutable makeImageMutable);
 extern void load_images(const struct _dyld_objc_notify_mapped_info* info);
 extern void unmap_image(const char *path, const struct mach_header *mh);
 extern void unmap_image_nolock(const struct mach_header *mh);
-extern void _read_images(mapped_image_info infos[], uint32_t hCount, int totalClasses, int unoptimizedTotalClass);
+extern void _read_images(mapped_image_info infos[], uint32_t hCount,
+                         int totalClasses, int unoptimizedTotalClass,
+                         _dyld_objc_mark_image_mutable makeImageMutable);
 void loadAllCategoriesIfNeeded(void);
 extern void _unload_image(header_info *hi);
 
@@ -766,6 +780,8 @@ extern const char *_category_getName(Category cat);
 extern const char *_category_getClassName(Category cat);
 extern Class _category_getClass(Category cat);
 extern IMP _category_getLoadMethod(Category cat);
+
+extern void *_calloc_canonical(size_t size);
 
 enum {
     OBJECT_CONSTRUCT_NONE = 0,
@@ -938,23 +954,7 @@ class StripedMap {
         }
     }
 
-    void defineLockOrder() {
-        for (unsigned int i = 1; i < StripeCount; i++) {
-            lockdebug::lock_precedes_lock(&array[i-1].value, &array[i].value);
-        }
-    }
-
-    void precedeLock(const void *newlock) {
-        // assumes defineLockOrder is also called
-        lockdebug::lock_precedes_lock(&array[StripeCount-1].value, newlock);
-    }
-
-    void succeedLock(const void *oldlock) {
-        // assumes defineLockOrder is also called
-        lockdebug::lock_precedes_lock(oldlock, &array[0].value);
-    }
-
-    const void *getLock(int i) {
+    T *getLock(int i) {
         if (i < StripeCount) return &array[i].value;
         else return nil;
     }
@@ -1155,6 +1155,11 @@ public:
 
     T *begin() { return ptr; }
     T *end() { return ptr + count; }
+    uint32_t index(const T* v) {
+        ASSERT(v >= begin());
+        ASSERT(v < end());
+        return (uint32_t)(v - begin());
+    }
 };
 
 // A fixed-size array that fills from the back, producing a contiguous chunk of

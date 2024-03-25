@@ -56,6 +56,7 @@ options:
     LANGUAGE=c,c++,objective-c,objective-c++,swift
     MEM=mrc,arc
     GUARDMALLOC=0|1|before|after
+    SANITIZE=<empty>|<check>[,<check>...]  (enable sanitizers)
 
     BUILD=0|1      (build the tests?)
     RUN=0|1        (run the tests?)
@@ -135,6 +136,8 @@ my $DEVICE;
 my $PARALLELBUILDS;
 
 my $SHAREDCACHEDIR;
+
+my $SANITIZE;
 
 my @TESTLIBNAMES = ("libobjc.A.dylib", "libobjc-trampolines.dylib");
 my $TESTLIBDIR = "/usr/lib";
@@ -1230,6 +1233,22 @@ sub find_compiler {
     return $result;
 }
 
+my %resource_dir_memo;
+sub find_resource_dir {
+    my ($cc, $toolchain) = @_;
+
+    # memoize
+    my $key = $cc . ':' . $toolchain;
+    my $result = $resource_dir_memo{$key};
+    return $result if defined $result;
+
+    $result = make("xcrun -toolchain $toolchain $cc --print-resource-dir 2>/dev/null");
+
+    chomp $result;
+    $resource_dir_memo{$key} = $result;
+    return $result
+}
+
 sub dirContainsAllTestLibs {
     my $dir = shift;
 
@@ -1546,7 +1565,7 @@ sub make_one_config {
 
     # Populate cflags
 
-    my $cflags = "-I$DIR -W -Wall -Wno-deprecated-volatile -Wno-undef-prefix -Wno-unknown-warning-option -Wno-objc-load-method -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -nostdlib -lSystem -Os -arch $C{ARCH} ";
+    my $cflags = "-I$DIR -W -Wall -Wno-deprecated-volatile -Wno-undef-prefix -Wno-unknown-warning-option -Wno-objc-load-method -Wno-objc-weak-compat -Wno-arc-bridge-casts-disallowed-in-nonarc -Wno-missing-field-initializers -Wshorten-64-to-32 -Qunused-arguments -fno-caret-diagnostics -nostdlib -lSystem -Os -arch $C{ARCH} ";
     if (!$BATS) {
         # Debug info disabled in BATS to save disk space.
         $cflags .= "-g ";
@@ -1604,6 +1623,42 @@ sub make_one_config {
         $target = "$C{ARCH}-apple-macosx$C{DEPLOYMENT_TARGET}";
     }
     $swiftflags .= " -target $target";
+
+    if ($SANITIZE ne "") {
+        # Because we're using -nostdlib, we need to include this logic here;
+        # normally clang would do this for us, but I don't see an obvious way
+        # to get it to tell us what to add here.
+        my %clang_rt_names = (
+            "iphoneos" => "ios",
+            "iphonesimulator" => "iossim",
+            "macosx" => "osx",
+            "tvos" => "tvos",
+            "tvos-simulator" => "tvossim",
+            "watchos" => "watchos",
+            "watchsimulator" => "watchossim",
+            );
+        my %sanlibs = (
+            "address" => "asan",
+            "leak" => "lsan",
+            "thread" => "tsan",
+            "undefined" => "ubsan",
+            );
+
+        my $resource_dir = find_resource_dir($cc, $C{TOOLCHAIN});
+        my $osname = $clang_rt_names{$C{OS}};
+
+        my @sanitizers = split /,/, $SANITIZE;
+
+        $cflags .= " -fsanitize=$SANITIZE -rpath $resource_dir/lib/darwin";
+        $swiftflags .= " -sanitize=$SANITIZE";
+
+        foreach my $sanitizer (@sanitizers) {
+            my $lib = $sanlibs{$sanitizer};
+            next if (!defined $lib);
+
+            $cflags .= " $resource_dir/lib/darwin/libclang_rt.${lib}_${osname}_dynamic.dylib";
+        }
+    }
 
     $C{TESTINCLUDEDIR} = "$C{SDK_PATH}/usr/include";
     $C{TESTLOCALINCLUDEDIR} = "$C{SDK_PATH}/usr/local/include";
@@ -1929,18 +1984,25 @@ sub build_and_run_one_config {
 }
 
 
+# Return value if set by "$argname=value" on the command line
+# Return $default if not set.
+sub getunsplit {
+    my ($argname, $default) = @_;
+
+    foreach my $arg (@ARGV) {
+        my ($value) = ($arg =~ /^$argname=(.+)$/);
+        return $value if defined $value;
+    }
+
+    return $default;
+}
 
 # Return value if set by "$argname=value" on the command line
 # Return $default if not set.
 sub getargs {
     my ($argname, $default) = @_;
-
-    foreach my $arg (@ARGV) {
-        my ($value) = ($arg =~ /^$argname=(.+)$/);
-        return [split ',', $value] if defined $value;
-    }
-
-    return [split ',', $default];
+    my $value = getunsplit($argname, $default);
+    return [split ',', $value]
 }
 
 # Return 1 or 0 if set by "$argname=1" or "$argname=0" on the 
@@ -1995,6 +2057,8 @@ $args{LANGUAGE} = [ map { lc($_) } @{getargs("LANGUAGE", "c,objective-c,c++,obje
 $args{BUILD_SHARED_CACHE} = getargs("BUILD_SHARED_CACHE", 0);
 
 $args{CC} = getargs("CC", "clang");
+
+$SANITIZE = getunsplit("SANITIZE", "");
 
 $HOST = getarg("HOST", 0);
 $PORT = getarg("PORT", "");
@@ -2099,9 +2163,11 @@ if ($BUILD && $BATS && !$failed) {
 
     # Write the BATS plist to disk.
     my $json = encode_json(\%bats_plist);
-    my $filename = "$DSTROOT$BATSBASE/objc4.plist";
+    my $dirname = "$DSTROOT$BATSBASE";
+    my $filename = "$dirname/objc4.plist";
     print "note: writing BATS config to $filename\n";
-    open(my $file, '>', $filename);
+    mkdir_verbose($dirname);
+    open(my $file, '>', $filename) or die "open: $!";
     print $file $json;
     close $file;
 }

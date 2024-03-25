@@ -142,12 +142,16 @@ int main()
 #else
     int count = is_guardmalloc() ? 10 : 100;
 #endif
-    
+
+    // Do some initial cycles to get one-time or few-times work out of the way.
+    // Empirically, four seems to be enough to get it all done. Note: libxpc
+    // builds up allocations without limit when this program is run from the
+    // terminal, but not from the test script. Watch out for that in case it
+    // starts happening from the test script. rdar://114027966
     cycle();
-#if __LP64__
-    // fixme heap use goes up 512 bytes after the 2nd cycle only - bad or not?
     cycle();
-#endif
+    cycle();
+    cycle();
 
     leak_mark();
     for (int i = 0; i < count; i++) {

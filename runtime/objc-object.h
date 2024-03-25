@@ -29,6 +29,7 @@
 #ifndef _OBJC_OBJCOBJECT_H_
 #define _OBJC_OBJCOBJECT_H_
 
+#include "InitWrappers.h"
 #include "objc-private.h"
 
 
@@ -169,6 +170,15 @@ objc_object::isExtTaggedPointer() const
 inline void
 isa_t::setClass(Class newCls, UNUSED_WITHOUT_PTRAUTH objc_object *obj)
 {
+#ifdef ISA_MASK
+    // Make sure the class pointer doesn't have any bits set outside the isa
+    // mask bits.
+    uintptr_t newClsBits = (uintptr_t)newCls;
+    if (slowpath((newClsBits & ISA_MASK) != newClsBits)) {
+        _objc_fatal("Invalid class pointer %p has bits set outside of ISA_MASK", newCls);
+    }
+#endif
+
     // Match the conditional in isa.h.
 #if __has_feature(ptrauth_calls) || TARGET_OS_SIMULATOR
 #   if ISA_SIGNING_SIGN_MODE == ISA_SIGNING_SIGN_NONE
@@ -1531,16 +1541,16 @@ struct ReturnAutoreleaseInfo {
     };
 
     // The actual TLS storage
-    static tls_direct(uintptr_t, tls_key::return_autorelease_object, TlsDealloc) tlsFirstWord;
-    static tls_direct(const void *, tls_key::return_autorelease_address) tlsReturnAddress;
+    static objc::ExplicitInit<tls_direct(uintptr_t, tls_key::return_autorelease_object, TlsDealloc)> tlsFirstWord;
+    static objc::ExplicitInit<tls_direct(const void *, tls_key::return_autorelease_address)> tlsReturnAddress;
 };
 
 static ALWAYS_INLINE ReturnAutoreleaseInfo
 getReturnAutoreleaseInfo()
 {
     ReturnAutoreleaseInfo info;
-    info.firstWord = ReturnAutoreleaseInfo::tlsFirstWord;
-    info.returnAddress = ReturnAutoreleaseInfo::tlsReturnAddress;
+    info.firstWord = ReturnAutoreleaseInfo::tlsFirstWord.get();
+    info.returnAddress = ReturnAutoreleaseInfo::tlsReturnAddress.get();
     return info;
 }
 
@@ -1548,8 +1558,8 @@ getReturnAutoreleaseInfo()
 static ALWAYS_INLINE void 
 setReturnAutoreleaseInfo(ReturnAutoreleaseInfo info)
 {
-    ReturnAutoreleaseInfo::tlsFirstWord = info.firstWord;
-    ReturnAutoreleaseInfo::tlsReturnAddress = info.returnAddress;
+    ReturnAutoreleaseInfo::tlsFirstWord.get() = info.firstWord;
+    ReturnAutoreleaseInfo::tlsReturnAddress.get() = info.returnAddress;
 }
 
 // If there's an object in the return autorelease TLS, move it into the current

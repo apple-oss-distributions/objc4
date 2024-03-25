@@ -259,7 +259,7 @@
 /// `willInitializeClass` callbacks, to ensure each callback is called exactly
 /// once for each class when adding a new callback concurrently with
 /// initialization.
-mutex_t classInitLock;
+ExplicitInitLock<mutex_t> classInitLock;
 
 
 struct _objc_willInitializeClassCallback {
@@ -478,7 +478,7 @@ typedef struct PendingInitialize {
 
 typedef objc::DenseMap<Class, PendingInitialize *> PendingInitializeMap;
 static PendingInitializeMap *pendingInitializeMap;
-mutex_t pendingInitializeMapLock;
+ExplicitInitLock<mutex_t> pendingInitializeMapLock;
 
 /***********************************************************************
 * _finishInitializing
@@ -490,7 +490,7 @@ static void _finishInitializing(Class cls, Class supercls)
 {
     PendingInitialize *pending;
 
-    lockdebug::assert_locked(&pendingInitializeMapLock);
+    lockdebug::assert_locked(&pendingInitializeMapLock.get());
     assertClassLocked(cls);
     ASSERT(!supercls  ||  supercls->isInitialized());
 
@@ -537,7 +537,7 @@ static void _finishInitializing(Class cls, Class supercls)
 **********************************************************************/
 static void _finishInitializingAfter(Class cls, Class supercls)
 {
-    lockdebug::assert_locked(&pendingInitializeMapLock);
+    lockdebug::assert_locked(&pendingInitializeMapLock.get());
     assertClassLocked(cls);
 
     if (PrintInitializing) {

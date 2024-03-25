@@ -697,7 +697,7 @@ IMP class_getMethodImplementation(Class cls, SEL sel)
 
     if (!cls  ||  !sel) return nil;
 
-    lockdebug::assert_no_locks_locked_except({ &loadMethodLock });
+    lockdebug::assert_no_locks_locked_except({ &loadMethodLock, SideTableGetLock });
 
     imp = lookUpImpOrNilTryCache(nil, sel, cls, LOOKUP_INITIALIZE | LOOKUP_RESOLVER);
 
@@ -727,7 +727,7 @@ IMP class_getMethodImplementation_stret(Class cls, SEL sel)
 * instrumentObjcMessageSends
 **********************************************************************/
 // Define this everywhere even if it isn't used to simplify fork() safety code.
-spinlock_t objcMsgLogLock;
+ExplicitInitLock<spinlock_t> objcMsgLogLock;
 
 #if !SUPPORT_MESSAGE_LOGGING
 
@@ -800,7 +800,7 @@ void instrumentObjcMessageSends(BOOL flag)
 
 Class _calloc_class(size_t size)
 {
-    return (Class) calloc(1, size);
+    return (Class) _calloc_canonical(size);
 }
 
 Class class_getSuperclass(Class cls)

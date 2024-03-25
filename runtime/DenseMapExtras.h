@@ -24,49 +24,11 @@
 #ifndef DENSEMAPEXTRAS_H
 #define DENSEMAPEXTRAS_H
 
+#include "InitWrappers.h"
 #include "llvm-DenseMap.h"
 #include "llvm-DenseSet.h"
 
 namespace objc {
-
-// We cannot use a C++ static initializer to initialize certain globals because
-// libc calls us before our C++ initializers run. We also don't want a global
-// pointer to some globals because of the extra indirection.
-//
-// ExplicitInit / LazyInit wrap doing it the hard way.
-template <typename Type>
-class ExplicitInit {
-    alignas(Type) uint8_t _storage[sizeof(Type)];
-
-public:
-    template <typename... Ts>
-    void init(Ts &&... Args) {
-        new (_storage) Type(std::forward<Ts>(Args)...);
-    }
-
-    Type &get() {
-        return *reinterpret_cast<Type *>(_storage);
-    }
-};
-
-template <typename Type>
-class LazyInit {
-    alignas(Type) uint8_t _storage[sizeof(Type)];
-    bool _didInit;
-
-public:
-    template <typename... Ts>
-    Type *get(bool allowCreate, Ts &&... Args) {
-        if (!_didInit) {
-            if (!allowCreate) {
-                return nullptr;
-            }
-            new (_storage) Type(std::forward<Ts>(Args)...);
-            _didInit = true;
-        }
-        return reinterpret_cast<Type *>(_storage);
-    }
-};
 
 // Convenience class for Dense Maps & Sets
 template <typename Key, typename Value>

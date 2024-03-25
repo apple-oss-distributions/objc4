@@ -50,6 +50,8 @@
 #  define PAGE_MAX_SIZE   16384
 #  define PAGE_MAX_SHIFT  14
 #if TARGET_OS_EXCLAVEKIT
+// This is not entirely correct as EK is moving to 36-bit addresses, but it's
+// OK to have this be an overestimate.
 #  define OBJC_VM_MAX_ADDRESS  0x0000001ffffffff8ULL
 #else
 #  define OBJC_VM_MAX_ADDRESS  0x00007ffffffffff8ULL

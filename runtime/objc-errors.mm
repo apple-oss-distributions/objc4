@@ -31,7 +31,7 @@
 
 #include "objc-private.h"
 
-mutex_t crashlog_lock;
+ExplicitInitLock<mutex_t> crashlog_lock;
 
 #if TARGET_OS_EXCLAVEKIT
 static inline int getpid(void)

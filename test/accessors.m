@@ -7,6 +7,7 @@
 #include "test.h"
 
 @interface Test : NSObject {
+@public
     NSString *_value;
     // _object is at the last optimized property offset
     id _object __attribute__((aligned(64)));
@@ -16,7 +17,7 @@
 @property(assign) id object;
 @end
 
-typedef struct {  
+typedef struct {
     void *isa;
     void *_value;
     // _object is at the last optimized property offset
@@ -49,9 +50,12 @@ typedef struct {
 
 @end
 
+@interface TestUninitializedClass: NSObject @end
+@implementation TestUninitializedClass @end
+
 int main() {
     PUSH_POOL {
-    
+
         NSMutableString *value = [NSMutableString stringWithUTF8String:"test"];
         id object = [NSNumber numberWithInt:11];
         Test *t = AUTORELEASE([Test new]);
@@ -59,19 +63,25 @@ int main() {
         [value setString:@"yuck"];      // mutate the string.
         testassert(t.value != value);   // must copy, since it was mutable.
         testassert([t.value isEqualToString:@"test"]);
-        
+
         Class testClass = [Test class];
         Class cls = t.cls;
         testassert(testClass == cls);
         cls = t.cls;
         testassert(testClass == cls);
-        
+
         t.object = object;
         t.object = object;
-        
+
+        // Make sure we handle getting a property set to a class that hasn't yet
+        // run +initialize. rdar://113033917
+        t.object = nil;
+        t->_object = objc_getClass("TestUninitializedClass");
+        testassert(t.object == objc_getClass("TestUninitializedClass"));
+
         // NSLog(@"t.object = %@, t.value = %@", t.object, t.value);
         // NSLog(@"t.object = %@, t.value = %@", t.object, t.value); // second call will optimized getters.
-        
+
     } POP_POOL;
 
     succeed(__FILE__);
