@@ -759,7 +759,7 @@ class DenseMap : public DenseMapBase<DenseMap<KeyT, ValueT, ValueInfoT, KeyInfoT
   // simplicity of referring to them.
   using BaseT = DenseMapBase<DenseMap, KeyT, ValueT, ValueInfoT, KeyInfoT, BucketT>;
 
-  BucketT *Buckets;
+  BucketT * ptrauth_densemap_buckets Buckets;
   unsigned NumEntries;
   unsigned NumTombstones;
   unsigned NumBuckets;

@@ -52,10 +52,15 @@
     __ptrauth(ptrauth_key_process_dependent_data, 1, \
     ptrauth_string_discriminator("method_t::bigSigned::types"))
 
+#define ptrauth_densemap_buckets \
+    __ptrauth(ptrauth_key_process_dependent_data, 1, \
+    ptrauth_string_discriminator("DenseMap::Buckets"))
+
 #else
 
 #define ptrauth_taggedpointer_table_entry
 #define ptrauth_method_list_types
+#define ptrauth_densemap_buckets
 
 #endif
 

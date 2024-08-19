@@ -74,9 +74,71 @@ template<class EnumerateFunc>
 static void enumerateSelectorsInMethodList(const method_list_t *list,
                                            const EnumerateFunc &fn);
 
+/// A category and the corresponding `header_info`. The category pointer is
+/// signed with the class it belongs to. This class is passed in by the caller,
+/// which needs to pass the same class when retrieving the category pointer.
 struct locstamped_category_t {
+private:
+#if __has_feature(ptrauth_calls)
+    static constexpr auto catDiscriminator = ptrauth_string_discriminator("locstamped_category_t::cat");
+#else
+    static constexpr auto catDiscriminator = 0;
+#endif
+
     category_t *cat;
+
+public:
     struct header_info *hi;
+
+    locstamped_category_t() : cat(nullptr), hi(nullptr) {}
+
+    /// Create a value containing the given category and `header_info`. The
+    /// category pointer is signed using `cls`. The same value for `cls` must be
+    /// used when retrieving the category pointer.
+    locstamped_category_t(category_t *cat, Class cls, header_info *hi) : hi(hi) {
+        this->cat = ptrauth_sign_unauthenticated(
+            cat,
+            ptrauth_key_process_dependent_data,
+            ptrauth_blend_discriminator((void *)cls, catDiscriminator));
+    }
+
+    /// Get the category pointer, using the given class pointer to authenticate
+    /// the pointer.
+    category_t *getCategory(Class cls) const {
+        return ptrauth_auth_data(cat, ptrauth_key_process_dependent_data, ptrauth_blend_discriminator((void *)cls, catDiscriminator));
+    }
+
+    /// Get the category pointer without authenticating it. This must only be
+    /// used when the pointer is used for identity purposes e.g. when adding
+    /// or removing entries from a list. The pointer must not be dereferenced.
+    category_t *getCategoryInsecure() const {
+        return ptrauth_strip(cat, ptrauth_key_process_dependent_data);
+    }
+
+    void clear() {
+        cat = NULL;
+        hi = NULL;
+    }
+
+    bool hasCategory() const {
+        return cat != NULL;
+    }
+
+    /// Get a structure containing the same values, except with the category
+    /// pointer re-signed for the class's metaclass. `cls` must be the class
+    /// that this value was signed with, and the resulting value is signed with
+    /// that class's metaclass. Sometimes categories are associated with a class
+    /// or its metaclass and we need to re-sign to handle that.
+    locstamped_category_t reSignedForMetaclass(Class cls) const {
+        ASSERT(!cls->isMetaClassMaybeUnrealized());
+        locstamped_category_t result;
+        result.cat = ptrauth_auth_and_resign(cat,
+            ptrauth_key_process_dependent_data,
+            ptrauth_blend_discriminator((void *)cls, catDiscriminator),
+            ptrauth_key_process_dependent_data,
+            ptrauth_blend_discriminator((void *)cls->ISA(), catDiscriminator));
+        return locstamped_category_t{getCategory(cls), cls->ISA(), hi};
+    }
 };
 enum {
     ATTACH_CLASS               = 1 << 0,
@@ -84,7 +146,7 @@ enum {
     ATTACH_CLASS_AND_METACLASS = 1 << 2,
     ATTACH_EXISTING            = 1 << 3,
 };
-static void attachCategories(Class cls, const struct locstamped_category_t *cats_list, uint32_t cats_count, int flags);
+static void attachCategories(Class cls, const struct locstamped_category_t *cats_list, uint32_t cats_count, Class catsListKey, int flags);
 
 
 /***********************************************************************
@@ -645,7 +707,7 @@ printReplacements(Class cls, const locstamped_category_t *cats_list, uint32_t ca
     // Newest categories are LAST in cats
     // Later categories override earlier ones.
     for (c = 0; c < cats_count; c++) {
-        category_t *cat = cats_list[c].cat;
+        category_t *cat = cats_list[c].getCategory(cls);
 
         method_list_t *mlist = cat->methodsForMeta(isMeta);
         if (!mlist) continue;
@@ -658,7 +720,7 @@ printReplacements(Class cls, const locstamped_category_t *cats_list, uint32_t ca
 
             // Look for method in earlier categories
             for (uint32_t c2 = 0; c2 < c; c2++) {
-                category_t *cat2 = cats_list[c2].cat;
+                category_t *cat2 = cats_list[c2].getCategory(cls);
 
                 const method_list_t *mlist2 = cat2->methodsForMeta(isMeta);
                 if (!mlist2) continue;
@@ -1258,7 +1320,7 @@ class category_list : nocopy_t {
     } _u;
 
 public:
-    category_list() : _u{{nullptr, nullptr}} { }
+    category_list() : _u{{}} { }
     category_list(locstamped_category_t lc) : _u{{lc}} { }
     category_list(category_list &&other) : category_list() {
         std::swap(_u, other._u);
@@ -1273,7 +1335,7 @@ public:
     uint32_t count() const
     {
         if (_u.is_array) return _u.count;
-        return _u.lc.cat ? 1 : 0;
+        return _u.lc.hasCategory() ? 1 : 0;
     }
 
     uint32_t arrayByteSize(uint32_t size) const
@@ -1299,7 +1361,7 @@ public:
                 _u.array = (locstamped_category_t *)reallocf(_u.array, arrayByteSize(_u.size));
             }
             _u.array[_u.count++] = lc;
-        } else if (_u.lc.cat == NULL) {
+        } else if (!_u.lc.hasCategory()) {
             _u.lc = lc;
         } else {
             locstamped_category_t *arr = (locstamped_category_t *)malloc(arrayByteSize(2));
@@ -1317,16 +1379,15 @@ public:
     {
         if (_u.is_array) {
             for (int i = 0; i < _u.count; i++) {
-                if (_u.array[i].cat == cat) {
+                if (_u.array[i].getCategoryInsecure() == cat) {
                     // shift entries to preserve list order
                     memmove(&_u.array[i], &_u.array[i+1], arrayByteSize(_u.count - i - 1));
                     _u.count--;
                     return;
                 }
             }
-        } else if (_u.lc.cat == cat) {
-            _u.lc.cat = NULL;
-            _u.lc.hi = NULL;
+        } else if (_u.lc.getCategoryInsecure() == cat) {
+            _u.lc.clear();
         }
     }
 };
@@ -1341,7 +1402,7 @@ public:
         if (slowpath(PrintConnecting)) {
             _objc_inform("CLASS: found category %c%s(%s)",
                          cls->isMetaClassMaybeUnrealized() ? '+' : '-',
-                         cls->nameForLogging(), lc.cat->name);
+                         cls->nameForLogging(), lc.getCategory(cls)->name);
         }
 
         auto result = get().try_emplace(cls, lc);
@@ -1364,10 +1425,10 @@ public:
             category_list &list = it->second;
             if (flags & ATTACH_CLASS_AND_METACLASS) {
                 int otherFlags = flags & ~ATTACH_CLASS_AND_METACLASS;
-                attachCategories(cls, list.array(), list.count(), otherFlags | ATTACH_CLASS);
-                attachCategories(cls->ISA(), list.array(), list.count(), otherFlags | ATTACH_METACLASS);
+                attachCategories(cls, list.array(), list.count(), previously, otherFlags | ATTACH_CLASS);
+                attachCategories(cls->ISA(), list.array(), list.count(), previously, otherFlags | ATTACH_METACLASS);
             } else {
-                attachCategories(cls, list.array(), list.count(), flags);
+                attachCategories(cls, list.array(), list.count(), previously, flags);
             }
             map.erase(it);
         }
@@ -1544,8 +1605,8 @@ class_rw_t::extAlloc(const class_ro_t *ro, bool deepCopy)
 // Assumes the categories in cats are all loaded and sorted by load order,
 // oldest categories first.
 static void
-attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cats_count,
-                 int flags)
+attachCategories(Class cls, const locstamped_category_t *cats_list,
+                 uint32_t cats_count, Class catsListKey, int flags)
 {
     if (slowpath(PrintReplacedMethods)) {
         printReplacements(cls, cats_list, cats_count);
@@ -1555,7 +1616,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
                      cats_count, (flags & ATTACH_EXISTING) ? " existing" : "",
                      cls->nameForLogging(), (flags & ATTACH_METACLASS) ? " (meta)" : "");
         for (uint32_t i = 0; i < cats_count; i++)
-            _objc_inform("    category: (%s) %p", cats_list[i].cat->name, cats_list[i].cat);
+            _objc_inform("    category: (%s) %p", cats_list[i].getCategory(catsListKey)->name, cats_list[i].getCategory(catsListKey));
     }
 
     /*
@@ -1584,7 +1645,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
     for (uint32_t i = 0; i < cats_count; i++) {
         auto& entry = cats_list[i];
 
-        method_list_t *mlist = entry.cat->methodsForMeta(isMeta);
+        method_list_t *mlist = entry.getCategory(catsListKey)->methodsForMeta(isMeta);
         bool isPreattached = entry.hi->info()->dyldCategoriesOptimized() && !DisablePreattachedCategories;
         Lists *lists = isPreattached ? &preattachedLists : &normalLists;
         if (mlist) {
@@ -1598,7 +1659,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
         }
 
         property_list_t *proplist =
-            entry.cat->propertiesForMeta(isMeta, entry.hi);
+            entry.getCategory(catsListKey)->propertiesForMeta(isMeta, entry.hi);
         if (proplist) {
             if (lists->properties.isFull()) {
                 rwe->properties.attachLists(lists->properties.array, lists->properties.count, isPreattached, PrintPreopt ? "properties" : nullptr);
@@ -1607,7 +1668,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
             lists->properties.add(proplist);
         }
 
-        protocol_list_t *protolist = entry.cat->protocolsForMeta(isMeta);
+        protocol_list_t *protolist = entry.getCategory(catsListKey)->protocolsForMeta(isMeta);
         if (protolist) {
             if (lists->protocols.isFull()) {
                 rwe->protocols.attachLists(lists->protocols.array, lists->protocols.count, isPreattached, PrintPreopt ? "protocols" : nullptr);
@@ -3482,7 +3543,7 @@ static void load_categories_nolock(header_info *hi) {
         for (unsigned i = 0; i < count; i++) {
             category_t *cat = catlist[i];
             Class cls = remapClass(cat->cls);
-            locstamped_category_t lc{cat, hi};
+            locstamped_category_t lc{cat, cls, hi};
 
             if (!cls) {
                 // Category's target class is missing (probably weak-linked).
@@ -3549,7 +3610,7 @@ static void load_categories_nolock(header_info *hi) {
                     if (cls->isRealized()) {
                         if (slowpath(PrintConnecting))
                             _objc_inform("CLASS: Attaching category (%s) %p to class %s", cat->name, cat, cls->nameForLogging());
-                        attachCategories(cls, &lc, 1, ATTACH_EXISTING);
+                        attachCategories(cls, &lc, 1, cls, ATTACH_EXISTING);
                     } else {
                         if (slowpath(PrintConnecting))
                             _objc_inform("CLASS: Adding unattached category (%s) %p for class %s", cat->name, cat, cls->nameForLogging());
@@ -3563,11 +3624,11 @@ static void load_categories_nolock(header_info *hi) {
                     if (cls->ISA()->isRealized()) {
                         if (slowpath(PrintConnecting))
                             _objc_inform("CLASS: Attaching category (%s) %p to metaclass %s", cat->name, cat, cls->nameForLogging());
-                        attachCategories(cls->ISA(), &lc, 1, ATTACH_EXISTING | ATTACH_METACLASS);
+                        attachCategories(cls->ISA(), &lc, 1, cls, ATTACH_EXISTING | ATTACH_METACLASS);
                     } else {
                         if (slowpath(PrintConnecting))
                             _objc_inform("CLASS: Adding unattached category (%s) %p for metaclass %s", cat->name, cat, cls->nameForLogging());
-                        objc::unattachedCategories.addForClass(lc, cls->ISA());
+                        objc::unattachedCategories.addForClass(lc.reSignedForMetaclass(cls), cls->ISA());
                     }
                 }
             }
@@ -5792,7 +5853,7 @@ _classConformsToProtocol_unrealized(Class _Nonnull cls,
 
             for (uint32_t n = 0; n < catCount; ++n) {
                 protocol_list_t *protoList
-                    = cats[n].cat->protocolsForMeta(isMeta);
+                    = cats[n].getCategory(cls)->protocolsForMeta(isMeta);
                 if (!protoList)
                     continue;
 
