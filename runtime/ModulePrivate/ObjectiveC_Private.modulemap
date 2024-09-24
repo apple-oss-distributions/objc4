@@ -1,0 +1,18 @@
+module ObjectiveC_Private [system] {
+  umbrella "objc"
+  explicit module * { export * }
+#ifndef BUILD_FOR_OSX
+
+  explicit module Object {
+    requires objc
+    header "objc/Object.h"
+    export *
+  }
+
+  explicit module Protocol {
+    requires objc
+    header "objc/Protocol.h"
+    export *
+  }
+#endif
+}

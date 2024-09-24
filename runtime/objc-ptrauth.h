@@ -52,10 +52,50 @@
     __ptrauth(ptrauth_key_process_dependent_data, 1, \
     ptrauth_string_discriminator("method_t::bigSigned::types"))
 
+#define ptrauth_densemap_buckets \
+    __ptrauth(ptrauth_key_process_dependent_data, 1, \
+    ptrauth_string_discriminator("DenseMap::Buckets"))
+
+#define ptrauth_loadImageCallback \
+    __ptrauth(ptrauth_key_process_dependent_code, 1, \
+    ptrauth_string_discriminator("objc_func_loadImage"))
+
+#define ptrauth_loadImageCallback2 \
+    __ptrauth(ptrauth_key_process_dependent_code, 1, \
+    ptrauth_string_discriminator("objc_func_loadImage2"))
+
+#define ptrauth_objc_exception_preprocessor \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("objc_exception_preprocessor"))
+
+#define ptrauth_objc_exception_matcher \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("objc_exception_matcher"))
+
+#define ptrauth_objc_uncaught_exception_handler \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("objc_uncaught_exception_handler"))
+
+#define ptrauth_badAllocHandler \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("badAllocHandler"))
+
+#define ptrauth_objc_forward_handler \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("_objc_forward_handler"))
+
 #else
 
 #define ptrauth_taggedpointer_table_entry
 #define ptrauth_method_list_types
+#define ptrauth_densemap_buckets
+#define ptrauth_loadImageCallback
+#define ptrauth_loadImageCallback2
+#define ptrauth_objc_exception_preprocessor
+#define ptrauth_objc_exception_matcher
+#define ptrauth_objc_uncaught_exception_handler
+#define ptrauth_badAllocHandler
+#define ptrauth_objc_forward_handler
 
 #endif
 
@@ -219,6 +259,70 @@ template <typename T> using RawPtr = WrappedPtr<T, PtrauthRaw>;
 #define DECLARE_AUTHED_PTR_TEMPLATE(name)                      \
     template <typename T> using name ## _authed_ptr = RawPtr<T>;
 #endif
+
+/// A global function pointer authenticated with address diversification which
+/// supports atomic operations on the value. std::atomic does not play well with
+/// `__ptrauth` so we do the operations manually.
+template <typename Fn>
+class PtrauthGlobalAtomicFunction {
+#if __has_feature(ptrauth_calls)
+    // We use the same discriminator for all PtrauthGlobalAtomicFunctions. Since
+    // our scheme is address diversified, and these are always static objects,
+    // there's no possibility that a signed function pointer in one of them will
+    // be substitutable into another one.
+    static constexpr ptrauth_extra_data_t discriminator = ptrauth_string_discriminator("PtrauthGlobalAtomicFunction");
+#else
+    static constexpr ptrauth_extra_data_t discriminator = 0;
+#endif
+
+    // Use atomicValue for almost all operations, but initialValue allows us to
+    // have an initial value without needing a static initializer.
+    union {
+        std::atomic<void *> atomicValue;
+        Fn __ptrauth(ptrauth_key_process_independent_code, 1, discriminator) initialValue;
+    };
+
+    Fn auth(void *signedValue) {
+        if (!signedValue)
+            return nullptr;
+        return (Fn)ptrauth_auth_function(signedValue,
+                                         ptrauth_key_process_independent_code,
+                                         ptrauth_blend_discriminator(&atomicValue, discriminator));
+    }
+
+    void *sign(Fn fn) {
+        if (!fn)
+            return nullptr;
+        return ptrauth_auth_and_resign((void *)fn,
+                                       ptrauth_key_function_pointer, 0,
+                                       ptrauth_key_function_pointer,
+                                       ptrauth_blend_discriminator(&atomicValue, discriminator));
+    }
+
+public:
+    constexpr PtrauthGlobalAtomicFunction(Fn f) : initialValue(f) {}
+
+    bool isSet() {
+        return atomicValue.load(std::memory_order_relaxed) != nullptr;
+    }
+
+    Fn load(std::memory_order order) {
+        return auth(atomicValue.load(order));
+    }
+
+    void store(Fn value, std::memory_order order) {
+        atomicValue.store(sign(value), order);
+    }
+
+    bool compare_exchange_weak(Fn &oldValue, Fn newValue, std::memory_order successOrder, std::memory_order failureOrder) {
+        void *oldValueSigned = sign(oldValue);
+        void *newValueSigned = sign(newValue);
+        bool success = atomicValue.compare_exchange_weak(oldValueSigned, newValueSigned, successOrder, failureOrder);
+        if (!success)
+            oldValue = auth(oldValueSigned);
+        return success;
+    }
+};
 
 // These are used to protect the class_rx_t pointer enforcement flag
 #if __has_feature(ptrauth_calls)

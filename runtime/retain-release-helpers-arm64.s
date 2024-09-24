@@ -178,8 +178,9 @@ LcustomRR_retain:
 
 	// The class uses Swift refcounting. Call the pointer in swiftRetain.
 	adrp x17, _swiftRetain@PAGE
-	ldr  x17, [x17, _swiftRetain@PAGEOFF]
-	TailCallFunctionPointer x17
+	add  x17, x17, _swiftRetain@PAGEOFF
+	ldr  x16, [x17]
+	TailCallSignedFunctionPointer x16, x17, 0x23eb
 
 LmsgSend_retain:
 	adrp x1, LRetainRef@PAGE
@@ -364,8 +365,9 @@ LcustomRR_release_\reg:
 
 	// The class uses Swift refcounting. Call the pointer in swiftRetain.
 	adrp x17, _swiftRelease@PAGE
-	ldr  x17, [x17, _swiftRelease@PAGEOFF]
-	TailCallFunctionPointer x17
+	add  x17, x17, _swiftRelease@PAGEOFF
+	ldr  x16, [x17]
+	TailCallSignedFunctionPointer x16, x17, 0x23eb
 
 LrawISA_release_\reg:
 	// The object has a raw isa pointer, call into C for that.

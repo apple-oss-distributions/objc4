@@ -61,9 +61,10 @@ static header_info * addHeader(const headerType *mhdr, const char *path,
                                const _dyld_section_location_info_t dyldObjCInfo,
                                int &totalClasses, int &unoptimizedTotalClasses)
 {
+    // Note we want to avoid dereferencing `mhdr` here as doing so will page-in every
+    // mach-o.  We may need to load the on-disk mach_header, but should try
+    // avoid the shared cache headers, which dominate the image list anyway.
     header_info *hi;
-
-    if (bad_magic(mhdr)) return NULL;
 
     bool inSharedCache = false;
 
@@ -90,6 +91,8 @@ static header_info * addHeader(const headerType *mhdr, const char *path,
     else 
     {
         // Didn't find an hinfo in the dyld shared cache.
+
+        if (bad_magic(mhdr)) return NULL;
 
         // Locate the __OBJC segment
         size_t info_size = 0;
@@ -223,6 +226,11 @@ static bool shouldRejectGCImage(const headerType *mhdr)
 **********************************************************************/
 static bool hasSignedClassROPointers(const headerType *h, _dyld_section_location_info_t dyldObjCInfo)
 {
+    // Signed RO pointers are required in the shared cache and enforced by the
+    // shared cache builder.
+    if (objc::inSharedCache((uintptr_t)h))
+        return true;
+
     size_t infoSize = 0;
     objc_image_info *info = _getObjcImageInfo(h, dyldObjCInfo, &infoSize);
     if (!info) {
@@ -241,10 +249,34 @@ static bool hasSignedClassROPointers(const header_info *hi) {
 // Swift currently adds 4 callbacks.
 struct loadImageCallback {
     union {
-        objc_func_loadImage func;
-        objc_func_loadImage2 func2;
+        objc_func_loadImage ptrauth_loadImageCallback func;
+        objc_func_loadImage2 ptrauth_loadImageCallback2 func2;
+        const void *rawFunc;
     };
     uint8_t kind;
+
+    loadImageCallback(objc_func_loadImage func) : func(func), kind(1) {}
+    loadImageCallback(objc_func_loadImage2 func2) : func2(func2), kind(2) {}
+
+    loadImageCallback(const loadImageCallback &other) {
+        *this = other;
+    }
+
+    loadImageCallback &operator=(const loadImageCallback &other) {
+        switch (other.kind) {
+            case 1:
+                func = other.func;
+                kind = 1;
+                break;
+            case 2:
+                func2 = other.func2;
+                kind = 2;
+                break;
+            default:
+                _objc_fatal("Corrupt load image callback, unknown kind %u, func %p", other.kind, other.rawFunc);
+        }
+        return *this;
+    }
 };
 static GlobalSmallVector<loadImageCallback, 4> loadImageCallbacks;
 
@@ -258,10 +290,7 @@ void objc_addLoadImageFunc(objc_func_loadImage _Nonnull func) {
     }
 
     // Add it to the vector for future loads.
-    loadImageCallback callback = {
-        .func = func,
-        .kind = 1
-    };
+    loadImageCallback callback{func};
     loadImageCallbacks.append(callback);
 }
 
@@ -274,10 +303,7 @@ void objc_addLoadImageFunc2(objc_func_loadImage2 _Nonnull func) {
     }
 
     // Add it to the vector for future loads.
-    loadImageCallback callback = {
-        .func2 = func,
-        .kind = 2,
-    };
+    loadImageCallback callback{func};
     loadImageCallbacks.append(callback);
 }
 
@@ -355,6 +381,7 @@ map_images_nolock(unsigned mhCount, const struct _dyld_objc_notify_mapped_info i
     // Count classes. Size various table based on the total.
     int totalClasses = 0;
     int unoptimizedTotalClasses = 0;
+    const headerType* executableMH = (const headerType*)_dyld_get_prog_image_header();
     {
         uint32_t i = mhCount;
         while (i--) {
@@ -369,7 +396,7 @@ map_images_nolock(unsigned mhCount, const struct _dyld_objc_notify_mapped_info i
 
             mapped_image_info mappedInfo{hi, infos[i]};
 
-            if (mhdr->filetype == MH_EXECUTE) {
+            if (mhdr == executableMH) {
                 // Size some data structures based on main executable's size
 
                 // If dyld3 optimized the main executable, then there shouldn't
@@ -410,10 +437,11 @@ map_images_nolock(unsigned mhCount, const struct _dyld_objc_notify_mapped_info i
             }
 
             // dtrace probe
-            OBJC_RUNTIME_LOAD_IMAGE(hi->fname(),
-                                    mhdr->filetype == MH_BUNDLE,
-                                    hi->info()->hasCategoryClassProperties(),
-                                    hi->info()->optimizedByDyld());
+            if (OBJC_RUNTIME_LOAD_IMAGE_ENABLED())
+                OBJC_RUNTIME_LOAD_IMAGE(hi->fname(),
+                                        mhdr->filetype == MH_BUNDLE,
+                                        hi->info()->hasCategoryClassProperties(),
+                                        hi->info()->optimizedByDyld());
         }
     }
 
@@ -696,7 +724,7 @@ static void static_init()
     auto offsets = getLibobjcInitializerOffsets(&count);
     for (size_t i = 0; i < count; i++) {
         UnsignedInitializer init(offsets[i]);
-#if DEBUG
+#if DEBUG || __has_feature(address_sanitizer)
         init();
 #else
         _objc_inform("libobjc static initializer found: %p %s at libobjc + %" PRIu32, init.address(), init.debugName(), offsets[i]);
@@ -705,6 +733,8 @@ static void static_init()
 #if DEBUG
     if (count == 0)
         _objc_inform("No static initializers found in libobjc. This is unexpected for a debug build. Make sure the 'markgc' build phase ran on this dylib. This process is probably going to crash momentarily due to using uninitialized global data.");
+#elif __has_feature(address_sanitizer)
+    // Don't check either way for ASan builds.
 #else
     if (count != 0)
         _objc_fatal("error: libobjc release build forbids static initializers, found %zu.", count);
@@ -895,14 +925,25 @@ void _objc_init(void)
     _imp_implementationWithBlock_init();
 #endif
 
-    _dyld_objc_callbacks_v3 callbacks = {
+    // This weird initialization pattern for `callbacks` ensures that we don't
+    // leave zero-signed pointers to these functions lying around. With a more
+    // typical initialization pattern, the compiler ends up placing `callbacks`
+    // in __AUTH_CONST and just passing that pointer, or copying the contents to
+    // the stack for initialization. Those pointers sit there forever and can
+    // potentially be copied into any zero-signed function pointer and called.
+    // By marking the local variable `volatile` and initializing the fields
+    // one by one instead of with {} aggregate initialization, we avoid that and
+    // ensure that the value is created on the stack, and we can zero it after
+    // we use it.
+    volatile _dyld_objc_callbacks_v3 callbacks = {
         3, // version
-        &map_images,
-        &load_images,
-        unmap_image,
-        _objc_patch_root_of_class
     };
+    callbacks.mapped = &map_images;
+    callbacks.init = &load_images;
+    callbacks.unmapped = unmap_image;
+    callbacks.patches = _objc_patch_root_of_class;
     _dyld_objc_register_callbacks((_dyld_objc_callbacks*)&callbacks);
+    memset_s((void *)&callbacks, sizeof(callbacks), 0, sizeof(callbacks));
 
     didCallDyldNotifyRegister = true;
 }

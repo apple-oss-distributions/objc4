@@ -40,6 +40,27 @@
 
 __BEGIN_DECLS
 
+#if __has_feature(ptrauth_calls)
+#include <ptrauth.h>
+#define NXMapTable_ptrauth_prototype \
+    __ptrauth(ptrauth_key_process_independent_data, 1, \
+    ptrauth_string_discriminator("_NXMapTable::prototype"))
+#define NXMapTable_ptrauth_hash \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("_NXMapTablePrototype::hash"))
+#define NXMapTable_ptrauth_isEqual \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("_NXMapTablePrototype::isEqual"))
+#define NXMapTable_ptrauth_free \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("_NXMapTablePrototype::free"))
+#else
+#define NXMapTable_ptrauth_prototype
+#define NXMapTable_ptrauth_hash
+#define NXMapTable_ptrauth_isEqual
+#define NXMapTable_ptrauth_free
+#endif
+
 /***************	Definitions		***************/
 
     /* This module allows hashing of arbitrary associations [key -> value].  Keys and values must be pointers or integers, and client is responsible for allocating/deallocating this data.  A deallocation call-back is provided.
@@ -48,21 +69,21 @@ __BEGIN_DECLS
 
 typedef struct _NXMapTable {
     /* private data structure; may change */
-    const struct _NXMapTablePrototype	* _Nonnull prototype;
+    const struct _NXMapTablePrototype	* NXMapTable_ptrauth_prototype _Nonnull prototype;
     unsigned	count;
     unsigned	nbBucketsMinusOne;
     void	* _Nullable buckets;
 } NXMapTable OBJC_MAP_AVAILABILITY;
 
 typedef struct OBJC_MAP_AVAILABILITY _NXMapTablePrototype {
-    unsigned	(* _Nonnull hash)(NXMapTable * _Nonnull,
-                                  const void * _Nullable key);
-    int		(* _Nonnull isEqual)(NXMapTable * _Nonnull,
-                                     const void * _Nullable key1,
-                                     const void * _Nullable key2);
-    void	(* _Nonnull free)(NXMapTable * _Nonnull,
-                                  void * _Nullable key,
-                                  void * _Nullable value);
+    unsigned	(* NXMapTable_ptrauth_hash _Nonnull hash)(NXMapTable * _Nonnull,
+                                                          const void * _Nullable key);
+    int		(* NXMapTable_ptrauth_isEqual _Nonnull isEqual)(NXMapTable * _Nonnull,
+                                                            const void * _Nullable key1,
+                                                            const void * _Nullable key2);
+    void	(* NXMapTable_ptrauth_free _Nonnull free)(NXMapTable * _Nonnull,
+                                                      void * _Nullable key,
+                                                      void * _Nullable value);
     int		style; /* reserved for future expansion; currently 0 */
 } NXMapTablePrototype OBJC_MAP_AVAILABILITY;
     

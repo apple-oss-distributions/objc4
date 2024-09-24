@@ -564,7 +564,8 @@ _objc_debug_taggedpointer_classes:
 	ldr	x16, [x10, x12, LSL #3]
 #else
 	add	x10, x10, x12, LSL #3
-	ldr	x16, [x10]
+	ldr	x14, [x10]	// x14 = unauthenticated isa
+	mov	x16, x14
 	movk	x10, #TAGGED_POINTER_TABLE_ENTRY_DISCRIMINATOR, LSL #48
 	autdb	x16, x10
 #endif
@@ -648,6 +649,14 @@ LLookup_Nil:
 	ret
 	
 	END_ENTRY __objc_msgNil
+
+	STATIC_ENTRY __objc_returnNil
+
+	// x0 is NOT already zero
+	mov x0, #0
+	b __objc_msgNil
+
+	END_ENTRY __objc_returnNil
 
 
 	ENTRY _objc_msgSendSuper
@@ -776,9 +785,10 @@ LGetImpMissConstant:
 	ENTRY __objc_msgForward
 
 	adrp	x17, __objc_forward_handler@PAGE
-	ldr	p17, [x17, __objc_forward_handler@PAGEOFF]
-	TailCallFunctionPointer x17
-	
+	add		x17, x17, __objc_forward_handler@PAGEOFF
+	ldr		p16, [x17]
+	TailCallSignedFunctionPointer x16, x17, 0x1c18
+
 	END_ENTRY __objc_msgForward
 	
 	

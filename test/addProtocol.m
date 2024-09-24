@@ -1,11 +1,5 @@
 /*
-TEST_BUILD_OUTPUT
-.*addProtocol.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*addProtocol.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*addProtocol.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*addProtocol.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*addProtocol.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-END
+TEST_CFLAGS -Wno-nonnull
 TEST_RUN_OUTPUT
 objc\[\d+\]: protocol_addProtocol: added protocol 'EmptyProto' is still under construction!
 objc\[\d+\]: objc_registerProtocol: protocol 'Proto1' was already registered!
@@ -15,7 +9,7 @@ objc\[\d+\]: objc_registerProtocol: protocol 'SuperProto' was already registered
 objc\[\d+\]: protocol_addProtocol: modified protocol 'SuperProto' is not under construction!
 objc\[\d+\]: protocol_addMethodDescription: protocol 'SuperProto' is not under construction!
 OK: addProtocol.m
-END 
+END
 */
 
 #include "test.h"

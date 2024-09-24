@@ -63,20 +63,84 @@ static method_t *search_method_list(const method_list_t *mlist, SEL sel);
 template<typename T> static bool method_lists_contains_any(T *mlists, T *end,
         SEL sels[], size_t selcount);
 static void flushCaches(Class cls, const char *func, bool (^predicate)(Class c));
+static void fixupProtocolIfNeeded_nolock(protocol_t *proto);
 static void initializeTaggedPointerObfuscator(void);
 #if SUPPORT_FIXUP
 static void fixupMessageRef(message_ref_t *msg);
 #endif
 static Class realizeClassMaybeSwiftAndUnlock(Class cls, mutex_t& lock);
 static Class readClass(Class cls, bool headerIsBundle, bool headerIsPreoptimized);
+static Class realizeAndInitializeIfNeeded_locked(id inst, Class cls, bool initialize);
 
 template<class EnumerateFunc>
 static void enumerateSelectorsInMethodList(const method_list_t *list,
                                            const EnumerateFunc &fn);
 
+/// A category and the corresponding `header_info`. The category pointer is
+/// signed with the class it belongs to. This class is passed in by the caller,
+/// which needs to pass the same class when retrieving the category pointer.
 struct locstamped_category_t {
+private:
+#if __has_feature(ptrauth_calls)
+    static constexpr auto catDiscriminator = ptrauth_string_discriminator("locstamped_category_t::cat");
+#else
+    static constexpr auto catDiscriminator = 0;
+#endif
+
     category_t *cat;
+
+public:
     struct header_info *hi;
+
+    locstamped_category_t() : cat(nullptr), hi(nullptr) {}
+
+    /// Create a value containing the given category and `header_info`. The
+    /// category pointer is signed using `cls`. The same value for `cls` must be
+    /// used when retrieving the category pointer.
+    locstamped_category_t(category_t *cat, Class cls, header_info *hi) : hi(hi) {
+        this->cat = ptrauth_sign_unauthenticated(
+            cat,
+            ptrauth_key_process_dependent_data,
+            ptrauth_blend_discriminator((void *)cls, catDiscriminator));
+    }
+
+    /// Get the category pointer, using the given class pointer to authenticate
+    /// the pointer.
+    category_t *getCategory(Class cls) const {
+        return ptrauth_auth_data(cat, ptrauth_key_process_dependent_data, ptrauth_blend_discriminator((void *)cls, catDiscriminator));
+    }
+
+    /// Get the category pointer without authenticating it. This must only be
+    /// used when the pointer is used for identity purposes e.g. when adding
+    /// or removing entries from a list. The pointer must not be dereferenced.
+    category_t *getCategoryInsecure() const {
+        return ptrauth_strip(cat, ptrauth_key_process_dependent_data);
+    }
+
+    void clear() {
+        cat = NULL;
+        hi = NULL;
+    }
+
+    bool hasCategory() const {
+        return cat != NULL;
+    }
+
+    /// Get a structure containing the same values, except with the category
+    /// pointer re-signed for the class's metaclass. `cls` must be the class
+    /// that this value was signed with, and the resulting value is signed with
+    /// that class's metaclass. Sometimes categories are associated with a class
+    /// or its metaclass and we need to re-sign to handle that.
+    locstamped_category_t reSignedForMetaclass(Class cls) const {
+        ASSERT(!cls->isMetaClassMaybeUnrealized());
+        locstamped_category_t result;
+        result.cat = ptrauth_auth_and_resign(cat,
+            ptrauth_key_process_dependent_data,
+            ptrauth_blend_discriminator((void *)cls, catDiscriminator),
+            ptrauth_key_process_dependent_data,
+            ptrauth_blend_discriminator((void *)cls->ISA(), catDiscriminator));
+        return locstamped_category_t{getCategory(cls), cls->ISA(), hi};
+    }
 };
 enum {
     ATTACH_CLASS               = 1 << 0,
@@ -84,7 +148,7 @@ enum {
     ATTACH_CLASS_AND_METACLASS = 1 << 2,
     ATTACH_EXISTING            = 1 << 3,
 };
-static void attachCategories(Class cls, const struct locstamped_category_t *cats_list, uint32_t cats_count, int flags);
+static void attachCategories(Class cls, const struct locstamped_category_t *cats_list, uint32_t cats_count, Class catsListKey, int flags);
 
 
 /***********************************************************************
@@ -512,11 +576,11 @@ void *object_getIndexedIvars(id obj)
 
 
 /***********************************************************************
-* make_ro_writeable
+* make_ro_writeable_nolock
 * Reallocates rw->ro if necessary to make it writeable.
 * Locking: runtimeLock must be held by the caller.
 **********************************************************************/
-static class_ro_t *make_ro_writeable(class_rw_t *rw)
+static class_ro_t *make_ro_writeable_nolock(class_rw_t *rw)
 {
     lockdebug::assert_locked(&runtimeLock.get());
 
@@ -529,6 +593,21 @@ static class_ro_t *make_ro_writeable(class_rw_t *rw)
     return const_cast<class_ro_t *>(rw->ro());
 }
 
+/***********************************************************************
+* make_ro_writeable_nolock
+* Reallocates class's ro if necessary to make it writeable. Realizes the class
+* if not already realized.
+* Locking: runtimeLock must be held by the caller.
+**********************************************************************/
+static class_ro_t *make_ro_writeable_nolock(Class cls)
+{
+    lockdebug::assert_locked(&runtimeLock.get());
+
+    if (!cls->isRealized())
+        realizeAndInitializeIfNeeded_locked(nil, cls, false);
+
+    return make_ro_writeable_nolock(cls->bits.data());
+}
 
 /***********************************************************************
 * dataSegmentsContain
@@ -645,7 +724,7 @@ printReplacements(Class cls, const locstamped_category_t *cats_list, uint32_t ca
     // Newest categories are LAST in cats
     // Later categories override earlier ones.
     for (c = 0; c < cats_count; c++) {
-        category_t *cat = cats_list[c].cat;
+        category_t *cat = cats_list[c].getCategory(cls);
 
         method_list_t *mlist = cat->methodsForMeta(isMeta);
         if (!mlist) continue;
@@ -658,7 +737,7 @@ printReplacements(Class cls, const locstamped_category_t *cats_list, uint32_t ca
 
             // Look for method in earlier categories
             for (uint32_t c2 = 0; c2 < c; c2++) {
-                category_t *cat2 = cats_list[c2].cat;
+                category_t *cat2 = cats_list[c2].getCategory(cls);
 
                 const method_list_t *mlist2 = cat2->methodsForMeta(isMeta);
                 if (!mlist2) continue;
@@ -1258,7 +1337,7 @@ class category_list : nocopy_t {
     } _u;
 
 public:
-    category_list() : _u{{nullptr, nullptr}} { }
+    category_list() : _u{{}} { }
     category_list(locstamped_category_t lc) : _u{{lc}} { }
     category_list(category_list &&other) : category_list() {
         std::swap(_u, other._u);
@@ -1273,7 +1352,7 @@ public:
     uint32_t count() const
     {
         if (_u.is_array) return _u.count;
-        return _u.lc.cat ? 1 : 0;
+        return _u.lc.hasCategory() ? 1 : 0;
     }
 
     uint32_t arrayByteSize(uint32_t size) const
@@ -1299,7 +1378,7 @@ public:
                 _u.array = (locstamped_category_t *)reallocf(_u.array, arrayByteSize(_u.size));
             }
             _u.array[_u.count++] = lc;
-        } else if (_u.lc.cat == NULL) {
+        } else if (!_u.lc.hasCategory()) {
             _u.lc = lc;
         } else {
             locstamped_category_t *arr = (locstamped_category_t *)malloc(arrayByteSize(2));
@@ -1317,16 +1396,15 @@ public:
     {
         if (_u.is_array) {
             for (int i = 0; i < _u.count; i++) {
-                if (_u.array[i].cat == cat) {
+                if (_u.array[i].getCategoryInsecure() == cat) {
                     // shift entries to preserve list order
                     memmove(&_u.array[i], &_u.array[i+1], arrayByteSize(_u.count - i - 1));
                     _u.count--;
                     return;
                 }
             }
-        } else if (_u.lc.cat == cat) {
-            _u.lc.cat = NULL;
-            _u.lc.hi = NULL;
+        } else if (_u.lc.getCategoryInsecure() == cat) {
+            _u.lc.clear();
         }
     }
 };
@@ -1341,7 +1419,7 @@ public:
         if (slowpath(PrintConnecting)) {
             _objc_inform("CLASS: found category %c%s(%s)",
                          cls->isMetaClassMaybeUnrealized() ? '+' : '-',
-                         cls->nameForLogging(), lc.cat->name);
+                         cls->nameForLogging(), lc.getCategory(cls)->name);
         }
 
         auto result = get().try_emplace(cls, lc);
@@ -1364,10 +1442,10 @@ public:
             category_list &list = it->second;
             if (flags & ATTACH_CLASS_AND_METACLASS) {
                 int otherFlags = flags & ~ATTACH_CLASS_AND_METACLASS;
-                attachCategories(cls, list.array(), list.count(), otherFlags | ATTACH_CLASS);
-                attachCategories(cls->ISA(), list.array(), list.count(), otherFlags | ATTACH_METACLASS);
+                attachCategories(cls, list.array(), list.count(), previously, otherFlags | ATTACH_CLASS);
+                attachCategories(cls->ISA(), list.array(), list.count(), previously, otherFlags | ATTACH_METACLASS);
             } else {
-                attachCategories(cls, list.array(), list.count(), flags);
+                attachCategories(cls, list.array(), list.count(), previously, flags);
             }
             map.erase(it);
         }
@@ -1544,8 +1622,8 @@ class_rw_t::extAlloc(const class_ro_t *ro, bool deepCopy)
 // Assumes the categories in cats are all loaded and sorted by load order,
 // oldest categories first.
 static void
-attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cats_count,
-                 int flags)
+attachCategories(Class cls, const locstamped_category_t *cats_list,
+                 uint32_t cats_count, Class catsListKey, int flags)
 {
     if (slowpath(PrintReplacedMethods)) {
         printReplacements(cls, cats_list, cats_count);
@@ -1555,7 +1633,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
                      cats_count, (flags & ATTACH_EXISTING) ? " existing" : "",
                      cls->nameForLogging(), (flags & ATTACH_METACLASS) ? " (meta)" : "");
         for (uint32_t i = 0; i < cats_count; i++)
-            _objc_inform("    category: (%s) %p", cats_list[i].cat->name, cats_list[i].cat);
+            _objc_inform("    category: (%s) %p", cats_list[i].getCategory(catsListKey)->name, cats_list[i].getCategory(catsListKey));
     }
 
     /*
@@ -1584,7 +1662,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
     for (uint32_t i = 0; i < cats_count; i++) {
         auto& entry = cats_list[i];
 
-        method_list_t *mlist = entry.cat->methodsForMeta(isMeta);
+        method_list_t *mlist = entry.getCategory(catsListKey)->methodsForMeta(isMeta);
         bool isPreattached = entry.hi->info()->dyldCategoriesOptimized() && !DisablePreattachedCategories;
         Lists *lists = isPreattached ? &preattachedLists : &normalLists;
         if (mlist) {
@@ -1598,7 +1676,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
         }
 
         property_list_t *proplist =
-            entry.cat->propertiesForMeta(isMeta, entry.hi);
+            entry.getCategory(catsListKey)->propertiesForMeta(isMeta, entry.hi);
         if (proplist) {
             if (lists->properties.isFull()) {
                 rwe->properties.attachLists(lists->properties.array, lists->properties.count, isPreattached, PrintPreopt ? "properties" : nullptr);
@@ -1607,7 +1685,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
             lists->properties.add(proplist);
         }
 
-        protocol_list_t *protolist = entry.cat->protocolsForMeta(isMeta);
+        protocol_list_t *protolist = entry.getCategory(catsListKey)->protocolsForMeta(isMeta);
         if (protolist) {
             if (lists->protocols.isFull()) {
                 rwe->protocols.attachLists(lists->protocols.array, lists->protocols.count, isPreattached, PrintPreopt ? "protocols" : nullptr);
@@ -2084,12 +2162,6 @@ static void addNamedClass(Class cls, const char *name, Class replacing = nil)
 
     // wrong: constructed classes are already realized when they get here
     // ASSERT(!cls->isRealized());
-}
-
-static void addNamedClass_locked(Class cls, const char *name, Class replacing = nil)
-{
-    mutex_locker_t lock(runtimeLock);
-    addNamedClass(cls, name, replacing);
 }
 
 
@@ -2789,7 +2861,7 @@ static void reconcileInstanceVariables(Class cls, Class supercls, const class_ro
             0 != strcmp(clsname, "NSSimpleCString"))
         {
             uint32_t oldStart = ro->instanceStart;
-            class_ro_t *ro_w = make_ro_writeable(rw);
+            class_ro_t *ro_w = make_ro_writeable_nolock(rw);
             ro = rw->ro();
 
             // Find max ivar alignment in class.
@@ -2840,7 +2912,7 @@ static void reconcileInstanceVariables(Class cls, Class supercls, const class_ro
                          cls->nameForLogging(), ro->instanceStart,
                          super_ro->instanceSize);
         }
-        class_ro_t *ro_w = make_ro_writeable(rw);
+        class_ro_t *ro_w = make_ro_writeable_nolock(rw);
         ro = rw->ro();
         moveIvars(ro_w, super_ro->instanceSize);
         gdb_objc_class_changed(cls, OBJC_CLASS_IVARS_CHANGED, ro->getName());
@@ -2926,6 +2998,23 @@ static Class realizeClassWithoutSwift(Class cls, Class previously)
     //   for ObjC subclasses of Swift classes.
     supercls = realizeClassWithoutSwift(remapClass(cls->getSuperclass()), nil);
     metacls = realizeClassWithoutSwift(remapClass(cls->ISA()), nil);
+
+    // If there's no superclass and this is not a root class, then we have a
+    // missing weak superclass. Disable the class and return.
+    if (!supercls && !(cls->safe_ro()->flags & RO_ROOT)) {
+        if (PrintConnecting)
+            _objc_inform("CLASS: '%s'%s %p has missing weak superclass, disabling.",
+                         cls->nameForLogging(), isMeta ? " (meta)" : "", (void *)cls);
+        addRemappedClass(cls, nil);
+
+        // Set the metaclass to nil to signal that this class is disabled.
+        // Root classes have a nil superclass, but all (non-disabled) classes
+        // have a non-nil isa pointer, so this can be used as a quick check for
+        // disabled classes.
+        cls->initIsa(nil);
+
+        return nil;
+    }
 
 #if SUPPORT_NONPOINTER_ISA
     if (isMeta) {
@@ -3147,7 +3236,7 @@ realizeClassMaybeSwiftMaybeRelock(Class cls, mutex_t& lock, bool leaveLocked)
     if (!cls->isSwiftStable_ButAllowLegacyForNow()) {
         // Non-Swift class. Realize it now with the lock still held.
         // fixme wrong in the future for objc subclasses of swift classes
-        realizeClassWithoutSwift(cls, nil);
+        cls = realizeClassWithoutSwift(cls, nil);
         if (!leaveLocked) lock.unlock();
     } else {
         // Swift class. We need to drop locks and call the Swift
@@ -3482,7 +3571,7 @@ static void load_categories_nolock(header_info *hi) {
         for (unsigned i = 0; i < count; i++) {
             category_t *cat = catlist[i];
             Class cls = remapClass(cat->cls);
-            locstamped_category_t lc{cat, hi};
+            locstamped_category_t lc{cat, cls, hi};
 
             if (!cls) {
                 // Category's target class is missing (probably weak-linked).
@@ -3549,7 +3638,7 @@ static void load_categories_nolock(header_info *hi) {
                     if (cls->isRealized()) {
                         if (slowpath(PrintConnecting))
                             _objc_inform("CLASS: Attaching category (%s) %p to class %s", cat->name, cat, cls->nameForLogging());
-                        attachCategories(cls, &lc, 1, ATTACH_EXISTING);
+                        attachCategories(cls, &lc, 1, cls, ATTACH_EXISTING);
                     } else {
                         if (slowpath(PrintConnecting))
                             _objc_inform("CLASS: Adding unattached category (%s) %p for class %s", cat->name, cat, cls->nameForLogging());
@@ -3563,11 +3652,11 @@ static void load_categories_nolock(header_info *hi) {
                     if (cls->ISA()->isRealized()) {
                         if (slowpath(PrintConnecting))
                             _objc_inform("CLASS: Attaching category (%s) %p to metaclass %s", cat->name, cat, cls->nameForLogging());
-                        attachCategories(cls->ISA(), &lc, 1, ATTACH_EXISTING | ATTACH_METACLASS);
+                        attachCategories(cls->ISA(), &lc, 1, cls, ATTACH_EXISTING | ATTACH_METACLASS);
                     } else {
                         if (slowpath(PrintConnecting))
                             _objc_inform("CLASS: Adding unattached category (%s) %p for metaclass %s", cat->name, cat, cls->nameForLogging());
-                        objc::unattachedCategories.addForClass(lc, cls->ISA());
+                        objc::unattachedCategories.addForClass(lc.reSignedForMetaclass(cls), cls->ISA());
                     }
                 }
             }
@@ -3835,7 +3924,9 @@ Class readClass(Class cls, bool headerIsBundle, bool headerIsPreoptimized)
 static void
 readProtocol(protocol_t *newproto, Class protocol_class,
              NXMapTable *protocol_map,
-             bool headerIsPreoptimized, bool headerIsBundle)
+             bool headerIsPreoptimized, bool headerIsBundle,
+             uint32_t objcImageIndex,
+             _dyld_objc_mark_image_mutable makeImageMutable)
 {
     // This is not enough to make protocols in unloaded bundles safe,
     // but it does prevent crashes when looking up unrelated protocols.
@@ -3906,7 +3997,17 @@ readProtocol(protocol_t *newproto, Class protocol_class,
     else {
         // New protocol from an un-preoptimized image. Fix it up in place.
         // fixme duplicate protocols from unloadable bundle
-        newproto->initIsa(protocol_class);  // fixme pinned
+        makeImageMutable(objcImageIndex);
+        newproto->initIsa(protocol_class);
+
+        if (objc::inSharedCache((uintptr_t)newproto) && !isPreoptimized()) {
+            // Un-fixed-up protocols in the shared cache are going to be made
+            // immutable after this point, and we can't make them mutable again.
+            // Eagerly perform all mutations that are normally done lazily.
+            fixupProtocolIfNeeded_nolock(newproto);
+            newproto->demangledName();
+        }
+
         insertFn(protocol_map, newproto->mangledName, newproto);
         if (PrintProtocols) {
             _objc_inform("PROTOCOLS: protocol at %p is %s",
@@ -4147,7 +4248,7 @@ void _read_images(mapped_image_info infosParam[], uint32_t hCount, int totalClas
     // dtrace probe
     OBJC_RUNTIME_DISCOVER_PROTOCOLS_START();
 
-    for (auto info : infos) {
+    for (auto &info : infos) {
         extern objc_class OBJC_CLASS_$_Protocol;
         Class cls = (Class)&OBJC_CLASS_$_Protocol;
         ASSERT(cls);
@@ -4170,10 +4271,14 @@ void _read_images(mapped_image_info infosParam[], uint32_t hCount, int totalClas
 
         bool isBundle = info.hi->isBundle();
 
+        // The infos array is reversed, but dyld expects the original index
+        const uint32_t infoIndex = (hCount - 1) - infos.index(&info);
+
         protocol_t * const *protolist = info.hi->protocollist(&count);
         for (i = 0; i < count; i++) {
             readProtocol(protolist[i], cls, protocol_map,
-                         isPreoptimized, isBundle);
+                         isPreoptimized, isBundle,
+                         infoIndex, makeImageMutable);
         }
     }
 
@@ -4421,8 +4526,10 @@ void prepare_load_methods(const headerType *mhdr, const _dyld_section_location_i
         Class cls = remapClass(cat->cls);
         if (!cls) continue;  // category for ignored weak-linked class
         if (cls->isSwiftStable()) {
-            _objc_fatal("Swift class extensions and categories on Swift "
-                        "classes are not allowed to have +load methods");
+            _objc_fatal("Category %s on Swift class %s has +load method. Swift "
+                        "class extensions and categories on Swift "
+                        "classes are not allowed to have +load methods.",
+                        cat->name, cls->nameForLogging());
         }
         realizeClassWithoutSwift(cls, nil);
         ASSERT(cls->ISA()->isRealized());
@@ -5792,7 +5899,7 @@ _classConformsToProtocol_unrealized(Class _Nonnull cls,
 
             for (uint32_t n = 0; n < catCount; ++n) {
                 protocol_list_t *protoList
-                    = cats[n].cat->protocolsForMeta(isMeta);
+                    = cats[n].getCategory(cls)->protocolsForMeta(isMeta);
                 if (!protoList)
                     continue;
 
@@ -5985,6 +6092,18 @@ _class_setCustomDeallocInitiation(_Nonnull Class cls)
             return true;
         });
     }
+}
+
+static ChainedHookFunction<
+    _objc_hook_msgSendCacheMiss,
+    _objc_hook_msgSendCacheMiss ptrauth_objc_hook_msgSendCacheMiss *>
+msgSendCacheMissHook{nullptr};
+
+void _objc_setHook_msgSendCacheMiss(
+    _objc_hook_msgSendCacheMiss _Nonnull newValue,
+    ptrauth_objc_hook_msgSendCacheMiss _objc_hook_msgSendCacheMiss _Nullable * _Nonnull oldOutValue)
+{
+    msgSendCacheMissHook.set(newValue, oldOutValue);
 }
 
 /***********************************************************************
@@ -7297,6 +7416,11 @@ log_and_fill_cache(Class cls, IMP imp, SEL sel, id receiver, Class implementer)
         if (!cacheIt) return;
     }
 #endif
+    if (slowpath(msgSendCacheMissHook.isSet())) {
+        auto hook = msgSendCacheMissHook.get();
+        hook(cls, receiver, sel, imp);
+    }
+
     cls->cache.insert(sel, imp, receiver);
 }
 
@@ -7317,6 +7441,10 @@ realizeAndInitializeIfNeeded_locked(id inst, Class cls, bool initialize)
         cls = realizeClassMaybeSwiftAndLeaveLocked(cls, runtimeLock);
         // runtimeLock may have been dropped but is now locked again
     }
+
+    // If the class was nilled out or disabled, we're done.
+    if (!cls || !cls->ISA())
+        return nil;
 
     if (slowpath(initialize && !cls->isInitialized())) {
         cls = initializeAndLeaveLocked(cls, inst, runtimeLock);
@@ -7443,6 +7571,31 @@ IMP lookUpImpOrForward(id inst, SEL sel, Class cls, int behavior)
     //
     // The only codepath calling into this without having performed some
     // kind of cache lookup is class_getInstanceMethod().
+
+    // Has this class been disabled? Act like a message to nil.
+    if (!cls || !cls->ISA()) {
+#if __arm64__
+        imp = _objc_returnNil;
+        goto done;
+#elif __x86_64
+        if (behavior & LOOKUP_FPRET)
+            imp = _objc_msgNil_fpret;
+        else if (behavior & LOOKUP_FP2RET)
+            imp = _objc_msgNil_fp2ret;
+        else
+            imp = _objc_msgNil;
+
+        // We can't cache these on x86, in case some other caller tries sending
+        // this selector with a different return type. If we con't cache then we
+        // always come back here, and always choose the correct IMP for the
+        // caller's expected return type.
+        behavior |= LOOKUP_NOCACHE;
+
+        goto done;
+#else
+#error Don't know how to handle messages to disabled classes on this target.
+#endif
+    }
 
     for (unsigned attempts = unreasonableClassCount();;) {
         if (curClass->cache.isConstantOptimizedCache(/* strict */true)) {
@@ -7790,33 +7943,34 @@ const char * objc_class::installMangledNameForLazilyNamedClass() {
         _objc_fatal("Lazily named class %p wasn't named by lazy name handler", this);
     }
 
-    // Add the name to the name->class table before setting it on the class.
-    // This ensures that another thread which roundtrips class->name->class
-    // will succeed. If we set the name on the class first, there would be a
-    // race where the other thread would see the class's name, but not the entry
-    // in the table, so the name->class lookup would fail.
-    addNamedClass_locked(cls, name);
+    // Acquire the runtime lock so that the rest of this doesn't race with other
+    // threads. Another thread may have raced with us above and already named
+    // this class, but from this point we'll run deterministically before or
+    // after it ran.
+    mutex_locker_t lock(runtimeLock);
 
-    // Emplace the name into the class_ro_t. If we lose the race,
-    // then we'll free our name and use whatever got placed there
-    // instead of our name.
-    const char *previously = NULL;
-    class_ro_t *ro = (class_ro_t *)cls->bits.safe_ro();
-    bool wonRace = ro->name.compare_exchange_strong(previously, name, std::memory_order_release, std::memory_order_acquire);
-    if (!wonRace) {
+    // Get a writeable class_ro_t so we can write the name. This is a no-op if
+    // the class_ro_t has already been made writeable.
+    class_ro_t *ro = make_ro_writeable_nolock(cls);
+
+    // See if another thread already installed a name on this class.
+    if (const char *previously = ro->name.load(std::memory_order_acquire)) {
+        // We lost the race. Free our name and use the one that's already there.
         free((void *)name);
-        name = previously;
+        return previously;
     }
 
-    // Emplace whatever name won the race in the metaclass too.
-    class_ro_t *metaRO = (class_ro_t *)metaclass->bits.safe_ro();
+    // We've won the race. Install the name in the class_ro, and in the
+    // metaclass's class_ro.
+    ro->name.store(name, std::memory_order_release);
+    class_ro_t *metaRO = make_ro_writeable_nolock(metaclass);
+    metaRO->name.store(name, std::memory_order_release);
 
-    // Write our pointer if the current value is NULL. There's no
-    // need to loop or check success, since the only way this can
-    // fail is if another thread succeeded in writing the exact
-    // same pointer.
-    const char *expected = NULL;
-    metaRO->name.compare_exchange_strong(expected, name, std::memory_order_release, std::memory_order_acquire);
+    // Add the class to the named class table to ensure that we can roundtrip
+    // class->name->class. Private Swift classes cannot be found by name through
+    // the Swift runtime but some ObjC code expects
+    // `objc_getClass(class_getName(...))` to work regardless. rdar://89286057
+    addNamedClass(cls, name);
 
     return name;
 }
@@ -7888,7 +8042,7 @@ class_setIvarLayout(Class cls, const uint8_t *layout)
         return;
     }
 
-    class_ro_t *ro_w = make_ro_writeable(cls->data());
+    class_ro_t *ro_w = make_ro_writeable_nolock(cls->data());
 
     try_free(ro_w->getIvarLayout());
     ro_w->ivarLayout = ustrdupMaybeNil(layout);
@@ -7922,7 +8076,7 @@ class_setWeakIvarLayout(Class cls, const uint8_t *layout)
         return;
     }
 
-    class_ro_t *ro_w = make_ro_writeable(cls->data());
+    class_ro_t *ro_w = make_ro_writeable_nolock(cls->data());
 
     try_free(ro_w->weakIvarLayout);
     ro_w->weakIvarLayout = ustrdupMaybeNil(layout);
@@ -8244,7 +8398,7 @@ class_addIvar(Class cls, const char *name, size_t size,
         return NO;
     }
 
-    class_ro_t *ro_w = make_ro_writeable(cls->data());
+    class_ro_t *ro_w = make_ro_writeable_nolock(cls->data());
 
     // fixme allocate less memory here
 
@@ -8885,7 +9039,11 @@ static void free_class(Class cls)
     try_free(ro);
     objc::zfree(rwe);
     objc::zfree(rw);
-    try_free(cls);
+
+    if (cls->isSwiftStable())
+        try_free(((swift_class_t *)cls)->baseAddress());
+    else
+        try_free(cls);
 }
 
 

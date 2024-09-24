@@ -39,6 +39,7 @@ First four:
   Animal
   Cat)
 Found a Heffalump
+Found NullImageSearchFromInitialize
 OK: enumClasses.m
 END
  */
@@ -179,6 +180,32 @@ END
 
 @end
 
+@interface NullImageSearchFromInitialize : TestRoot
+@end
+
+@implementation NullImageSearchFromInitialize
+
++ (void)initialize {
+    // Make sure that passing a NULL image (to search the caller's image) works
+    // even when the call is in a position to be tail called. The call must not
+    // be emitted as a tail call, otherwise "the caller" is seen as the caller's
+    // caller. We put this in a +initialize method so that the caller is libobjc
+    // which makes it so that the class would not be found.
+    //
+    // In order to be tail called, objc_enumerateClasses must be the last
+    // statement in the method, AND the block passed to it must have no
+    // captures.
+    //
+    // rdar://128486336
+    objc_enumerateClasses(NULL, "NullImageSearchFromInitialize", NULL, NULL,
+                          ^(Class cls, BOOL *stop) {
+                              (void)stop;
+                              fprintf(stderr, "Found %s\n", class_getName(cls));
+                          });
+}
+
+@end
+
 static const char *heffalump_name() {
     return "heffalump";
 }
@@ -305,6 +332,9 @@ int main() {
                               }
                           });
     testassert(foundHeffalump);
+
+    // Perform enumeration from the end of a +initialize method.
+    [NullImageSearchFromInitialize self];
 
     succeed(__FILE__);
 }

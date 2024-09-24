@@ -20,7 +20,7 @@ func myArch() -> String {
 // ------------------------------------------
 
 enum OS: String, ExpressibleByArgument {
-    case iphone, watch, tv
+    case iphone, watch, tv, vision
 }
 
 struct Device: Decodable {
@@ -40,6 +40,7 @@ struct Runtime: Decodable {
         case "iOS": return .iphone
         case "tvOS": return .tv
         case "watchOS": return .watch
+        case "xrOS": return .vision
         default:
             fail("Don't know what OS corresponds to simulator runtime \(self).")
         }
@@ -196,9 +197,9 @@ func getLibInfo(path: String, arch: String) -> (os: OS, version: String) {
 
     let os: OS
     switch platform {
-    case "iOS-sim": os = .iphone
-    case "tvOS-sim": os = .tv
-    case "watchOS-sim": os = .watch
+    case "iOS-sim", "iOS-simulator": os = .iphone
+    case "tvOS-sim", "tvOS-simulator": os = .tv
+    case "watchOS-sim", "watchOS-simulator": os = .watch
     default:
         fail("Unknown libobjc platform: \(platform)")
     }
@@ -241,7 +242,13 @@ struct Main: ParsableCommand {
     @Option(help: "Test the libobjc in the specified root.")
     var root: String?
 
-    func run() throws {
+    @Flag(name: .shortAndLong, help: "Set the verbosity of the test runner. Repeat twice for extra verbose.")
+    var verbose: Int
+
+    @Option(help: "Run only specified tests. Interpreted as a glob.")
+    var filter: String?
+
+    mutating func run() throws {
         // Validate parameters.
         if (builditTrain != nil && root != nil)
             || (builditTrain == nil && root == nil) {
@@ -251,6 +258,11 @@ struct Main: ParsableCommand {
         if builditTrain != nil && geteuid() != 0 {
             print("Not running as root. Buildit will attempt to sudo, be ready "
                 + "to authenticate.")
+        }
+
+        if verbose > 2 {
+            print("Warning: Capping verbosity to 2.")
+            verbose = 2
         }
 
         // Find the project directory we're using.
@@ -298,11 +310,20 @@ struct Main: ParsableCommand {
         print("Running tests")
         let testScript = (resolvedProjectDirectory as NSString)
             .appendingPathComponent("test/test.pl")
-        runCmd(testScript,
-               ["ROOT=\(finalRootPath)",
-                "OS=\(os.rawValue)simulator",
-                "DEVICE=\(device.udid)",
-                "ARCH=\(myArch())"])
+
+        var arguments: [String] = []
+        arguments.append("ROOT=\(finalRootPath)")
+        arguments.append("VERBOSE=\(verbose)")
+        arguments.append("OS=\(os.rawValue)simulator")
+        arguments.append("DEVICE=\(device.udid)")
+        arguments.append("ARCH=\(myArch())")
+
+        if let filter {
+            // test.pl takes the filter as a plain argument.
+            arguments.append(filter)
+        }
+
+        runCmd(testScript, arguments)
     }
 }
 

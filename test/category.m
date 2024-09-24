@@ -135,14 +135,17 @@ static int state = 0;
 #endif
 
 asm(
-"    .section __DATA,__objc_const                                       \n"
+"    .section __DATA,__objc_classname,cstring_literals                  \n"
 "L_catlist2CategoryName:                                                \n"
 "    .asciz \"Category_catlist2\"                                       \n"
+"    .section __DATA,__objc_methname,cstring_literals                   \n"
 "L_catlist2MethodString:                                                \n"
 "    .asciz \"catlist2Method\"                                          \n"
+"    .section __DATA,__objc_methtype,cstring_literals                   \n"
 "L_catlist2MethodTypes:                                                 \n"
 "    .asciz \"i16@0:8\"                                                 \n"
 
+"    .section __DATA,__objc_const                                       \n"
 "    .p2align 3                                                         \n"
 "l_OBJC_$_CATEGORY_INSTANCE_METHODS_Super_$_Category_catlist2:          \n"
 "    .long 24                                                           \n"

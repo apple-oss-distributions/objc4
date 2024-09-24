@@ -42,6 +42,27 @@
 
 __BEGIN_DECLS
 
+#if __has_feature(ptrauth_calls)
+#include <ptrauth.h>
+#define NXHashTable_ptrauth_prototype \
+    __ptrauth(ptrauth_key_process_independent_data, 1, \
+    ptrauth_string_discriminator("NXHashTable::prototype"))
+#define NXHashTable_ptrauth_hash \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("NXHashTablePrototype::hash"))
+#define NXHashTable_ptrauth_isEqual \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("NXHashTablePrototype::isEqual"))
+#define NXHashTable_ptrauth_free \
+    __ptrauth(ptrauth_key_process_independent_code, 1, \
+    ptrauth_string_discriminator("NXHashTablePrototype::free"))
+#else
+#define NXHashTable_ptrauth_prototype
+#define NXHashTable_ptrauth_hash
+#define NXHashTable_ptrauth_isEqual
+#define NXHashTable_ptrauth_free
+#endif
+
 /*************************************************************************
  *	Hash tables of arbitrary data
  *************************************************************************/
@@ -51,13 +72,13 @@ The objective C class HashTable is preferred when dealing with (key, values) ass
 As well-behaved scalable data structures, hash tables double in size when they start becoming full, thus guaranteeing both average constant time access and linear size. */
 
 typedef struct {
-    uintptr_t	(* _Nonnull hash)(const void * _Nullable info,
-                                  const void * _Nullable data);
-    int		(* _Nonnull isEqual)(const void * _Nullable info,
-                                     const void * _Nullable data1,
-                                     const void * _Nullable data2);
-    void	(* _Nonnull free)(const void * _Nullable info,
-                                  void * _Nullable data);
+    uintptr_t	(* NXHashTable_ptrauth_hash _Nonnull hash)(const void * _Nullable info,
+                                                           const void * _Nullable data);
+    int		(* NXHashTable_ptrauth_isEqual _Nonnull isEqual)(const void * _Nullable info,
+                                                             const void * _Nullable data1,
+                                                             const void * _Nullable data2);
+    void	(* NXHashTable_ptrauth_free _Nonnull free)(const void * _Nullable info,
+                                                       void * _Nullable data);
     int		style; /* reserved for future expansion; currently 0 */
     } NXHashTablePrototype;
     
@@ -70,7 +91,7 @@ typedef struct {
  */
 
 typedef struct {
-    const NXHashTablePrototype	* _Nonnull prototype OBJC_HASH_AVAILABILITY;
+    const NXHashTablePrototype	* NXHashTable_ptrauth_prototype _Nonnull prototype OBJC_HASH_AVAILABILITY;
     unsigned			count OBJC_HASH_AVAILABILITY;
     unsigned			nbBuckets OBJC_HASH_AVAILABILITY;
     void			* _Nullable buckets OBJC_HASH_AVAILABILITY;

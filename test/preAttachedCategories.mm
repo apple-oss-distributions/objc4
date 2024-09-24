@@ -376,6 +376,12 @@ void doChecks(bool testRuntimeAdditions)
 }
 
 int main() {
+    // If there's no shared cache info, we have nothing to test, so just pass.
+    if (!objc_debug_headerInfoRWs) {
+        succeed(__FILE__);
+        return 0;
+    }
+
     FixupListOfListsImageIndexes(TestClassListOfMethodLists);
     FixupListOfListsImageIndexes(TestClassListOfProtocolLists);
     FixupListOfListsImageIndexes(TestClassListOfPropertyLists);

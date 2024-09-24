@@ -1,23 +1,5 @@
 /*
-TEST_CFLAGS -Wno-deprecated-declarations
-TEST_BUILD_OUTPUT
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*methodArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-END
+TEST_CFLAGS -Wno-deprecated-declarations -Wno-nonnull
 */
 
 #include "test.h"

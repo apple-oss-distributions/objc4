@@ -81,7 +81,7 @@ static id defaultBadAllocHandler(Class cls)
                 cls->nameForLogging());
 }
 
-id(*badAllocHandler)(Class) = &defaultBadAllocHandler;
+id(* ptrauth_badAllocHandler badAllocHandler)(Class) = &defaultBadAllocHandler;
 
 id _objc_callBadAllocHandler(Class cls)
 {
@@ -94,36 +94,57 @@ void _objc_setBadAllocHandler(id(*newHandler)(Class))
     badAllocHandler = newHandler;
 }
 
-
+// Support for making direct calls to swift_retain and swift_release instead of
+// going through objc_msgSend and SwiftObject's retain/release methods.
+//
+// We use delay-init to refer to swift_retain/release, since we don't want to
+// force libswiftCore to load. Delay-init adds a tiny bit of overhead to each
+// call, which is normally fine, but refcounting is performance-critical.
+// Instead of calling the functions directly, we lazily initialize function
+// pointers. By initializing the function pointers with functions that perform
+// the lazy initialization, we get minimal overhead once the functions have been
+// looked up.
+//
+// Delay-init rewrites the references to swift_retain/release to go through a
+// function call, which means it needs the containing function to have a frame.
+// These initialization functions are small/simple enough that the compiler
+// normally makes them frameless, with a tail call to swiftRetain/Release. We
+// use empty asm volatile statements to force the calls to not be tail calls,
+// thus forcing the initialization functions to have frames. These functions
+// only run once (or, in the event of a perfect thread race, a handful of times)
+// so performance isn't critical for that.
 static id _initializeSwiftRefcountingThenCallRetain(id objc);
 static void _initializeSwiftRefcountingThenCallRelease(id objc);
 
-explicit_atomic<id(*)(id)> swiftRetain{&_initializeSwiftRefcountingThenCallRetain};
-explicit_atomic<void(*)(id)> swiftRelease{&_initializeSwiftRefcountingThenCallRelease};
+PtrauthGlobalAtomicFunction<id(*)(id)> swiftRetain{&_initializeSwiftRefcountingThenCallRetain};
+PtrauthGlobalAtomicFunction<void(*)(id)> swiftRelease{&_initializeSwiftRefcountingThenCallRelease};
 
+extern "C" id swift_retain(id);
+extern "C" void swift_release(id);
+
+ALWAYS_INLINE
 static void _initializeSwiftRefcounting() {
-#if TARGET_OS_EXCLAVEKIT
-#   define LIBSWIFTCORE_PATH "/System/ExclaveKit/usr/lib/swift/libswiftCore.dylib"
-#else
-#   define LIBSWIFTCORE_PATH "/usr/lib/swift/libswiftCore.dylib"
-#endif
-    void *const token = dlopen(LIBSWIFTCORE_PATH, RTLD_LAZY | RTLD_LOCAL);
-    ASSERT(token);
-    swiftRetain.store((id(*)(id))dlsym(token, "swift_retain"), memory_order_relaxed);
+    swiftRetain.store(swift_retain, memory_order_relaxed);
     ASSERT(swiftRetain.load(memory_order_relaxed));
-    swiftRelease.store((void(*)(id))dlsym(token, "swift_release"), memory_order_relaxed);
+    swiftRelease.store(swift_release, memory_order_relaxed);
     ASSERT(swiftRelease.load(memory_order_relaxed));
-    dlclose(token);
 }
 
 static id _initializeSwiftRefcountingThenCallRetain(id objc) {
-  _initializeSwiftRefcounting();
-  return swiftRetain.load(memory_order_relaxed)(objc);
+    _initializeSwiftRefcounting();
+    id ret = swiftRetain.load(memory_order_relaxed)(objc);
+    asm volatile ("");
+    return ret;
 }
 
 static void _initializeSwiftRefcountingThenCallRelease(id objc) {
-  _initializeSwiftRefcounting();
-  swiftRelease.load(memory_order_relaxed)(objc);
+    _initializeSwiftRefcounting();
+    swiftRelease.load(memory_order_relaxed)(objc);
+    // Delay-init rewrites the references to swift_retain/release to go through
+    // a function call, which means it needs this function to have a frame, but
+    // it runs too late to force one. Instead, we force it with this empty asm
+    // statement, which prevents the above call from being tail called.
+    asm volatile ("");
 }
 
 namespace objc {

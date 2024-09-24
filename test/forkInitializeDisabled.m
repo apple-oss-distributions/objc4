@@ -5,6 +5,7 @@ TEST_CONFIG OS=macosx MEM=mrc ARCH=x86_64
 
 TEST_ENV OBJC_PRINT_INITIALIZE_METHODS=YES
 
+TEST_RUN_OUTPUT_FILTER .*INITIALIZE: thread.*
 TEST_RUN_OUTPUT
 objc\[\d+\]: INITIALIZE: disabling \+initialize fork safety enforcement because the app has a __DATA,__objc_fork_ok section
 OK: forkInitializeDisabled\.m

@@ -347,18 +347,24 @@ static bool forbidStaticInitializers = true;
 bool processFile(const char *filename);
 
 int main(int argc, const char *argv[]) {
-    if (argc != 3) {
-        printf("usage: %s <dylib> <build configuration>\n", argv[0]);
+    if (argc != 4) {
+        printf("usage: %s <dylib> <build configuration> <YES if asan is enabled>\n", argv[0]);
         return 1;
     }
 
     const char *dylib = argv[1];
     const char *configuration = argv[2];
+    const char *asanEnabled = argv[3];
     if (debug) printf("configuration: %s\n", configuration);
 
     if (strcasecmp(configuration, "debug") == 0) {
         forbidStaticInitializers = false;
         if (debug) printf("Allowing static initializers in debug build.\n");
+    }
+
+    if (asanEnabled[0] == 'y' || asanEnabled[0] == 'Y') {
+        forbidStaticInitializers = false;
+        if (debug) printf("Allowing static initializers in ASan build.\n");
     }
 
 
@@ -406,7 +412,7 @@ void dosect(uint8_t *start, macho_section<P> *sect)
             exit(1);
         }
         // section type 0 is S_REGULAR
-        sect->set_flags(sect->flags() & ~SECTION_TYPE);
+        sect->set_flags(0);
         sect->set_sectname("__objc_init_func");
         if (debug) printf("disabled __mod_init_func section\n");
     }
@@ -418,7 +424,7 @@ void dosect(uint8_t *start, macho_section<P> *sect)
             exit(1);
         }
         // section type 0 is S_REGULAR
-        sect->set_flags(sect->flags() & ~SECTION_TYPE);
+        sect->set_flags(0);
         sect->set_sectname("__objc_init_offs");
         if (debug) printf("disabled __mod_init_func section\n");
     }
@@ -426,7 +432,7 @@ void dosect(uint8_t *start, macho_section<P> *sect)
         sectnameEquals(sect->sectname(), "__mod_term_func"))
     {
         // section type 0 is S_REGULAR
-        sect->set_flags(sect->flags() & ~SECTION_TYPE);
+        sect->set_flags(0);
         sect->set_sectname("__objc_term_func");
         if (debug) printf("disabled __mod_term_func section\n");
     }

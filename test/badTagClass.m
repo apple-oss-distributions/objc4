@@ -1,8 +1,6 @@
-/* 
+/*
+TEST_CFLAGS -Wno-nonnull
 TEST_CRASHES
-TEST_BUILD_OUTPUT
-.*badTagClass.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-END
 TEST_RUN_OUTPUT
 objc\[\d+\]: tag index 1 used for two different classes \(was 0x[0-9a-fA-F]+ NSObject, now 0x[0-9a-fA-F]+ TestRoot\)
 objc\[\d+\]: HALTED

@@ -219,7 +219,7 @@ static id _objc_default_exception_preprocessor(id exception)
 {
     return exception;
 }
-static objc_exception_preprocessor exception_preprocessor = _objc_default_exception_preprocessor;
+static objc_exception_preprocessor ptrauth_objc_exception_preprocessor exception_preprocessor = _objc_default_exception_preprocessor;
 
 
 /***********************************************************************
@@ -238,7 +238,7 @@ static int _objc_default_exception_matcher(Class catch_cls, id exception)
 
     return 0;
 }
-static objc_exception_matcher exception_matcher = _objc_default_exception_matcher;
+static objc_exception_matcher ptrauth_objc_exception_matcher exception_matcher = _objc_default_exception_matcher;
 
 
 /***********************************************************************
@@ -248,7 +248,7 @@ static objc_exception_matcher exception_matcher = _objc_default_exception_matche
 static void _objc_default_uncaught_exception_handler(id exception)
 {
 }
-static objc_uncaught_exception_handler uncaught_handler = _objc_default_uncaught_exception_handler;
+static objc_uncaught_exception_handler ptrauth_objc_uncaught_exception_handler uncaught_handler = _objc_default_uncaught_exception_handler;
 
 
 /***********************************************************************
@@ -845,9 +845,13 @@ static struct frame_range findHandler(void)
     unw_proc_info_t    info;
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
+    uintptr_t objc_personality
+        = (uintptr_t)ptrauth_strip((void *)__objc_personality_v0,
+                                   ptrauth_key_function_pointer);
+
     while ( (unw_step(&cursor) > 0) && (unw_get_proc_info(&cursor, &info) == UNW_ESUCCESS) ) {
         // must use objc personality handler
-        if ( info.handler != (uintptr_t)__objc_personality_v0 )
+        if ( info.handler != objc_personality)
             continue;
         // must have landing pad
         if ( info.lsda == 0 )
@@ -859,6 +863,8 @@ static struct frame_range findHandler(void)
         bases.func = info.start_ip;
         unw_word_t ip;
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
+        ip = (unw_word_t)ptrauth_strip((void *)ip,
+                                       ptrauth_key_function_pointer);
         ip -= 1;
         struct frame_range try_range = {0, 0, 0, 0};
         if ( isObjCExceptionCatcher(info.lsda, ip, &bases, &try_range) ) {

@@ -154,8 +154,12 @@ static inline void fail(const char *msg, ...)
 #define __testassert(cond, file, line) \
     (fail("failed assertion '%s' at %s:%u", cond, __FILE__, __LINE__))
 
-static inline char *hexstring(uint8_t *data, size_t size)
+#define testunreachable() \
+    fail("unreachable code reached", __FILE__, __LINE__)
+
+static inline char *hexstring(const void *bytes, size_t size)
 {
+    const uint8_t *data = (const uint8_t *)bytes;
     char *str;
     switch (size) {
     case sizeof(unsigned long long):
@@ -176,7 +180,7 @@ static inline char *hexstring(uint8_t *data, size_t size)
     return str;
 }
 
-static inline void failnotequal(uint8_t *lhs, size_t lhsSize, uint8_t *rhs, size_t rhsSize, const char *lhsStr, const char *rhsStr, const char *file, unsigned line)
+static inline void failnotequal(void *lhs, size_t lhsSize, void *rhs, size_t rhsSize, const char *lhsStr, const char *rhsStr, const char *file, unsigned line)
 {
     fprintf(stderr, "BAD: failed assertion '%s != %s' (0x%s != 0x%s) at %s:%u\n", lhsStr, rhsStr, hexstring(lhs, lhsSize), hexstring(rhs, rhsSize), file, line);
     exit(1);
@@ -185,7 +189,7 @@ static inline void failnotequal(uint8_t *lhs, size_t lhsSize, uint8_t *rhs, size
 #define testassertequal(lhs, rhs) do {\
     __typeof__(0 ? lhs : rhs) __lhs = lhs; \
     __typeof__(0 ? lhs : rhs) __rhs = rhs; \
-    if ((__lhs) != (__rhs)) failnotequal((uint8_t *)&__lhs, sizeof(__lhs), (uint8_t *)&__rhs, sizeof(__rhs), #lhs, #rhs, __FILE__, __LINE__); \
+    if ((__lhs) != (__rhs)) failnotequal((uint8_t *)(void *)&__lhs, sizeof(__lhs), (uint8_t *)(void *)&__rhs, sizeof(__rhs), #lhs, #rhs, __FILE__, __LINE__); \
 } while(0)
 
 #define testassertequalstr(lhs, rhs) do { \
@@ -193,6 +197,12 @@ static inline void failnotequal(uint8_t *lhs, size_t lhsSize, uint8_t *rhs, size
     __typeof__(rhs) __rhs = rhs; \
     if (strcmp(__lhs, __rhs) != 0) \
         fail("failed assertion %s (\"%s\") != %s (\"%s\") at %s:%u", #lhs, __lhs, #rhs, __rhs, __FILE__, __LINE__); \
+} while(0)
+
+#define testassertnil(value) do { \
+    __typeof__(value) __value = value; \
+    if (__value) \
+        fail("failed assertion '%s (%p) != nil' at %s:%u", #value, __value, __FILE__, __LINE__); \
 } while(0)
 
 /* time-sensitive assertion, disabled under valgrind */

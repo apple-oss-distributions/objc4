@@ -10,11 +10,7 @@
 	<key>preoptimizedCaches</key>
 	<dict>
 		<key>Enabled</key>
-#if TARGET_OS_TV
-		<false/>
-#else
 		<true/>
-#endif
 	</dict>
 	<key>classRxSigning</key>
 	<dict>

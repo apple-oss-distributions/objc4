@@ -5,10 +5,6 @@
 // TEST_CFLAGS -DOLD=1 -Xlinker -platform_version -Xlinker tvos-simulator -Xlinker 9.0 -Xlinker 9.0 -mtvos-simulator-version-min=9.0
 
 /*
-TEST_BUILD_OUTPUT
-ld: warning: passed two min versions.*for platform.*
-END
-
 TEST_RUN_OUTPUT
 objc\[\d+\]: Invalid or prematurely-freed autorelease pool 0x[0-9a-fA-f]+\. Set a breakpoint .*
 objc\[\d+\]: Proceeding anyway.*

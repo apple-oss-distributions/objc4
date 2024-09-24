@@ -1,0 +1,23 @@
+---
+Name: ObjectiveC_Private
+Classes:
+- Name: List
+  Methods:
+  - Selector: init
+    MethodKind: Instance
+    NullabilityOfRet: N
+  - Selector: 'isEqual:'
+    MethodKind: Instance
+    Nullability:
+    - O
+    NullabilityOfRet: S
+- Name: Object
+  Methods:
+  - Selector: init
+    MethodKind: Instance
+    NullabilityOfRet: N
+  - Selector: 'isEqual:'
+    MethodKind: Instance
+    Nullability:
+    - O
+    NullabilityOfRet: S

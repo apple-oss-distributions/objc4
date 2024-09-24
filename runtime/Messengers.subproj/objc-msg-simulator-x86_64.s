@@ -436,16 +436,25 @@ LExit$0:
 
 	SAVE_REGS MSGSEND
 
-	// lookUpImpOrForward(obj, sel, cls, LOOKUP_INITIALIZE | LOOKUP_RESOLVER)
-.if $0 == NORMAL
-	// receiver already in a1
-	// selector already in a2
-.else
+	// lookUpImpOrForward(obj, sel, cls, <flags>)
+.if $0 == STRET
 	movq	%a2, %a1
 	movq	%a3, %a2
+.else
+	// receiver already in a1
+	// selector already in a2
 .endif
 	movq	%r10, %a3
-	movl	$$3, %a4d
+.if $0 == FPRET
+	// flags are LOOKUP_INITIALIZE | LOOKUP_RESOLVER | LOOKUP_FPRET
+	movl	$(1 << 0) | (1 << 1) | (1 << 4), %a4d
+.elseif $0 == FP2RET
+	// flags are LOOKUP_INITIALIZE | LOOKUP_RESOLVER | LOOKUP_FP2RET
+	movl	$(1 << 0) | (1 << 1) | (1 << 5), %a4d
+.else
+	// flags are LOOKUP_INITIALIZE | LOOKUP_RESOLVER
+	movl	$(1 << 0) | (1 << 1), %a4d
+.endif
 	call	_lookUpImpOrForward
 
 	// IMP is now in %rax
@@ -796,7 +805,7 @@ LCacheMiss:
 // cache miss: go search the method lists
 LCacheMiss:
 	// isa still in r10
-	jmp	__objc_msgSend_uncached
+	jmp	__objc_msgSend_fpret_uncached
 
 	END_ENTRY _objc_msgSend_fpret
 
@@ -812,7 +821,7 @@ LCacheMiss:
 // cache miss: go search the method lists
 LCacheMiss:
 	// isa still in r10
-	jmp	__objc_msgLookup_uncached
+	jmp	__objc_msgLookup_fpret_uncached
 
 	END_ENTRY _objc_msgLookup_fpret
 
@@ -848,7 +857,7 @@ LCacheMiss:
 // cache miss: go search the method lists
 LCacheMiss:
 	// isa still in r10
-	jmp	__objc_msgSend_uncached
+	jmp	__objc_msgSend_fp2ret_uncached
 
 	END_ENTRY _objc_msgSend_fp2ret
 
@@ -864,7 +873,7 @@ LCacheMiss:
 // cache miss: go search the method lists
 LCacheMiss:
 	// isa still in r10
-	jmp	__objc_msgLookup_uncached
+	jmp	__objc_msgLookup_fp2ret_uncached
 
 	END_ENTRY _objc_msgLookup_fp2ret
 
@@ -1056,7 +1065,33 @@ LCacheMiss:
 
 	END_ENTRY __objc_msgSend_stret_uncached
 
-	
+
+	STATIC_ENTRY __objc_msgSend_fpret_uncached
+	UNWIND __objc_msgSend_fpret_uncached, FrameWithNoSaves
+
+	// THIS IS NOT A CALLABLE C FUNCTION
+	// Out-of-band r10 is the searched class
+
+	// r10 is already the class to search
+	MethodTableLookup FPRET		// r11 = IMP
+	jmp	*%r11			// goto *imp
+
+	END_ENTRY __objc_msgSend_fpret_uncached
+
+
+	STATIC_ENTRY __objc_msgSend_fp2ret_uncached
+	UNWIND __objc_msgSend_fp2ret_uncached, FrameWithNoSaves
+
+	// THIS IS NOT A CALLABLE C FUNCTION
+	// Out-of-band r10 is the searched class
+
+	// r10 is already the class to search
+	MethodTableLookup FP2RET	// r11 = IMP
+	jmp	*%r11			// goto *imp
+
+	END_ENTRY __objc_msgSend_fp2ret_uncached
+
+
 	STATIC_ENTRY __objc_msgLookup_uncached
 	UNWIND __objc_msgLookup_uncached, FrameWithNoSaves
 	
@@ -1082,7 +1117,33 @@ LCacheMiss:
 
 	END_ENTRY __objc_msgLookup_stret_uncached
 
+
+	STATIC_ENTRY __objc_msgLookup_fpret_uncached
+	UNWIND __objc_msgLookup_fpret_uncached, FrameWithNoSaves
+
+	// THIS IS NOT A CALLABLE C FUNCTION
+	// Out-of-band r10 is the searched class
+
+	// r10 is already the class to search
+	MethodTableLookup FPRET		// r11 = IMP
+	ret
+
+	END_ENTRY __objc_msgLookup_fpret_uncached
+
 	
+	STATIC_ENTRY __objc_msgLookup_fp2ret_uncached
+	UNWIND __objc_msgLookup_fp2ret_uncached, FrameWithNoSaves
+
+	// THIS IS NOT A CALLABLE C FUNCTION
+	// Out-of-band r10 is the searched class
+
+	// r10 is already the class to search
+	MethodTableLookup FP2RET	// r11 = IMP
+	ret
+
+	END_ENTRY __objc_msgLookup_fp2ret_uncached
+
+
 /********************************************************************
 *
 * id _objc_msgForward(id self, SEL _cmd,...);

@@ -142,15 +142,15 @@ NXHashTable *NXCreateHashTable (NXHashTablePrototype prototype, unsigned capacit
 	};
     proto = (NXHashTablePrototype *)NXHashGet (prototypes, &prototype); 
     if (! proto) {
-	proto
-            = (NXHashTablePrototype *) malloc(sizeof (NXHashTablePrototype));
-    memmove ((char *)proto, (const char *)&prototype, sizeof (NXHashTablePrototype));
-    	(void) NXHashInsert (prototypes, proto);
-	proto = (NXHashTablePrototype *)NXHashGet (prototypes, &prototype);
-	if (! proto) {
-	    _objc_inform ("*** NXCreateHashTable: bug\n");
-	    return NULL;
-	    };
+        proto
+        = (NXHashTablePrototype *) malloc(sizeof (NXHashTablePrototype));
+        *proto = prototype;
+        (void) NXHashInsert (prototypes, proto);
+        proto = (NXHashTablePrototype *)NXHashGet (prototypes, &prototype);
+        if (! proto) {
+            _objc_inform ("*** NXCreateHashTable: bug\n");
+            return NULL;
+        };
 	};
     table->prototype = proto; table->count = 0; table->info = info;
     table->nbBuckets = GOOD_CAPACITY(capacity);

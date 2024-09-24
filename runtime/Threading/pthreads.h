@@ -183,10 +183,6 @@ public:
         return pthread_mutex_unlock(&lock_) == 0;
     }
 
-    void unlockForkedChild() {
-        unlock();
-    }
-
     void reset() {
         memset(&lock_, 0, sizeof(lock_));
         lock_ = PTHREAD_MUTEX_INITIALIZER;
@@ -233,6 +229,10 @@ public:
 
     bool tryUnlock() {
         return pthread_mutex_unlock(&lock_) == 0;
+    }
+
+    void unlockForkedChild() {
+        unlock();
     }
 
     void reset() {

@@ -109,7 +109,9 @@ static const char *key = "key";
 @end
 
 void TestReleaseLater(void) {
-    int otherObjsCount = 100;
+    enum {
+        otherObjsCount = 100
+    };
     char keys1[otherObjsCount];
     char keys2[otherObjsCount];
     char laterKey;

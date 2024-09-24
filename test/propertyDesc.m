@@ -1,14 +1,5 @@
 /*
-TEST_BUILD_OUTPUT
-.*propertyDesc.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*propertyDesc.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*propertyDesc.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*propertyDesc.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*propertyDesc.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*propertyDesc.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*propertyDesc.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*propertyDesc.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-END
+TEST_CFLAGS -Wno-nonnull
 */
 
 #include "test.h"

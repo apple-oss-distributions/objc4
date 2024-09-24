@@ -1,10 +1,20 @@
 /*
 TEST_BUILD
     $C{COMPILE} $DIR/future0.m -install_name $T{DYLIBDIR}/future0.dylib -o future0.dylib -dynamiclib
-    $C{COMPILE} $DIR/future2.m -x none future0.dylib -install_name $T{DYLIBDIR}/future2.dylib -o future2.dylib -dynamiclib
+    $C{COMPILE} $DIR/future2.m -x none future0.dylib -install_name $T{DYLIBDIR}/future2.dylib -o future2.dylib -dynamiclib -ld_classic
     $C{COMPILE} $DIR/future.m -x none future0.dylib -o future.exe
 END
+
+TEST_BUILD_OUTPUT
+ld: warning: -ld_classic is deprecated and will be removed in a future release
+END
 */
+
+// NOTE: ld-prime now eliminates classrefs, which breaks future classes
+// somewhat. We don't plan to fix this for now, but we do want to keep older
+// binaries working. We build future2.dylib with -ld_classic to force it to
+// still use classrefs, which allows this test to verify that future classes
+// still work in that case.
 
 #include "test.h"
 

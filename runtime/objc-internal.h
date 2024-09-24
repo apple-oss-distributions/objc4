@@ -438,6 +438,41 @@ OBJC_EXPORT void
 _class_setCustomDeallocInitiation(_Nonnull Class cls);
 #define OBJC_SETCUSTOMDEALLOCINITIATION_DEFINED 1
 
+/**
+ * Function type for a hook that's called when a msgSend cache miss occurs.
+ *
+ * @see _objc_setHook_msgSendCacheMiss
+ */
+typedef void (*_objc_hook_msgSendCacheMiss)(_Nonnull Class cls,
+                                            _Nonnull id receiver,
+                                            _Nonnull SEL sel,
+                                            _Nonnull IMP imp);
+
+#if __has_feature(ptrauth_calls)
+#define ptrauth_objc_hook_msgSendCacheMiss __ptrauth(ptrauth_key_process_dependent_code, 0, ptrauth_string_discriminator("_objc_hook_msgSendCacheMiss"))
+#else
+#define ptrauth_objc_hook_msgSendCacheMiss
+#endif
+
+/**
+ * Install a hook that's called when a msgSend cache miss occurs.
+ *
+ * @param newValue The hook function to install.
+ * @param outOldValue The address of a function pointer variable. On return,
+ *  the old hook function is stored in the variable. If there was no hook
+ *  previously set, NULL is stored in the variable.
+ *
+ * @note The store to `*outOldValue` is thread-safe: the variable will be
+ *  updated before anything calls your new hook to read it,
+ *  even if your new hook is called from another thread before this
+ *  setter completes.
+ * @note Your hook must call the previous hook if there is one.
+ */
+OBJC_EXPORT void _objc_setHook_msgSendCacheMiss(
+    _objc_hook_msgSendCacheMiss _Nonnull newValue,
+    ptrauth_objc_hook_msgSendCacheMiss _objc_hook_msgSendCacheMiss _Nullable * _Nonnull oldOutValue)
+    OBJC_AVAILABLE(15.0, 18.0, 18.0, 11.0, 9.0);
+
 // Tagged pointer objects.
 
 #if __LP64__

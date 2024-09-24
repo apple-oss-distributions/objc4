@@ -2,7 +2,7 @@
 TEST_CONFIG OS=!exclavekit
 TEST_BUILD
     $C{COMPILE} $DIR/load-parallel00.m -install_name $T{DYLIBDIR}/load-parallel00.dylib -o load-parallel00.dylib -dynamiclib
-    $C{COMPILE} $DIR/load-parallel.m -x none load-parallel00.dylib -o load-parallel.exe -DCOUNT=10
+    $C{COMPILE} $DIR/03-load-parallel.m -x none load-parallel00.dylib -o 03-load-parallel.exe -DCOUNT=10
 
     $C{COMPILE} $DIR/load-parallel0.m -x none load-parallel00.dylib -install_name $T{DYLIBDIR}/load-parallel0.dylib -o load-parallel0.dylib -dynamiclib -DN=0
     $C{COMPILE} $DIR/load-parallel0.m -x none load-parallel00.dylib -install_name $T{DYLIBDIR}/load-parallel1.dylib -o load-parallel1.dylib -dynamiclib -DN=1

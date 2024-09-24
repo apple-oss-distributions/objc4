@@ -1,8 +1,5 @@
 /*
-TEST_BUILD_OUTPUT
-.*nilAPIArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-.*nilAPIArgs.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\]
-END
+TEST_CFLAGS -Wno-nonnull
 */
 
 #include "test.h"

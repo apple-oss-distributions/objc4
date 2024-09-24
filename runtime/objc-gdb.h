@@ -275,6 +275,7 @@ OBJC_EXTERN const uint32_t objc_debug_autoreleasepoolpage_parent_offset OBJC_AVA
 OBJC_EXTERN const uint32_t objc_debug_autoreleasepoolpage_child_offset  OBJC_AVAILABLE(10.15, 13.0, 13.0, 6.0, 5.0);
 OBJC_EXTERN const uint32_t objc_debug_autoreleasepoolpage_depth_offset  OBJC_AVAILABLE(10.15, 13.0, 13.0, 6.0, 5.0);
 OBJC_EXTERN const uint32_t objc_debug_autoreleasepoolpage_hiwat_offset  OBJC_AVAILABLE(10.15, 13.0, 13.0, 6.0, 5.0);
+OBJC_EXTERN const uint32_t objc_debug_autoreleasepoolpage_begin_offset  OBJC_AVAILABLE(11.0, 14.0, 14.0, 7.0, 6.0);
 OBJC_EXTERN const uintptr_t objc_debug_autoreleasepoolpage_ptr_mask     OBJC_AVAILABLE(10.16, 14.0, 14.0, 7.0, 6.0);
 
 OBJC_EXPORT void *const _Nonnull objc_debug_side_tables_map

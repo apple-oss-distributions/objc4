@@ -19,7 +19,7 @@ void objc_setHook_lazyClassNamer(_Nonnull objc_hook_lazyClassNamer newValue,
 extern struct ObjCClass LazyClassName;
 extern struct ObjCClass LazyClassName2;
 
-struct ObjCClass_ro LazyClassNameMetaclass_ro = {
+const struct ObjCClass_ro LazyClassNameMetaclass_ro = {
     .flags = RO_META,
     .instanceStart = 40,
     .instanceSize = 40,
@@ -33,7 +33,7 @@ struct ObjCClass LazyClassNameMetaclass = {
     .data = &LazyClassNameMetaclass_ro,
 };
 
-struct ObjCClass_ro LazyClassName_ro = {
+const struct ObjCClass_ro LazyClassName_ro = {
     .instanceStart = 8,
     .instanceSize = 8,
 };
@@ -45,7 +45,7 @@ struct ObjCClass LazyClassName = {
     .data = (void *)((uintptr_t)&LazyClassName_ro + 2),
 };
 
-struct ObjCClass_ro LazyClassName2Metaclass_ro = {
+const struct ObjCClass_ro LazyClassName2Metaclass_ro = {
     .flags = RO_META,
     .instanceStart = 40,
     .instanceSize = 40,
@@ -59,7 +59,7 @@ struct ObjCClass LazyClassName2Metaclass = {
     .data = &LazyClassName2Metaclass_ro,
 };
 
-struct ObjCClass_ro LazyClassName2_ro = {
+const struct ObjCClass_ro LazyClassName2_ro = {
     .instanceStart = 8,
     .instanceSize = 8,
 };

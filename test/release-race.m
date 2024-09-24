@@ -34,7 +34,9 @@
 @end
 
 int main() {
-    for (unsigned long long i = 0; i < 100000000000ULL; i++) {
+    // The 1 thread worker pool on simulators makes this slow and pointless.
+#if !TARGET_OS_SIMULATOR
+    for (unsigned long long i = 0; i < 100000000ULL; i++) {
         if (i % 100000 == 0)
             testprintf("%llu\n", i);
 
@@ -50,5 +52,6 @@ int main() {
         });
         [enc release]; // Drop top level reference
     }
+#endif
     succeed(__FILE__);
 }

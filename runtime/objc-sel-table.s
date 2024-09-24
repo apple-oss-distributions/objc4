@@ -39,9 +39,13 @@ __objc_opt_data:
 #if TARGET_OS_OSX  &&  __i386__
 // old ABI
 .globl .objc_class_name_Protocol
+lobjc_opt_ptrs:
 PTR(.objc_class_name_Protocol)
 #else
 // new ABI
 .globl _OBJC_CLASS_$_Protocol
+lobjc_opt_ptrs:
 PTR(_OBJC_CLASS_$_Protocol)
 #endif
+
+.no_dead_strip lobjc_opt_ptrs

@@ -30,7 +30,21 @@
 .globl __objc_blockTrampolineStart
 .globl __objc_blockTrampolineLast
 
-.align PAGE_MAX_SHIFT
+// We want to align to PAGE_MAX_SHIFT, but the linker only aligns to a maximum
+// of PAGE_MIN_SHIFT on x86-64. We don't exactly care about alignment, but we do
+// need _objc_blockTrampolineImpl to start at offset 0x4000 from our load
+// address. Emulate it by emitting enough padding aligned to PAGE_MIN_SHIFT to
+// get us to where we want to be.
+//
+// NOTE: this assumes that the mach-o headers
+// occupy less than PAGE_MIN_SIZE bytes. This is probably a safe assumption, as
+// they currently occupy 744 bytes, and PAGE_MIN_SIZE is 4096.
+.rept PAGE_MAX_SIZE / PAGE_MIN_SIZE - 1
+.align PAGE_MIN_SHIFT
+.byte 0
+.endr
+
+.align PAGE_MIN_SHIFT
 __objc_blockTrampolineImpl:
     movq (%rsp), %r10  // read return address pushed by TrampolineEntry's callq
     movq %rdi, %rsi    // arg1 -> arg2
@@ -597,7 +611,7 @@ __objc_blockTrampolineLast:
 .globl __objc_blockTrampolineStart_stret
 .globl __objc_blockTrampolineLast_stret
 
-.align PAGE_MAX_SHIFT
+.align PAGE_MIN_SHIFT
 __objc_blockTrampolineImpl_stret:
 
     // %rdi -- arg1 -- is address of return value's space. Don't mess with it.

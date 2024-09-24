@@ -143,6 +143,12 @@ SwiftVersions:
 - Version: 3
   Functions:
   # objc.h swift3
+  - Name: sel_getName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: sel_registerName
+    NullabilityOfRet: U
+    Nullability: [U]
   - Name: object_getClassName
     NullabilityOfRet: U
     Nullability: [U]
@@ -400,12 +406,6 @@ SwiftVersions:
   - Name: objc_copyClassNamesForImage
     ResultType: "const char * _Nullable * _Null_unspecified"
     Nullability: [U, U]
-  - Name: sel_getName
-    NullabilityOfRet: U
-    Nullability: [U]
-  - Name: sel_registerName
-    NullabilityOfRet: U
-    Nullability: [U]
   - Name: sel_isEqual
     Nullability: [U, U]
   - Name: objc_enumerationMutation

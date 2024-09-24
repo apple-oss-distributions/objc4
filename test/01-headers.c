@@ -1,7 +1,7 @@
-/* 
+/*
 TEST_BUILD
 $DIR/headers.sh '$C{TESTINCLUDEDIR}' '$C{TESTLOCALINCLUDEDIR}' '$C{COMPILE_C}' '$C{COMPILE_CXX}' '$C{COMPILE_M}' '$C{COMPILE_MM}' '$VERBOSE'
-$C{COMPILE_C} $DIR/headers.c -o headers.exe
+$C{COMPILE_C} $DIR/01-headers.c -o 01-headers.exe
 END
 
 allow `sh -x` output from headers.sh

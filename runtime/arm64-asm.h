@@ -119,6 +119,13 @@
 #endif
 .endmacro
 
+// Tail call an address-diversified signed function pointer. addressReg will be
+// modified by this call.
+.macro TailCallSignedFunctionPointer fptrReg, addressReg, discriminator
+	movk	\addressReg, #\discriminator, lsl #48
+	braa	\fptrReg, \addressReg
+.endmacro
+
 .macro TailCallCachedImp IMP, IMPAddress, SEL, ISA
 	// $0 = cached imp, $1 = address of cached imp, $2 = SEL, $3 = isa
 	eor	\IMPAddress, \IMPAddress, \SEL	// mix SEL into ptrauth modifier
@@ -192,6 +199,10 @@ LTailCallCachedImpIndirectBranch:
 
 .macro TailCallFunctionPointer
 	// $0 = function pointer value
+	br	$0
+.endmacro
+
+.macro TailCallSignedFunctionPointer
 	br	$0
 .endmacro
 

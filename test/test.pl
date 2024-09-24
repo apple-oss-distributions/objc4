@@ -5,6 +5,7 @@
 
 use strict;
 use File::Basename;
+use Time::HiRes;
 
 use Config;
 my $supportsParallelBuilds = $Config{useithreads};
@@ -379,7 +380,7 @@ sub cplusplus {
 # Turn a C compiler name into a Swift compiler name
 sub swift {
     my ($c) = @_;
-    $c =~ s#[^/]*$#swift#;
+    $c =~ s#[^/]*$#swiftc#;
     return $c;
 }
 
@@ -996,6 +997,9 @@ sub append_bats_test {
 
 
 # Builds a simple test
+# Returns (ok, unexpectedBuildOutput). ok is true if the test built
+# successfully, false if not. unexpectedBuildOutput is a nonempty string if the
+# build produced unexpected output that should be considered a failure.
 sub build_simple {
     my %C = %{shift()};
     my $name = shift;
@@ -1007,7 +1011,7 @@ sub build_simple {
         # so if this file exists now, that means another configuration already
         # did an equivalent build.
         print "note:	$name is already built at $dstdir, skipping the build\n" if $VERBOSE;
-        return 1;
+        return (1, "");
     }
 
     mkdir_verbose $dstdir;
@@ -1019,7 +1023,7 @@ sub build_simple {
     if ($T{TEST_CRASHES}) {
         ### BEGIN APPLE INTERNAL
         if ($C{OS} eq "exclavekit") {
-            return 1;
+            return (1, "");
         }
         ### END APPLE INTERNAL
 
@@ -1028,7 +1032,7 @@ sub build_simple {
         if ($?) {
             colorprint  $red, "FAIL: building crashcatch.c";
             colorprefix $red, $output;
-            return 0;
+            return (0, "");
         }
     }
 
@@ -1048,12 +1052,16 @@ sub build_simple {
     # rdar://38710948
     $output =~ s/ld: warning: ignoring file [^\n]*libclang_rt\.bridgeos\.a[^\n]*\n//g;
     $output =~ s/ld: warning: building for iOS Simulator, but[^\n]*\n//g;
+    # ignore the Swift compiler being concerned about version mismatches in the SDK
+    $output =~ s/remark: compiled module was created by a different version of the compiler .*\n//g;
+
     # ignore compiler logging of CCC_OVERRIDE_OPTIONS effects
     if (defined $ENV{CCC_OVERRIDE_OPTIONS}) {
         $output =~ s/### (CCC_OVERRIDE_OPTIONS:|Adding argument|Deleting argument|Replacing) [^\n]*\n//g;
     }
 
     my $ok;
+    my $unexpectedBuildOutput = "";
     if (my $builderror = $T{TEST_BUILD_OUTPUT}) {
         # check for expected output and ignore $?
         if ($output =~ /$builderror/) {
@@ -1067,11 +1075,12 @@ sub build_simple {
             colorprint  $yellow, "WARN: $name (build output does not match TEST_BUILD_OUTPUT; not fatal because CCC_OVERRIDE_OPTIONS is set)";
             $ok = 1;
         } else {
-            colorprint  $red, "FAIL: /// test '$name' \\\\\\";
-            colorprefix $red, $output;
-            colorprint  $red, "FAIL: \\\\\\ test '$name' ///";
-            colorprint  $red, "FAIL: $name (build output does not match TEST_BUILD_OUTPUT)";
-            $ok = 0;
+            colorprint  $yellow, "WARN: /// test '$name' \\\\\\";
+            colorprefix $yellow, $output;
+            colorprint  $yellow, "WARN: \\\\\\ test '$name' ///";
+            colorprint  $yellow, "WARN: $name (build output does not match TEST_BUILD_OUTPUT)";
+            $ok = 1;
+            $unexpectedBuildOutput = $output;
         }
     } elsif ($?) {
         colorprint  $red, "FAIL: /// test '$name' \\\\\\";
@@ -1080,11 +1089,12 @@ sub build_simple {
         colorprint  $red, "FAIL: $name (build failed)";
         $ok = 0;
     } elsif ($output ne "") {
-        colorprint  $red, "FAIL: /// test '$name' \\\\\\";
-        colorprefix $red, $output;
-        colorprint  $red, "FAIL: \\\\\\ test '$name' ///";
-        colorprint  $red, "FAIL: $name (unexpected build output)";
-        $ok = 0;
+        colorprint  $yellow, "WARN: /// test '$name' \\\\\\";
+        colorprefix $yellow, $output;
+        colorprint  $yellow, "WARN: \\\\\\ test '$name' ///";
+        colorprint  $yellow, "WARN: $name (unexpected build output)";
+        $ok = 1;
+        $unexpectedBuildOutput = $output;
     } else {
         $ok = 1;
     }
@@ -1112,7 +1122,7 @@ sub build_simple {
                 if ($?) {
                     colorprint  $red, "FAIL: codesign $file";
                     colorprefix $red, $output;
-                    return 0;
+                    return (0, "");
                 }
             }
         }
@@ -1124,7 +1134,7 @@ sub build_simple {
         make("touch build-succeeded", $dstdir);
     }
 
-    return $ok;
+    return ($ok, $unexpectedBuildOutput);
 }
 
 # Run a simple test (testname.exe, with error checking of stdout and stderr)
@@ -1326,6 +1336,11 @@ sub make_one_config {
     $C{LANGUAGE} = "objective-c"  if $C{LANGUAGE} eq "objc";
     $C{LANGUAGE} = "objective-c++"  if $C{LANGUAGE} eq "objc++";
     
+    # Swift does not support MRC.
+    if ($C{LANGUAGE} eq "swift" && $C{MEM} eq "mrc") {
+        return 0;
+    }
+
     # Interpret OS version string from command line.
     my ($sdk_arg, $deployment_arg, $run_arg, undef) = split('-', $C{OSVERSION});
     delete $C{OSVERSION};
@@ -1576,7 +1591,7 @@ sub make_one_config {
 
     $cflags .= " -isysroot '$C{SDK_PATH}'";
     $cflags .= " '-Wl,-syslibroot,$C{SDK_PATH}'";
-    $swiftflags .= " -sdk '$C{SDK_PATH}'";
+    $swiftflags .= " -sdk '$C{SDK_PATH}' -Xclang-linker -isysroot -Xclang-linker '$C{SDK_PATH}'";
 
     # Set deployment target cflags
     my $target = undef;
@@ -1587,7 +1602,7 @@ sub make_one_config {
     }
     elsif ($C{OS} eq "iphonesimulator") {
         $cflags .= " -mios-simulator-version-min=$C{DEPLOYMENT_TARGET}";
-        $target = "$C{ARCH}-apple-ios$C{DEPLOYMENT_TARGET}";
+        $target = "$C{ARCH}-apple-ios$C{DEPLOYMENT_TARGET}-simulator";
     }
     elsif ($C{OS} eq "watchos") {
         $cflags .= " -mwatchos-version-min=$C{DEPLOYMENT_TARGET}";
@@ -1595,7 +1610,7 @@ sub make_one_config {
     }
     elsif ($C{OS} eq "watchsimulator") {
         $cflags .= " -mwatchos-simulator-version-min=$C{DEPLOYMENT_TARGET}";
-        $target = "$C{ARCH}-apple-watchos$C{DEPLOYMENT_TARGET}";
+        $target = "$C{ARCH}-apple-watchos$C{DEPLOYMENT_TARGET}-simulator";
     }
     elsif ($C{OS} eq "appletvos") {
         $cflags .= " -mtvos-version-min=$C{DEPLOYMENT_TARGET}";
@@ -1603,7 +1618,7 @@ sub make_one_config {
     }
     elsif ($C{OS} eq "appletvsimulator") {
         $cflags .= " -mtvos-simulator-version-min=$C{DEPLOYMENT_TARGET}";
-        $target = "$C{ARCH}-apple-tvos$C{DEPLOYMENT_TARGET}";
+        $target = "$C{ARCH}-apple-tvos$C{DEPLOYMENT_TARGET}-simulator";
     }
     elsif ($C{OS} eq "bridgeos") {
         $cflags .= " -mbridgeos-version-min=$C{DEPLOYMENT_TARGET}";
@@ -1746,13 +1761,6 @@ sub make_one_config {
         return 0;
     }
 
-    # fixme 
-    if ($C{LANGUAGE} eq "swift"  &&  $C{ARCH} =~ /^arm/) {
-        print "note: skipping configuration $C{NAME}\n";
-        print "note:   because ARCH=$C{ARCH} does not support LANGUAGE=SWIFT\n";
-        return 0;
-    }
-
     # fixme unimplemented run targets
     if ($C{RUN_TARGET} ne "default" &&  $C{OS} !~ /simulator/) {
         colorprint $yellow, "WARN: skipping configuration $C{NAME}";
@@ -1760,6 +1768,8 @@ sub make_one_config {
     }
 
     %$configref = %C;
+
+    return 1;
 }    
 
 sub make_configs {
@@ -1822,6 +1832,7 @@ sub build_and_run_one_config {
     my $testcount = 0;
     my $failcount = 0;
     my $skipconfig = 0;
+    my $allUnexpectedBuildOutput = "";
 
     my @gathertests;
     foreach my $test (@tests) {
@@ -1849,6 +1860,8 @@ sub build_and_run_one_config {
         @builttests = @gathertests;
         $testcount = scalar(@gathertests);
     } elsif ($PARALLELBUILDS > 1 && $supportsParallelBuilds) {
+        my $buildcount = scalar(@gathertests);
+        print "note: Building $buildcount tests in parallel.\n";
         my $workQueue = Thread::Queue->new();
         my $resultsQueue = Thread::Queue->new();
         my @threads = map {
@@ -1860,8 +1873,16 @@ sub build_and_run_one_config {
                     open STDOUT, '>>', \$output;
                     open STDERR, '>>', \$output;
             
-                    my $success = build_simple(\%C, $test);
-                    $resultsQueue->enqueue({ test => $test, success => $success, output => $output });
+                    my $start = Time::HiRes::time;
+                    my ($success, $unexpectedBuildOutput) = build_simple(\%C, $test);
+                    my $end = Time::HiRes::time;
+                    $resultsQueue->enqueue({
+                        test => $test,
+                        success => $success,
+                        output => $output,
+                        duration => $end - $start,
+                        unexpectedBuildOutput => $unexpectedBuildOutput
+                    });
                 }
             });
         } (1 .. $PARALLELBUILDS);
@@ -1883,12 +1904,23 @@ sub build_and_run_one_config {
             my $test = $result->{test};
             my $success = $result->{success};
             my $output = $result->{output};
+            my $duration = $result->{duration};
+            my $unexpectedBuildOutput = $result->{unexpectedBuildOutput};
+
+            if ($VERBOSE) {
+                print "$test: $duration seconds\n";
+            }
             
             print $output;
             if ($success) {
                 push @builttests, $test;
             } else {
                 $failcount++;
+            }
+
+            if ($unexpectedBuildOutput ne "") {
+                $allUnexpectedBuildOutput .= "test '$test': unexpected build output:";
+                $allUnexpectedBuildOutput .= "$unexpectedBuildOutput\n";
             }
         }
         foreach my $thread (@threads) {
@@ -1898,6 +1930,8 @@ sub build_and_run_one_config {
         if ($PARALLELBUILDS > 1) {
             print "WARNING: requested parallel builds, but this perl interpreter does not support threads. Falling back to sequential builds.\n";
         }
+        my $buildcount = scalar(@gathertests);
+        print "note: Building $buildcount tests.\n";
         foreach my $test (@gathertests) {
             if ($VERBOSE) {
                 print "\nBUILD $test\n";
@@ -1905,10 +1939,15 @@ sub build_and_run_one_config {
             
             if ($ALL_TESTS{$test}) {
                 $testcount++;
-                if (!build_simple(\%C, $test)) {
+                my ($ok, $unexpectedBuildOutput) = build_simple(\%C, $test);
+                if (!$ok) {
                     $failcount++;
                 } else {
                     push @builttests, $test;
+                    if ($unexpectedBuildOutput ne "") {
+                        $allUnexpectedBuildOutput .= "test '$test': unexpected build output:";
+                        $allUnexpectedBuildOutput .= "$unexpectedBuildOutput\n";
+                    }
                 }
             } else {
                 die "No test named '$test'\n";
@@ -1916,6 +1955,23 @@ sub build_and_run_one_config {
         }
     }
     
+    if ($allUnexpectedBuildOutput ne "") {
+        # Fail right away if we're also running tests, since the pseudo-test
+        # that checks this file only runs in run-only mode.
+        if ($RUN) {
+            colorprint  $red, "FAIL: /// unexpected build output \\\\\\";
+            colorprefix $red, $allUnexpectedBuildOutput;
+            colorprint  $red, "FAIL: \\\\\\ unexpected build output ///";
+            $failcount++;
+        }
+
+        # Save the output to a file so that the unexpectedBuildOutput test can
+        # see it and fail.
+        open(my $fh, ">", "$DSTROOT$BUILDDIR/unexpected-build-output")
+            or die "Can't open $DSTROOT$BUILDDIR/unexpected-build-output: $!";
+        print $fh $allUnexpectedBuildOutput;
+    }
+
     if (!$RUN  ||  !scalar(@builttests)) {
         # nothing to do
     }
@@ -2045,14 +2101,15 @@ sub getint {
 }
 
 
-my $default_arch = "x86_64";
+my $default_arch = `machine`;
+chomp $default_arch;
 $args{ARCH} = getargs("ARCH", 0);
 $args{ARCH} = getargs("ARCHS", $default_arch)  if !@{$args{ARCH}}[0];
 
 $args{OSVERSION} = getargs("OS", "macosx-default-default");
 
 $args{MEM} = getargs("MEM", "mrc,arc");
-$args{LANGUAGE} = [ map { lc($_) } @{getargs("LANGUAGE", "c,objective-c,c++,objective-c++")} ];
+$args{LANGUAGE} = [ map { lc($_) } @{getargs("LANGUAGE", "c,objective-c,c++,objective-c++,swift")} ];
 
 $args{BUILD_SHARED_CACHE} = getargs("BUILD_SHARED_CACHE", 0);
 
@@ -2067,7 +2124,7 @@ if ($PORT) {
 }
 $DEVICE = getarg("DEVICE", "booted");
 
-$PARALLELBUILDS = getarg("PARALLELBUILDS", `sysctl -n hw.ncpu`);
+$PARALLELBUILDS = getarg("PARALLELBUILDS", `sysctl -n hw.ncpu` * 2);
 
 $SHAREDCACHEDIR = getarg("SHAREDCACHEDIR", "");
 

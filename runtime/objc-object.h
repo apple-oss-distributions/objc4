@@ -615,8 +615,8 @@ objc_object::rootDealloc()
 #endif // ISA_HAS_INLINE_RC
 }
 
-extern explicit_atomic<id(*)(id)> swiftRetain;
-extern explicit_atomic<void(*)(id)> swiftRelease;
+extern PtrauthGlobalAtomicFunction<id(*)(id)> swiftRetain;
+extern PtrauthGlobalAtomicFunction<void(*)(id)> swiftRelease;
 
 // Equivalent to calling [this retain], with shortcuts if there is no override
 inline id 

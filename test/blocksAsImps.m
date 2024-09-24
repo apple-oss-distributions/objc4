@@ -41,7 +41,7 @@ typedef struct BigStruct {
 
 // This is void* instead of id to prevent interference from ARC.
 typedef uintptr_t (*FuncPtr)(void *, SEL);
-typedef BigStruct (*BigStructFuncPtr)(id, SEL, BigStruct);
+typedef BigStruct (*BigStructFuncPtr)(void *, SEL, BigStruct);
 typedef float (*FloatFuncPtr)(id, SEL, float);
 
 BigStruct bigfunc(BigStruct a) {
@@ -110,8 +110,9 @@ int main () {
 #endif
 
     uintptr_t TEST_QUANTITY = is_guardmalloc() ? 1000 : 100000;
-    FuncPtr funcArray[TEST_QUANTITY];
+    FuncPtr *funcArray = (FuncPtr *)calloc(TEST_QUANTITY, sizeof(*funcArray));
 
+    // Test normal blocks.
     for(uintptr_t i = 0; i < TEST_QUANTITY; i++) {
         uintptr_t (^block)(void *self) = ^uintptr_t(void *self) {
             testassert(i == (uintptr_t)self);
@@ -159,6 +160,62 @@ int main () {
         testassert(j == result);
     }
     
+    // Test stret blocks;
+    BigStructFuncPtr *bigStructFuncArray = (BigStructFuncPtr *)calloc(TEST_QUANTITY, sizeof(*bigStructFuncArray));
+    for(uintptr_t i = 0; i < TEST_QUANTITY; i++) {
+        BigStruct (^block)(void *self, BigStruct s) = ^BigStruct(void *self, BigStruct s) {
+            testassert(i == (uintptr_t)self);
+            s.datums[0] = i;
+            return s;
+        };
+        block = (__bridge id)_Block_copy((__bridge void *)block);
+
+        bigStructFuncArray[i] = (BigStructFuncPtr) imp_implementationWithBlock(block);
+
+        BigStruct s = {};
+        testassert(block((void *)i, s).datums[0] == i);
+
+        id blockFromIMPResult = imp_getBlock((IMP)bigStructFuncArray[i]);
+        testassert(blockFromIMPResult == (id)block);
+
+        _Block_release((__bridge void *)block);
+    }
+
+    for(uintptr_t i = 0; i < TEST_QUANTITY; i++) {
+        BigStruct result = {};
+        result = bigStructFuncArray[i]((void *)i, 0, result);
+        testassert(i == result.datums[0]);
+    }
+
+    for(uintptr_t i = 0; i < TEST_QUANTITY; i = i + 3) {
+        imp_removeBlock((IMP)bigStructFuncArray[i]);
+        id shouldBeNull = imp_getBlock((IMP)bigStructFuncArray[i]);
+        testassert(shouldBeNull == NULL);
+    }
+
+    for(uintptr_t i = 0; i < TEST_QUANTITY; i = i + 3) {
+        uintptr_t j = i * i;
+
+        BigStruct (^block)(void *, BigStruct) = ^BigStruct(void *self, BigStruct s) {
+            testassert(j == (uintptr_t)self);
+            s.datums[0] = j;
+            return s;
+        };
+        bigStructFuncArray[i] = (BigStructFuncPtr) imp_implementationWithBlock(block);
+
+        BigStruct s = {};
+        testassert(block((void *)j, s).datums[0] == j);
+        testassert(bigStructFuncArray[i]((void *)j, 0, s).datums[0] == j);
+    }
+
+    for(uintptr_t i = 0; i < TEST_QUANTITY; i = i + 3) {
+        uintptr_t j = i * i;
+        BigStruct s = {};
+        s = bigStructFuncArray[i]((void *)j, 0, s);
+        testassert(j == s.datums[0]);
+    }
+
+
     int (^implBlock)(id, int);
     
     implBlock = ^(id self __attribute__((unused)), int a){
@@ -210,7 +267,7 @@ int main () {
         
         bFunc = (BigStructFuncPtr) [Foo instanceMethodForSelector: @selector(methodThatReturnsBigStruct:)];
         
-        b = bFunc(f, @selector(methodThatReturnsBigStruct:), a);
+        b = bFunc((__bridge void *)f, @selector(methodThatReturnsBigStruct:), a);
         testassert(!memcmp(&a, &b, sizeof(BigStruct)));
         
         b = [f methodThatReturnsBigStruct: a];
@@ -218,7 +275,7 @@ int main () {
         
         bFunc = (BigStructFuncPtr) [Foo instanceMethodForSelector: @selector(structThatIsBig:)];
         
-        b = bFunc(f, @selector(structThatIsBig:), a);
+        b = bFunc((__bridge void *)f, @selector(structThatIsBig:), a);
         testassert(!memcmp(&a, &b, sizeof(BigStruct)));
         testassert(state==2);
         
@@ -247,6 +304,9 @@ int main () {
 #endif
 
     } POP_POOL;
+
+    free(funcArray);
+    free(bigStructFuncArray);
 
     succeed(__FILE__);
 }

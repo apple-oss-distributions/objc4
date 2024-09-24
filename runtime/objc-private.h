@@ -284,7 +284,6 @@ typedef enum {
 #undef INTERNAL_OPTION
 
 /* errors */
-extern id(*badAllocHandler)(Class);
 extern id _objc_callBadAllocHandler(Class cls) __attribute__((cold, noinline));
 extern void __objc_error(id, const char *, ...) __attribute__((cold, format (printf, 2, 3), noreturn));
 extern void _objc_inform(const char *fmt, ...) __attribute__((cold, format(printf, 1, 2)));
@@ -576,10 +575,25 @@ extern Class _calloc_class(size_t size);
 
 /* method lookup */
 enum {
-    LOOKUP_INITIALIZE = 1,
-    LOOKUP_RESOLVER = 2,
-    LOOKUP_NIL = 4,
-    LOOKUP_NOCACHE = 8,
+    // Initialize the class if needed.
+    LOOKUP_INITIALIZE = 1 << 0,
+
+    // Use resolve(Class|Instance)Method: if no method found.
+    LOOKUP_RESOLVER = 1 << 1,
+
+    // Return nil instead of msgForward if no method found.
+    LOOKUP_NIL = 1 << 2,
+
+    // Don't put the result in the class's method cache.
+    LOOKUP_NOCACHE = 1 << 3,
+
+    // This call is from objc_msgSend_fpret. If the target is a disabled class,
+    // return an IMP that does an fpret return 0.
+    LOOKUP_FPRET = 1 << 4,
+
+    // This call is from objc_msgSend_fp2ret. If the target is a disabled class,
+    // return an IMP that does an fp2ret return 0.
+    LOOKUP_FP2RET = 1 << 5,
 };
 extern IMP lookUpImpOrForward(id obj, SEL, Class cls, int behavior);
 extern IMP lookUpImpOrForwardTryCache(id obj, SEL, Class cls, int behavior = 0);
@@ -609,6 +623,19 @@ extern bool logMessageSend(bool isClassMethod,
 extern void _objc_msgForward_impcache(void);
 #else
 extern id _objc_msgForward_impcache(id, SEL, ...);
+#endif
+
+#if __arm64__
+// An IMP that returns nil the same way msgSend(nil) does.
+void _objc_returnNil(void);
+#elif __x86_64
+// IMPs that return nil the same way msgSend(nil) does, with variants for
+// the different Intel calling conventions. (Note that _stret is handled in the
+// caller by either doing a nil check before messaging or zeroing the struct
+// memory before messaging.
+extern "C" void _objc_msgNil(void);
+extern "C" void _objc_msgNil_fpret(void);
+extern "C" void _objc_msgNil_fp2ret(void);
 #endif
 
 // Report an error gated on an environment variable. Based on the variable,
@@ -1050,23 +1077,26 @@ static inline bool operator != (DisguisedPtr<objc_object> lhs, id rhs) {
 // T1: store to old variable; store-release to hook variable
 // T2: load-acquire from hook variable; call it; called hook loads old variable
 
-template <typename Fn>
+template <typename Fn, typename SignedFnStorage = Fn *>
 class ChainedHookFunction {
-    std::atomic<Fn> hook{nil};
-
+    PtrauthGlobalAtomicFunction<Fn> storage;
 public:
-    constexpr ChainedHookFunction(Fn f) : hook{f} { };
+    constexpr ChainedHookFunction(Fn f) : storage{f} {}
 
-    Fn get() {
-        return hook.load(std::memory_order_acquire);
+    bool isSet() {
+        return storage.isSet();
     }
 
-    void set(Fn newValue, Fn *oldVariable)
+    Fn get() {
+        return storage.load(std::memory_order_acquire);
+    }
+
+    void set(Fn newValue, SignedFnStorage oldVariable)
     {
-        Fn oldValue = hook.load(std::memory_order_relaxed);
+        auto oldValue = storage.load(std::memory_order_relaxed);
         do {
             *oldVariable = oldValue;
-        } while (!hook.compare_exchange_weak(oldValue, newValue,
+        } while (!storage.compare_exchange_weak(oldValue, newValue,
                                              std::memory_order_release,
                                              std::memory_order_relaxed));
     }
@@ -1084,8 +1114,6 @@ public:
 
 template <typename T, unsigned InlineCount>
 class GlobalSmallVector {
-    static_assert(std::is_pod<T>::value, "SmallVector requires POD types");
-    
 protected:
     unsigned count{0};
     union {
@@ -1094,6 +1122,8 @@ protected:
     };
     
 public:
+    GlobalSmallVector() {}
+
     void append(const T &val) {
         if (count < InlineCount) {
             // We have space. Store the new value inline.
@@ -1101,12 +1131,22 @@ public:
         } else if (count == InlineCount) {
             // Inline storage is full. Switch to a heap allocation.
             T *newElements = (T *)malloc((count + 1) * sizeof(T));
-            memcpy(newElements, inlineElements, count * sizeof(T));
+            for (unsigned i = 0; i < count; i++)
+                newElements[i] = inlineElements[i];
             newElements[count] = val;
             elements = newElements;
         } else {
             // Resize the heap allocation and append.
-            elements = (T *)realloc(elements, (count + 1) * sizeof(T));
+            if (std::is_pod_v<T>) {
+                elements = (T *)realloc(elements, (count + 1) * sizeof(T));
+            } else {
+                T *newElements = (T *)malloc((count + 1) * sizeof(T));
+                for (unsigned i = 0; i < count; i++)
+                    newElements[i] = elements[i];
+                free(elements);
+                elements = newElements;
+            }
+
             elements[count] = val;
         }
         count++;

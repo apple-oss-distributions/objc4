@@ -1,9 +1,5 @@
-/* 
-TEST_BUILD_OUTPUT
-.*runtime.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*runtime.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-.*runtime.m:\d+:\d+: warning: null passed to a callee that requires a non-null argument \[-Wnonnull\](\n.* note: expanded from macro 'testassert')?
-END
+/*
+TEST_CFLAGS -Wno-nonnull
 
 TEST_RUN_OUTPUT
 objc\[\d+\]: class `SwiftV1Class\' not linked into application

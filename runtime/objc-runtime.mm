@@ -303,7 +303,7 @@ void appendHeader(header_info *hi)
         LastHeader = hi;
     }
 
-    if ((hi->mhdr()->flags & MH_DYLIB_IN_CACHE) == 0) {
+    if (!objc::inSharedCache((uintptr_t)hi->mhdr())) {
         foreach_data_segment(hi->mhdr(), [](const segmentType *seg, intptr_t slide) {
             uintptr_t start = (uintptr_t)seg->vmaddr + slide;
             objc::dataSegmentsRanges.add(start, start + seg->vmsize);
@@ -348,7 +348,7 @@ void removeHeader(header_info *hi)
         prev = current;
     }
 
-    if ((hi->mhdr()->flags & MH_DYLIB_IN_CACHE) == 0) {
+    if (!objc::inSharedCache((uintptr_t)hi->mhdr())) {
         foreach_data_segment(hi->mhdr(), [](const segmentType *seg, intptr_t slide) {
             uintptr_t start = (uintptr_t)seg->vmaddr + slide;
             objc::dataSegmentsRanges.remove(start, start + seg->vmsize);
@@ -629,7 +629,7 @@ objc_defaultForwardHandler(id self, SEL sel)
                 class_isMetaClass(object_getClass(self)) ? '+' : '-', 
                 object_getClassName(self), sel_getName(sel), self);
 }
-void *_objc_forward_handler = (void*)objc_defaultForwardHandler;
+void (* ptrauth_objc_forward_handler _objc_forward_handler)(id, SEL) = objc_defaultForwardHandler;
 
 #if SUPPORT_STRET
 struct stret { int i[100]; };
@@ -643,7 +643,7 @@ void *_objc_forward_stret_handler = (void*)objc_defaultForwardStretHandler;
 
 void objc_setForwardHandler(void *fwd, void *fwd_stret)
 {
-    _objc_forward_handler = fwd;
+    _objc_forward_handler = (void (*)(id, SEL))fwd;
 #if SUPPORT_STRET
     _objc_forward_stret_handler = fwd_stret;
 #endif

@@ -1,6 +1,6 @@
 // Test OBJC_DEBUG_POOL_ALLOCATION (which is also enabled by MallocStackLogging)
 
-// TEST_ENV OBJC_DEBUG_POOL_ALLOCATION=YES
+// TEST_ENV OBJC_DEBUG_POOL_ALLOCATION=YES OBJC_DEBUG_POOL_DEPTH=-1
 // TEST_CFLAGS -framework Foundation
 // TEST_CONFIG MEM=mrc OS=!exclavekit
 
