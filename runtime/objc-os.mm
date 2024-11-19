@@ -925,25 +925,14 @@ void _objc_init(void)
     _imp_implementationWithBlock_init();
 #endif
 
-    // This weird initialization pattern for `callbacks` ensures that we don't
-    // leave zero-signed pointers to these functions lying around. With a more
-    // typical initialization pattern, the compiler ends up placing `callbacks`
-    // in __AUTH_CONST and just passing that pointer, or copying the contents to
-    // the stack for initialization. Those pointers sit there forever and can
-    // potentially be copied into any zero-signed function pointer and called.
-    // By marking the local variable `volatile` and initializing the fields
-    // one by one instead of with {} aggregate initialization, we avoid that and
-    // ensure that the value is created on the stack, and we can zero it after
-    // we use it.
-    volatile _dyld_objc_callbacks_v3 callbacks = {
-        3, // version
+    _dyld_objc_callbacks_v4 callbacks = {
+        4, // version
+        map_images,
+        load_images,
+        unmap_image,
+        _objc_patch_root_of_class,
     };
-    callbacks.mapped = &map_images;
-    callbacks.init = &load_images;
-    callbacks.unmapped = unmap_image;
-    callbacks.patches = _objc_patch_root_of_class;
     _dyld_objc_register_callbacks((_dyld_objc_callbacks*)&callbacks);
-    memset_s((void *)&callbacks, sizeof(callbacks), 0, sizeof(callbacks));
 
     didCallDyldNotifyRegister = true;
 }
