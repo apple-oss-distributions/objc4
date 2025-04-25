@@ -1,4 +1,7 @@
 /*
+Stop the linker from trying to relativize methods in this overly-small protocol.
+TEST_CFLAGS -Wl,-no_objc_relative_method_lists
+
 TEST_BUILD_OUTPUT
 .*protocolSmall.m:\d+:\d+: warning: cannot find protocol definition for 'SmallProto'
 .*protocolSmall.m:\d+:\d+: note: protocol 'SmallProto' has no definition
@@ -44,7 +47,7 @@ struct SmallProtoStructure {
 struct MethodListOneEntry SmallProtoMethodList = {
     .entSizeAndFlags = 3 * sizeof(void *),
     .count = 1,
-    .name = NULL,
+    .name = (SEL)"not_null",
     .types = "v@:",
     .imp = NULL,
 };

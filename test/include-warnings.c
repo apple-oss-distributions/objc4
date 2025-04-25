@@ -1,4 +1,5 @@
 /*
+TEST_CONFIG MEM=mrc,arc LANGUAGE=c,c++,objc,objc++
 TEST_BUILD
     $C{COMPILE} $DIR/include-warnings.c -o include-warnings.exe -Wsystem-headers -Weverything -Wno-undef -Wno-old-style-cast -Wno-nullability-extension -Wno-c++98-compat -Wno-declaration-after-statement 2>&1 | grep -v 'In file' | grep objc || true
 END

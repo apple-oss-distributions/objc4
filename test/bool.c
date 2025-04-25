@@ -1,4 +1,5 @@
 // TEST_CFLAGS -funsigned-char
+// TEST_CONFIG LANGUAGE=c,c++,objc,objc++
 // (verify -funsigned-char doesn't change the definition of BOOL)
 
 #include "test.h"

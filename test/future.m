@@ -6,7 +6,7 @@ TEST_BUILD
 END
 
 TEST_BUILD_OUTPUT
-ld: warning: -ld_classic is deprecated and will be removed in a future release
+(ld: warning: -ld_classic is deprecated and will be removed in a future release\n?)+
 END
 */
 

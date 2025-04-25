@@ -31,6 +31,10 @@
 
 #include "objc-private.h"
 
+#if !TARGET_OS_EXCLAVEKIT
+#include <execinfo.h>
+#endif
+
 ExplicitInitLock<mutex_t> crashlog_lock;
 
 #if TARGET_OS_EXCLAVEKIT
@@ -39,17 +43,33 @@ static inline int getpid(void)
     return 1;
 }
 
-void _objc_inform_now_and_on_crash(const char *fmt, ...)
+static inline void _objc_informv(const char *fmt, va_list val)
 {
-    va_list ap;
     char *buf;
 
-    va_start(ap, fmt);
-    _objc_vasprintf(&buf, fmt, ap);
-    va_end(ap);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+    _objc_vasprintf(&buf, fmt, val);
+#pragma clang diagnostic pop
     printf("objc[%d]: %s\n", getpid(), buf);
     free(buf);
 }
+
+#define OBJC_INFORM_IMPL(name)                  \
+    void name(const char *fmt, ...)             \
+    {                                           \
+        va_list ap;                             \
+                                                \
+        va_start(ap, fmt);                      \
+        _objc_informv(fmt, ap);                 \
+        va_end(ap);                             \
+    }
+
+OBJC_INFORM_IMPL(_objc_inform_now_and_on_crash)
+OBJC_INFORM_IMPL(_objc_inform)
+OBJC_INFORM_IMPL(_objc_fault)
+OBJC_INFORM_IMPL(_objc_fault_and_log)
+OBJC_INFORM_IMPL(_objc_stochastic_fault)
 
 void __objc_error(id rcv, const char *fmt, ...)
 {
@@ -62,31 +82,19 @@ void __objc_error(id rcv, const char *fmt, ...)
     _objc_fatal("%s: %s", object_getClassName(rcv), buf);
 }
 
-void _objc_inform(const char *fmt, ...)
-{
-    va_list ap;
-    char *buf;
-
-    va_start(ap, fmt);
-    _objc_vasprintf(&buf, fmt, ap);
-    va_end(ap);
-    printf("objc[%d]: %s\n", getpid(), buf);
-    free(buf);
-}
-
 void _objc_fatal(const char *fmt, ...)
 {
     va_list ap;
-    char *buf;
 
     va_start(ap, fmt);
-    _objc_vasprintf(&buf, fmt, ap);
+    _objc_informv(fmt, ap);
     va_end(ap);
-    printf("objc[%d]: %s\n", getpid(), buf);
     abort();
 }
-
 #else
+
+#include <os/reason_private.h>
+#include <os/variant_private.h>
 
 #include <sandbox/private.h>
 #include <_simple.h>
@@ -235,6 +243,83 @@ void _objc_fatal(const char *fmt, ...)
 }
 
 /*
+ * Emit a fault and optionally call _objc_syslog to log to asl and stderr.
+ */
+static void _objc_fault_impl(bool doSyslog, bool doFault,
+                             const char *fmt, va_list ap)
+{
+    char *buf1;
+    char *buf2;
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+    _objc_vasprintf(&buf1, fmt, ap);
+#pragma clang diagnostic pop
+
+    _objc_asprintf(&buf2, "objc[%d]: %s\n", getpid(), buf1);
+    if (doSyslog)
+        _objc_syslog(buf2);
+
+    if (doFault && !DisableFaults) {
+        // Don't be tempted to make this static; that would require
+        // __cxa_guard_acquire/__cxa_guard_release, which we cannot call
+        // from here.
+        bool faultsAreUnsafe =
+            getpid() == 1
+            || is_root_ramdisk()
+            || !os_variant_has_internal_diagnostics("com.apple.obj-c");
+
+        // We fault with the string that doesn't include the pid. Analytics
+        // unique faults by the fault string, so we don't want any variable data
+        // in the string.
+        if (!faultsAreUnsafe) {
+            os_fault_with_payload(OS_REASON_LIBSYSTEM,
+                                  OS_REASON_LIBSYSTEM_CODE_FAULT,
+                                  NULL, 0, buf1, 0);
+        }
+    }
+
+    free(buf1);
+    free(buf2);
+}
+
+/*
+ * Generates a "soft" crash; this doesn't actually crash the process,
+ * but will generate a crash report.
+ */
+void _objc_fault(const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap,fmt);
+    _objc_fault_impl(false, true, fmt, ap);
+    va_end (ap);
+}
+
+/*
+ * Generates a "soft" crash and logs to asl and stderr.
+ */
+void _objc_fault_and_log(const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap,fmt);
+    _objc_fault_impl(true, true, fmt, ap);
+    va_end (ap);
+}
+
+/*
+ * Logs a soft runtime error, but 10% of the time will turn this into a
+ * fault.
+ */
+void _objc_stochastic_fault(const char *fmt, ...)
+{
+    uint32_t rnd = objc_uniformRandom(1048576);
+    va_list ap;
+    va_start(ap, fmt);
+    _objc_fault_impl(true, rnd < 104858, fmt, ap);
+    va_end(ap);
+}
+
+/*
  * this routine handles soft runtime errors...like not being able
  * add a category to a class (because it wasn't linked in).
  */
@@ -315,4 +400,19 @@ void _objc_inform_deprecated(const char *oldf, const char *newf)
         }
     }
     _objc_warn_deprecated();
+}
+
+NEVER_INLINE void
+_objc_inform_backtrace(const char *linePrefix)
+{
+#if !TARGET_OS_EXCLAVEKIT
+    void *stack[128];
+    int count = backtrace(stack, sizeof(stack)/sizeof(stack[0]));
+    char **sym = backtrace_symbols(stack, count);
+    // Start at 1 to skip this function.
+    for (int i = 1; i < count; i++) {
+        _objc_inform("%s%s", linePrefix, sym[i]);
+    }
+    free(sym);
+#endif
 }

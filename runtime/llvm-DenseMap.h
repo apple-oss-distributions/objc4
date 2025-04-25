@@ -755,6 +755,8 @@ class DenseMap : public DenseMapBase<DenseMap<KeyT, ValueT, ValueInfoT, KeyInfoT
                                      KeyT, ValueT, ValueInfoT, KeyInfoT, BucketT> {
   friend class DenseMapBase<DenseMap, KeyT, ValueT, ValueInfoT, KeyInfoT, BucketT>;
 
+  static_assert(!std::is_same_v<KeyT, Class>, "Use DisguisedPtr<objc_class> as the key type. Using Class directly can make the hash table look like an ObjC object to memory analysis tools.");
+
   // Lift some types from the dependent base class into this class for
   // simplicity of referring to them.
   using BaseT = DenseMapBase<DenseMap, KeyT, ValueT, ValueInfoT, KeyInfoT, BucketT>;

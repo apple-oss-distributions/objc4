@@ -1,6 +1,6 @@
 /*
 TEST_RUN_OUTPUT
-objc\[\d+\]: Class Sub is implemented in both [^\s]+ \(0x[0-9a-f]+\) and [^\s]+ \(0x[0-9a-f]+\)\. One of the two will be used\. Which one is undefined\.
+objc\[\d+\]: Class Sub is implemented in both [^\s]+ \(0x[0-9a-f]+\) and [^\s]+ \(0x[0-9a-f]+\)\. This may cause spurious casting failures and mysterious crashes\. One of the duplicates must be removed or renamed\.
 OK: readClassPair.m
 END
  */

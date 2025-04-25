@@ -1,0 +1,54 @@
+//
+//  ObjectiveC.xcconfig
+//  objc
+//
+//  Created by Ian Anderson on 11/20/24.
+//
+
+// Some of these are described at https://confluence.sd.apple.com/x/Gg_-DQ
+
+INSTALL_PATH = $(SYSTEM_PREFIX)/usr/lib/swift
+EXECUTABLE_PREFIX = libswift
+BUILD_LIBRARY_FOR_DISTRIBUTION = YES
+APPLICATION_EXTENSION_API_ONLY = YES
+
+DYLIB_COMPATIBILITY_VERSION = 1
+DYLIB_CURRENT_VERSION = $(CURRENT_PROJECT_VERSION)
+
+IS_ZIPPERED[sdk=macosx*] = YES
+GCC_SYMBOLS_PRIVATE_EXTERN = NO
+SUPPORTS_TEXT_BASED_API = YES
+GENERATE_TEXT_BASED_STUBS = YES
+TAPI_VERIFY_MODE = Pedantic
+
+TAPI_EXTRA_PROJECT_HEADERS[sdk=mac*] = ObjectiveC/ObjectiveCRPathInstallName.h
+TAPI_EXTRA_PROJECT_HEADERS[sdk=iphone*] = ObjectiveC/ObjectiveCRPathInstallName.h
+TAPI_EXTRA_PROJECT_HEADERS[sdk=appletv*] = ObjectiveC/ObjectiveCRPathInstallName.h
+TAPI_EXTRA_PROJECT_HEADERS[sdk=watch*] = ObjectiveC/ObjectiveCRPathInstallName.h
+
+CLANG_ENABLE_OBJC_ARC = YES
+CLANG_ENABLE_MODULES = YES
+CLANG_MODULES_AUTOLINK = NO
+CLANG_LINK_OBJC_RUNTIME = NO
+// Suppress os/object.h from using NSObject to prevent a module cycle while building
+// ObjectiveC -> MachO_Private -> DispatchPrivate -> Dispatch -> os_object -> ObjectiveC
+// It's not enough to set OS_OBJECT_USE_OBJC, os/object.h will override that when
+// building with Swift.
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) OS_OBJECT_HAVE_OBJC_SUPPORT=0
+OTHER_CFLAGS = $(inherited) -ivfsoverlay "$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml"
+
+OTHER_SWIFT_FLAGS = $(inherited) -vfsoverlay "$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml" -Xcc -ivfsoverlay -Xcc "$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml" -autolink-force-load -runtime-compatibility-version none -module-link-name swift$(PRODUCT_MODULE_NAME)
+SWIFT_ENABLE_INCREMENTAL_COMPILATION = NO // YES conflicts with -autolink-force-load
+STRIP_SWIFT_SYMBOLS = NO
+SWIFT_OBJC_INTERFACE_HEADER_NAME =
+SWIFT_INSTALL_MODULE_FOR_DEPLOYMENT = YES
+SWIFT_LINK_OBJC_RUNTIME = NO
+
+// ObjectiveC uses the MachO_Private clang module, which imports the Dispatch clang
+// module. There's a bug with Swift explicit modules where that pre-builds the Dispatch
+// Swift overlay as well <rdar://144797648>, which is a problem because the Dispatch
+// Swift overlay depends on the ObjectiveC Swift overlay.
+SWIFT_ENABLE_EXPLICIT_MODULES = NO
+
+// The SWIFT_MODULE_ONLY settings mentioned at https://confluence.sd.apple.com/x/Gg_-DQ
+// are obsolete and generate warnings if specified.

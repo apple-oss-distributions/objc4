@@ -200,6 +200,7 @@ func getLibInfo(path: String, arch: String) -> (os: OS, version: String) {
     case "iOS-sim", "iOS-simulator": os = .iphone
     case "tvOS-sim", "tvOS-simulator": os = .tv
     case "watchOS-sim", "watchOS-simulator": os = .watch
+    case "visionOS-sim", "visionOS-simulator": os = .vision
     default:
         fail("Unknown libobjc platform: \(platform)")
     }

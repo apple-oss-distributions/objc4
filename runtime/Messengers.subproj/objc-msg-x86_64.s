@@ -497,10 +497,10 @@ LLookupEnd$2:
 
 	RESTORE_REGS MSGSEND
 
-.if $0 == NORMAL
-	test	%r11, %r11		// set ne for nonstret forwarding
-.else
+.if $0 == STRET
 	cmp	%r11, %r11		// set eq for stret forwarding
+.else
+	test	%r11, %r11		// set ne for nonstret forwarding
 .endif
 
 .endmacro

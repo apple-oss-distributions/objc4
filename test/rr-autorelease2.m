@@ -121,11 +121,15 @@ void *autorelease_lots_fn(void *singlePool)
     // last pool has only 1 autorelease in it
     pools[p++] = RR_PUSH();
 
+    RR_AUTORELEASE(RR_RETAIN(obj));
+
     for (int i = 0; i < COUNT; i++) {
         if (rand() % 1000 == 0  &&  !singlePool) {
             pools[p++] = RR_PUSH();
         } else {
-            RR_AUTORELEASE(RR_RETAIN(obj));
+            // Put different objects in the pool to avoid autorelease coalescing
+            // defeating our attempt to make lots and lots of pages.
+            RR_AUTORELEASE([[NSObject alloc] init]);
         }
     }
 

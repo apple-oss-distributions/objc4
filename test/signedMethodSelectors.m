@@ -1,9 +1,6 @@
-// TEST_CRASHES
-
 /*
 TEST_RUN_OUTPUT
 Calling smashed method.
-CRASHED: .*
 OR
 Calling smashed method.
 OK: signedMethodSelectors.m

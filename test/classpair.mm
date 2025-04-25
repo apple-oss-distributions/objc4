@@ -295,6 +295,15 @@ static void cycle(void)
     
     testassert(!objc_getClass("Sub"));
 
+    // Test creation of root classes.
+    testassertequal(objc_getClass("DynamicRoot"), Nil);
+    Class dynamicRoot = objc_allocateClassPair(Nil, "DynamicRoot", 0);
+    objc_registerClassPair(dynamicRoot);
+    testassertequal(class_getSuperclass(dynamicRoot), Nil);
+    testassertequal(objc_getClass("DynamicRoot"), dynamicRoot);
+    objc_disposeClassPair(dynamicRoot);
+    testassertequal(objc_getClass("DynamicRoot"), Nil);
+
     // fixme test layout setters
 }
 

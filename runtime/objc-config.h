@@ -159,6 +159,18 @@
 #   define SUPPORT_AUTORELEASEPOOL_DEDUP_PTRS 1
 #endif
 
+// Define SUPPORT_MUTABLE_SHARED_CACHE=1 on any platform that has a shared
+// cache with data such as refs and protocols in const segments
+#if TARGET_OS_EXCLAVEKIT
+#   define SUPPORT_MUTABLE_SHARED_CACHE 0
+#elif TARGET_OS_SIMULATOR
+#   define SUPPORT_MUTABLE_SHARED_CACHE 0
+#elif !__arm64e__
+#   define SUPPORT_MUTABLE_SHARED_CACHE 0
+#else
+#   define SUPPORT_MUTABLE_SHARED_CACHE 1
+#endif
+
 // Define HAVE_TASK_RESTARTABLE_RANGES to enable usage of
 // task_restartable_ranges_synchronize()
 #if TARGET_OS_EXCLAVEKIT
@@ -365,5 +377,16 @@
 #else
 #define SUPPORT_THREAD_LOCAL 0
 #endif
+
+// Whether to use Rosetta APIs. macOS and iOS use it, but not simulators or
+// other platforms. visionOS sets TARGET_OS_IOS in the internal SDK so we need
+// to explicitly exclude that
+#if (TARGET_OS_OSX || TARGET_OS_IOS) && \
+    !TARGET_OS_VISION && !TARGET_OS_SIMULATOR && !TARGET_OS_EXCLAVEKIT
+#define OBJC_USE_ROSETTA 1
+#else
+#define OBJC_USE_ROSETTA 0
+#endif
+
 
 #endif

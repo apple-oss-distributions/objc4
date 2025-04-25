@@ -164,7 +164,10 @@ _object_set_associative_reference(id object, const void *key, id value, uintptr_
     // rdar://problem/44094390
     if (!object && !value) return;
 
-    if (object->getIsa()->forbidsAssociatedObjects())
+    Class objectClass = object->getIsa();
+    objectClass->realizeIfNeeded();
+
+    if (objectClass->forbidsAssociatedObjects())
         _objc_fatal("objc_setAssociatedObject called on instance (%p) of class %s which does not allow associated objects", object, object_getClassName(object));
 
     DisguisedPtr<objc_object> disguised{(objc_object *)object};

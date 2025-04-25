@@ -40,10 +40,11 @@
 #include <stdint.h>
 #include <TargetConditionals.h>
 
-__BEGIN_DECLS
-
 #if __has_feature(ptrauth_calls)
 #include <ptrauth.h>
+
+__BEGIN_DECLS
+
 #define NXHashTable_ptrauth_prototype \
     __ptrauth(ptrauth_key_process_independent_data, 1, \
     ptrauth_string_discriminator("NXHashTable::prototype"))
@@ -57,6 +58,8 @@ __BEGIN_DECLS
     __ptrauth(ptrauth_key_process_independent_code, 1, \
     ptrauth_string_discriminator("NXHashTablePrototype::free"))
 #else
+__BEGIN_DECLS
+
 #define NXHashTable_ptrauth_prototype
 #define NXHashTable_ptrauth_hash
 #define NXHashTable_ptrauth_isEqual

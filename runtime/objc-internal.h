@@ -1349,6 +1349,14 @@ OBJC_EXPORT void
 _objc_patch_root_of_class(const struct mach_header * _Nonnull originalMH, void* _Nonnull originalClass,
                           const struct mach_header * _Nonnull replacementMH, const void* _Nonnull replacementClass);
 
+// True if this runtime supports lazy realization. When true, it is safe to use
+// classes without first explicitly realizing them (messaging them, or calling
+// objc_readClassPair).
+#define OBJC_SUPPORTSLAZYREALIZATION_DEFINED 1
+OBJC_EXPORT BOOL
+_objc_supportsLazyRealization(void)
+    OBJC_AVAILABLE(15.4, 18.4, 18.4, 11.4, 9.4);
+
 // API to only be called by classes that provide their own reference count storage
 
 OBJC_EXPORT void

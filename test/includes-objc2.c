@@ -1,3 +1,4 @@
+// TEST_CONFIG MEM=mrc,arc LANGUAGE=c,c++,objc,objc++
 // TEST_CFLAGS -D__OBJC2__
 
 // Verify that all headers can be included in any language, even if

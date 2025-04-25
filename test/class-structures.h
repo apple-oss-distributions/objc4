@@ -1,6 +1,8 @@
 // Structures to help us define fake classes in tests.
 
+#include <objc/runtime.h>
 #include <ptrauth.h>
+#include <stdint.h>
 
 struct ObjCClass {
     struct ObjCClass * __ptrauth_objc_isa_pointer isa;
@@ -54,6 +56,16 @@ struct ObjCMethodListSmall {
     uint32_t sizeAndFlags;
     uint32_t count;
     struct ObjCMethodSmall methods[];
+};
+
+struct ObjCCategory {
+    const char *name;
+    struct ObjCClass *cls;
+    struct ObjCMethodList * __ptrauth_objc_method_list_pointer instanceMethods;
+    struct ObjCMethodList * __ptrauth_objc_method_list_pointer classMethods;
+    struct protocol_list_t *protocols;
+    struct property_list_t *instanceProperties;
+    struct property_list_t *classProperties;
 };
 
 extern struct ObjCClass OBJC_METACLASS_$_NSObject;

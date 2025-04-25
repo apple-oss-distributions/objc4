@@ -1,6 +1,6 @@
 /* 
 need exception-safe ARC for exception deallocation tests 
-TEST_CONFIG OS=!exclavekit
+TEST_CONFIG OS=!exclavekit MEM=mrc,arc LANGUAGE=objc,objc++
 TEST_CFLAGS -fobjc-arc-exceptions -framework Foundation
 */
 

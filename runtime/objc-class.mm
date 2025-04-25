@@ -332,6 +332,8 @@ _class_lookUpIvar(Class cls, Ivar ivar, ptrdiff_t& ivarOffset,
 objc_ivar_memory_management_t 
 _class_getIvarMemoryManagement(Class cls, Ivar ivar)
 {
+    cls->realizeIfNeeded();
+
     ptrdiff_t offset;
     objc_ivar_memory_management_t memoryManagement;
     _class_lookUpIvar(cls, ivar, offset, memoryManagement);
@@ -812,6 +814,8 @@ Class class_getSuperclass(Class cls)
 BOOL class_isMetaClass(Class cls)
 {
     if (!cls) return NO;
+    if (!cls->isRealized())
+        return (cls->safe_ro()->flags & RO_META) != 0;
     return cls->isMetaClass();
 }
 
@@ -819,6 +823,7 @@ BOOL class_isMetaClass(Class cls)
 size_t class_getInstanceSize(Class cls)
 {
     if (!cls) return 0;
+    cls->realizeIfNeeded();
     return cls->alignedInstanceSize();
 }
 
@@ -871,6 +876,8 @@ _class_createInstances(Class cls, size_t extraBytes, id *results,
 {
     unsigned num_allocated;
     if (!cls) return 0;
+
+    cls->realizeIfNeeded();
 
     size_t size = cls->instanceSize(extraBytes);
 
@@ -926,7 +933,8 @@ inform_duplicate(const char *name, Class oldCls, Class newCls)
 
     OBJC_DEBUG_OPTION_REPORT_ERROR(DebugDuplicateClasses,
          "Class %s is implemented in both %s (%p) and %s (%p). "
-         "One of the two will be used. Which one is undefined.",
+         "This may cause spurious casting failures and mysterious crashes. "
+         "One of the duplicates must be removed or renamed.",
          name, oldName, oldCls, newName, newCls);
 }
 

@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXAggregateTarget section */
@@ -39,6 +39,19 @@
 			);
 			name = "objc-simulator";
 			productName = objc_simulator;
+		};
+		842AB7322CEF0DF600D7A577 /* objc-vfs-overlay */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 842AB7332CEF0DF600D7A577 /* Build configuration list for PBXAggregateTarget "objc-vfs-overlay" */;
+			buildPhases = (
+				842AB7362CEF0E1200D7A577 /* Write VFS */,
+			);
+			dependencies = (
+			);
+			name = "objc-vfs-overlay";
+			packageProductDependencies = (
+			);
+			productName = "objc-vfs-overlay";
 		};
 /* End PBXAggregateTarget section */
 
@@ -131,6 +144,17 @@
 		83EF5E9C20D2299E00F486A4 /* objc-blocktramps-arm.s in Sources */ = {isa = PBXBuildFile; fileRef = 8383A3A1122600E9009290B8 /* objc-blocktramps-arm.s */; };
 		83F4B52815E843B100E0926F /* NSObjCRuntime.h in Headers */ = {isa = PBXBuildFile; fileRef = 83F4B52615E843B100E0926F /* NSObjCRuntime.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		83F4B52915E843B100E0926F /* NSObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 83F4B52715E843B100E0926F /* NSObject.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		842581632CEE927E007C1920 /* ObjectiveCRPathInstallName.h in Headers */ = {isa = PBXBuildFile; fileRef = 8425815B2CEE90D6007C1920 /* ObjectiveCRPathInstallName.h */; };
+		842581642CEE927E007C1920 /* ObjectiveCRPathInstallName.c in Sources */ = {isa = PBXBuildFile; fileRef = 8425815C2CEE90D6007C1920 /* ObjectiveCRPathInstallName.c */; platformFilters = (ios, macos, tvos, watchos, ); };
+		842581662CEE928A007C1920 /* ObjectiveC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842581652CEE928A007C1920 /* ObjectiveC.swift */; };
+		8425816F2CEEB869007C1920 /* libswiftObjectiveC.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 84B3DAC72CEE827B009A3DB2 /* libswiftObjectiveC.dylib */; };
+		8425817C2CEEBB54007C1920 /* StdlibUnittest checkHashable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842581792CEEBB2E007C1920 /* StdlibUnittest checkHashable.swift */; };
+		8425817D2CEEBB54007C1920 /* StdlibUnittest checkEquatable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842581782CEEBB2E007C1920 /* StdlibUnittest checkEquatable.swift */; };
+		8425817E2CEEBB54007C1920 /* Creatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8425817A2CEEBB2E007C1920 /* Creatures.swift */; };
+		8425817F2CEEBB54007C1920 /* ObjectiveC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8425817B2CEEBB2E007C1920 /* ObjectiveC.swift */; };
+		842581972CEEBCB2007C1920 /* libObjectiveC-swiftoverlay-Test-Dylib.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 842581852CEEBC4B007C1920 /* libObjectiveC-swiftoverlay-Test-Dylib.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		842581982CEEBCCB007C1920 /* Trees.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842581932CEEBC5B007C1920 /* Trees.swift */; };
+		842AB73D2CEF1C4600D7A577 /* libobjc.A.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = D2AAC0630554660B00DB518D /* libobjc.A.dylib */; };
 		87BB4EA70EC39854005D08E1 /* objc-probes.d in Sources */ = {isa = PBXBuildFile; fileRef = 87BB4E900EC39633005D08E1 /* objc-probes.d */; };
 		9672F7EE14D5F488007CEC96 /* NSObject.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9672F7ED14D5F488007CEC96 /* NSObject.mm */; };
 		C204A64329D4DDF50054A65C /* objc-opt.h in Headers */ = {isa = PBXBuildFile; fileRef = C204A64229D4DDF50054A65C /* objc-opt.h */; };
@@ -171,6 +195,34 @@
 			remoteGlobalIDString = D2AAC0620554660B00DB518D;
 			remoteInfo = objc;
 		};
+		842581702CEEB869007C1920 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 08FB7793FE84155DC02AAC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 84B3DAC62CEE827B009A3DB2;
+			remoteInfo = ObjectiveC;
+		};
+		842581942CEEBC81007C1920 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 08FB7793FE84155DC02AAC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 842581842CEEBC4B007C1920;
+			remoteInfo = "ObjectiveC-swiftoverlay-Test-Dylib";
+		};
+		842AB7392CEF122400D7A577 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 08FB7793FE84155DC02AAC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 842AB7322CEF0DF600D7A577;
+			remoteInfo = "objc-vfs-overlay";
+		};
+		842AB73B2CEF122B00D7A577 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 08FB7793FE84155DC02AAC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 842AB7322CEF0DF600D7A577;
+			remoteInfo = "objc-vfs-overlay";
+		};
 		D36DEACD285B306B009B5CC4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 08FB7793FE84155DC02AAC07 /* Project object */;
@@ -198,6 +250,17 @@
 			);
 			name = "Install Manpages";
 			runOnlyForDeploymentPostprocessing = 1;
+		};
+		842581962CEEBC9B007C1920 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				842581972CEEBCB2007C1920 /* libObjectiveC-swiftoverlay-Test-Dylib.dylib in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
@@ -295,9 +358,23 @@
 		83EB007A121C9EC200B92C16 /* objc-sel-table.s */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.asm; name = "objc-sel-table.s"; path = "runtime/objc-sel-table.s"; sourceTree = "<group>"; };
 		83F4B52615E843B100E0926F /* NSObjCRuntime.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = NSObjCRuntime.h; path = runtime/NSObjCRuntime.h; sourceTree = "<group>"; };
 		83F4B52715E843B100E0926F /* NSObject.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = NSObject.h; path = runtime/NSObject.h; sourceTree = "<group>"; };
+		8425815B2CEE90D6007C1920 /* ObjectiveCRPathInstallName.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ObjectiveCRPathInstallName.h; sourceTree = "<group>"; };
+		8425815C2CEE90D6007C1920 /* ObjectiveCRPathInstallName.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ObjectiveCRPathInstallName.c; sourceTree = "<group>"; };
+		842581652CEE928A007C1920 /* ObjectiveC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveC.swift; sourceTree = "<group>"; };
+		8425816B2CEEB869007C1920 /* ObjectiveCTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ObjectiveCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		842581782CEEBB2E007C1920 /* StdlibUnittest checkEquatable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StdlibUnittest checkEquatable.swift"; sourceTree = "<group>"; };
+		842581792CEEBB2E007C1920 /* StdlibUnittest checkHashable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StdlibUnittest checkHashable.swift"; sourceTree = "<group>"; };
+		8425817A2CEEBB2E007C1920 /* Creatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Creatures.swift; sourceTree = "<group>"; };
+		8425817B2CEEBB2E007C1920 /* ObjectiveC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveC.swift; sourceTree = "<group>"; };
+		842581802CEEBBEE007C1920 /* ObjectiveC.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = ObjectiveC.xctestplan; sourceTree = "<group>"; };
+		842581852CEEBC4B007C1920 /* libObjectiveC-swiftoverlay-Test-Dylib.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = "libObjectiveC-swiftoverlay-Test-Dylib.dylib"; sourceTree = BUILT_PRODUCTS_DIR; };
+		842581932CEEBC5B007C1920 /* Trees.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trees.swift; sourceTree = "<group>"; };
+		842AB7382CEF0FF000D7A577 /* write-vfs-overlay.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "write-vfs-overlay.sh"; sourceTree = "<group>"; };
 		847A4AFB2AF4646400FC0A23 /* ObjectiveC.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; name = ObjectiveC.modulemap; path = runtime/Module/ObjectiveC.modulemap; sourceTree = "<group>"; };
 		847A4AFC2AF46A2D00FC0A23 /* ObjectiveC_Private.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; name = ObjectiveC_Private.modulemap; path = runtime/ModulePrivate/ObjectiveC_Private.modulemap; sourceTree = "<group>"; };
 		84AC349A2B50C00100096801 /* ObjectiveC_Private.apinotes */ = {isa = PBXFileReference; lastKnownFileType = text.apinotes; name = ObjectiveC_Private.apinotes; path = runtime/ModulePrivate/ObjectiveC_Private.apinotes; sourceTree = "<group>"; };
+		84B3DAC72CEE827B009A3DB2 /* libswiftObjectiveC.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libswiftObjectiveC.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		84B3DAD52CEE8402009A3DB2 /* ObjectiveC.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ObjectiveC.xcconfig; sourceTree = "<group>"; };
 		87BB4E900EC39633005D08E1 /* objc-probes.d */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.dtrace; name = "objc-probes.d"; path = "runtime/objc-probes.d"; sourceTree = "<group>"; };
 		9672F7ED14D5F488007CEC96 /* NSObject.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = NSObject.mm; path = runtime/NSObject.mm; sourceTree = "<group>"; };
 		BC8B5D1212D3D48100C78A5B /* libauto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libauto.dylib; path = /usr/lib/libauto.dylib; sourceTree = "<absolute>"; };
@@ -344,6 +421,29 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		842581682CEEB869007C1920 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8425816F2CEEB869007C1920 /* libswiftObjectiveC.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		842581832CEEBC4B007C1920 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		84B3DAC52CEE827B009A3DB2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				842AB73D2CEF1C4600D7A577 /* libobjc.A.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D289988505E68E00004EDB86 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -382,6 +482,11 @@
 				838485B20D6D67F900CEA253 /* Other */,
 				6EF877D82325D62600963DBB /* objcdt */,
 				E9AD465824925261002AF1DB /* check-preopt-caches */,
+				842AB7372CEF0FE200D7A577 /* objc-vfs-overlay */,
+				84B3DAD22CEE829C009A3DB2 /* ObjectiveC */,
+				842581762CEEBB26007C1920 /* ObjectiveCTests */,
+				842581902CEEBC53007C1920 /* ObjectiveC-swiftoverlay-Test-Dylib */,
+				842581802CEEBBEE007C1920 /* ObjectiveC.xctestplan */,
 				1AB674ADFE9D54B511CA2CBB /* Products */,
 				F9BCC72A205C6A1600DD9AFC /* Frameworks */,
 			);
@@ -445,6 +550,9 @@
 				F9BCC727205C68E800DD9AFC /* libobjc-trampolines.dylib */,
 				6EF877D72325D62600963DBB /* objcdt */,
 				D36DEAC4285B2C7D009B5CC4 /* libobjc-env.dylib */,
+				84B3DAC72CEE827B009A3DB2 /* libswiftObjectiveC.dylib */,
+				8425816B2CEEB869007C1920 /* ObjectiveCTests.xctest */,
+				842581852CEEBC4B007C1920 /* libObjectiveC-swiftoverlay-Test-Dylib.dylib */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -567,6 +675,44 @@
 			name = "Project Headers";
 			sourceTree = "<group>";
 		};
+		842581762CEEBB26007C1920 /* ObjectiveCTests */ = {
+			isa = PBXGroup;
+			children = (
+				8425817B2CEEBB2E007C1920 /* ObjectiveC.swift */,
+				8425817A2CEEBB2E007C1920 /* Creatures.swift */,
+				842581782CEEBB2E007C1920 /* StdlibUnittest checkEquatable.swift */,
+				842581792CEEBB2E007C1920 /* StdlibUnittest checkHashable.swift */,
+			);
+			path = ObjectiveCTests;
+			sourceTree = "<group>";
+		};
+		842581902CEEBC53007C1920 /* ObjectiveC-swiftoverlay-Test-Dylib */ = {
+			isa = PBXGroup;
+			children = (
+				842581932CEEBC5B007C1920 /* Trees.swift */,
+			);
+			path = "ObjectiveC-swiftoverlay-Test-Dylib";
+			sourceTree = "<group>";
+		};
+		842AB7372CEF0FE200D7A577 /* objc-vfs-overlay */ = {
+			isa = PBXGroup;
+			children = (
+				842AB7382CEF0FF000D7A577 /* write-vfs-overlay.sh */,
+			);
+			path = "objc-vfs-overlay";
+			sourceTree = "<group>";
+		};
+		84B3DAD22CEE829C009A3DB2 /* ObjectiveC */ = {
+			isa = PBXGroup;
+			children = (
+				84B3DAD52CEE8402009A3DB2 /* ObjectiveC.xcconfig */,
+				8425815B2CEE90D6007C1920 /* ObjectiveCRPathInstallName.h */,
+				8425815C2CEE90D6007C1920 /* ObjectiveCRPathInstallName.c */,
+				842581652CEE928A007C1920 /* ObjectiveC.swift */,
+			);
+			path = ObjectiveC;
+			sourceTree = "<group>";
+		};
 		D34CF10227E0BF6400A395CA /* Threading */ = {
 			isa = PBXGroup;
 			children = (
@@ -611,6 +757,21 @@
 			buildActionMask = 2147483647;
 			files = (
 				8306440920D24A5D00E356D2 /* objc-block-trampolines.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		842581812CEEBC4B007C1920 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		84B3DAC32CEE827B009A3DB2 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				842581632CEE927E007C1920 /* ObjectiveCRPathInstallName.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -706,6 +867,68 @@
 			productReference = 6EF877D72325D62600963DBB /* objcdt */;
 			productType = "com.apple.product-type.tool";
 		};
+		8425816A2CEEB869007C1920 /* ObjectiveCTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 842581722CEEB869007C1920 /* Build configuration list for PBXNativeTarget "ObjectiveCTests" */;
+			buildPhases = (
+				842581672CEEB869007C1920 /* Sources */,
+				842581682CEEB869007C1920 /* Frameworks */,
+				842581692CEEB869007C1920 /* Resources */,
+				842581962CEEBC9B007C1920 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				842AB73C2CEF122B00D7A577 /* PBXTargetDependency */,
+				842581712CEEB869007C1920 /* PBXTargetDependency */,
+				842581952CEEBC81007C1920 /* PBXTargetDependency */,
+			);
+			name = ObjectiveCTests;
+			packageProductDependencies = (
+			);
+			productName = ObjectiveCTests;
+			productReference = 8425816B2CEEB869007C1920 /* ObjectiveCTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		842581842CEEBC4B007C1920 /* ObjectiveC-swiftoverlay-Test-Dylib */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8425818B2CEEBC4B007C1920 /* Build configuration list for PBXNativeTarget "ObjectiveC-swiftoverlay-Test-Dylib" */;
+			buildPhases = (
+				842581812CEEBC4B007C1920 /* Headers */,
+				842581822CEEBC4B007C1920 /* Sources */,
+				842581832CEEBC4B007C1920 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "ObjectiveC-swiftoverlay-Test-Dylib";
+			packageProductDependencies = (
+			);
+			productName = "ObjectiveC-swiftoverlay-Test-Dylib";
+			productReference = 842581852CEEBC4B007C1920 /* libObjectiveC-swiftoverlay-Test-Dylib.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+		84B3DAC62CEE827B009A3DB2 /* ObjectiveC */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 84B3DACF2CEE827B009A3DB2 /* Build configuration list for PBXNativeTarget "ObjectiveC" */;
+			buildPhases = (
+				84B3DAC32CEE827B009A3DB2 /* Headers */,
+				84B3DAC42CEE827B009A3DB2 /* Sources */,
+				84B3DAC52CEE827B009A3DB2 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				842AB73A2CEF122400D7A577 /* PBXTargetDependency */,
+			);
+			name = ObjectiveC;
+			packageProductDependencies = (
+			);
+			productName = ObjectiveC;
+			productReference = 84B3DAC72CEE827B009A3DB2 /* libswiftObjectiveC.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
 		D2AAC0620554660B00DB518D /* objc */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1DEB914A08733D8E0010E9CD /* Build configuration list for PBXNativeTarget "objc" */;
@@ -786,6 +1009,19 @@
 					837F67A81A771F63004D34FA = {
 						CreatedOnToolsVersion = 6.3;
 					};
+					8425816A2CEEB869007C1920 = {
+						CreatedOnToolsVersion = 16.3;
+					};
+					842581842CEEBC4B007C1920 = {
+						CreatedOnToolsVersion = 16.3;
+					};
+					842AB7322CEF0DF600D7A577 = {
+						CreatedOnToolsVersion = 16.3;
+					};
+					84B3DAC62CEE827B009A3DB2 = {
+						CreatedOnToolsVersion = 16.3;
+						LastSwiftMigration = 1630;
+					};
 					D36DEAC3285B2C7D009B5CC4 = {
 						CreatedOnToolsVersion = 14.3;
 					};
@@ -812,9 +1048,23 @@
 				834F9B01212E560100F95A54 /* objc4_tests */,
 				6EF877EF23263D7000963DBB /* objc_executables */,
 				6EF877D62325D62600963DBB /* objcdt */,
+				84B3DAC62CEE827B009A3DB2 /* ObjectiveC */,
+				8425816A2CEEB869007C1920 /* ObjectiveCTests */,
+				842581842CEEBC4B007C1920 /* ObjectiveC-swiftoverlay-Test-Dylib */,
+				842AB7322CEF0DF600D7A577 /* objc-vfs-overlay */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		842581692CEEB869007C1920 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		830F2AB60D739AB600392440 /* Run Script (markgc) */ = {
@@ -864,6 +1114,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "set -x\nset -e\n\n# Set this to empty, or a space-separated list of tests to run.\ntestfiles=\"\"\n\n# Location inside DSTROOT of our test files and our BATS config file.\ntestdir=/AppleInternal/CoreOS/tests/objc4\nconfigdir=/AppleInternal/CoreOS/BATS/unit_tests\n\nmkdir -p ${DSTROOT}${testdir}\nmkdir -p ${DSTROOT}${configdir}\n\n# Common test.pl args for building and running.\ntestargs=\"ARCH=`echo ${ARCHS} | tr ' ' ','` OS=${PLATFORM_NAME} MEM=mrc,arc LANGUAGE=c,c++,objc,objc++ RUN=0 VERBOSE=1 BATS=1 ${testfiles}\"\n\n# Build the tests and BATS plist into DSTROOT.\nperl ${SRCROOT}/test/test.pl $testargs BUILD=1 RUN=0\n\n# Move the BATS plist where BATS expects it, and convert it to binary format.\nmv ${DSTROOT}${testdir}/objc4.plist ${DSTROOT}${configdir}\nplutil -convert binary1 ${DSTROOT}${configdir}/objc4.plist\n\n# Copy test sources to DSTROOT; running the test requires reading them again.\ncp -R ${SRCROOT}/test ${DSTROOT}${testdir}/test\n\n# Don't copy gcfiles because XBS chokes on them.\n# Don't copy other cruft because verifiers dislike them. (This doesn't matter for submissions but does affect local buildit builds.)\nrm -rf ${DSTROOT}${testdir}/test/gcfiles\nrm -rf ${DSTROOT}${testdir}/test/*~\nrm -rf ${DSTROOT}${testdir}/test/\\#*\\#\nrm -rf ${DSTROOT}${testdir}/test/.\\#*\n";
+		};
+		842AB7362CEF0E1200D7A577 /* Write VFS */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(PROJECT_DIR)/objc-vfs-overlay/write-vfs-overlay.sh",
+			);
+			name = "Write VFS";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = ". objc-vfs-overlay/write-vfs-overlay.sh\n";
 		};
 		84B230642AF2FD2E00422A32 /* Copy Extra Headers and API Notes and Module Maps */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -937,6 +1207,34 @@
 				6EF877E82326184000963DBB /* json.mm in Sources */,
 				6EF877DA2325D62600963DBB /* objcdt.mm in Sources */,
 				6EF877DE2325D79000963DBB /* objc-probes.d in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		842581672CEEB869007C1920 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8425817E2CEEBB54007C1920 /* Creatures.swift in Sources */,
+				8425817F2CEEBB54007C1920 /* ObjectiveC.swift in Sources */,
+				8425817D2CEEBB54007C1920 /* StdlibUnittest checkEquatable.swift in Sources */,
+				8425817C2CEEBB54007C1920 /* StdlibUnittest checkHashable.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		842581822CEEBC4B007C1920 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				842581982CEEBCCB007C1920 /* Trees.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		84B3DAC42CEE827B009A3DB2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				842581642CEE927E007C1920 /* ObjectiveCRPathInstallName.c in Sources */,
+				842581662CEE928A007C1920 /* ObjectiveC.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1018,6 +1316,26 @@
 			target = D2AAC0620554660B00DB518D /* objc */;
 			targetProxy = 837F67AC1A771F6E004D34FA /* PBXContainerItemProxy */;
 		};
+		842581712CEEB869007C1920 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 84B3DAC62CEE827B009A3DB2 /* ObjectiveC */;
+			targetProxy = 842581702CEEB869007C1920 /* PBXContainerItemProxy */;
+		};
+		842581952CEEBC81007C1920 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 842581842CEEBC4B007C1920 /* ObjectiveC-swiftoverlay-Test-Dylib */;
+			targetProxy = 842581942CEEBC81007C1920 /* PBXContainerItemProxy */;
+		};
+		842AB73A2CEF122400D7A577 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 842AB7322CEF0DF600D7A577 /* objc-vfs-overlay */;
+			targetProxy = 842AB7392CEF122400D7A577 /* PBXContainerItemProxy */;
+		};
+		842AB73C2CEF122B00D7A577 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 842AB7322CEF0DF600D7A577 /* objc-vfs-overlay */;
+			targetProxy = 842AB73B2CEF122B00D7A577 /* PBXContainerItemProxy */;
+		};
 		D36DEACE285B306B009B5CC4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = D36DEAC3285B2C7D009B5CC4 /* objc-env */;
@@ -1072,7 +1390,7 @@
 					"-Xlinker",
 					"-delay-lswiftCore",
 				);
-				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
+				"OTHER_LDFLAGS[sdk=appletvos*]" = (
 					"$(inherited)",
 					"-lc++abi",
 					"-Wl,-segalign,0x4000",
@@ -1088,6 +1406,41 @@
 					"-headerpad",
 					"-Xlinker",
 					0x100,
+				);
+				"OTHER_LDFLAGS[sdk=bridgeos*]" = (
+					"$(inherited)",
+					"-lc++abi",
+					"-Wl,-segalign,0x4000",
+					"-Xlinker",
+					"-sectalign",
+					"-Xlinker",
+					__DATA,
+					"-Xlinker",
+					__objc_data,
+					"-Xlinker",
+					0x1000,
+					"-Xlinker",
+					"-headerpad",
+					"-Xlinker",
+					0x100,
+				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-lc++abi",
+					"-Wl,-segalign,0x4000",
+					"-Xlinker",
+					"-sectalign",
+					"-Xlinker",
+					__DATA,
+					"-Xlinker",
+					__objc_data,
+					"-Xlinker",
+					0x1000,
+					"-Xlinker",
+					"-headerpad",
+					"-Xlinker",
+					0x100,
+					"-weak-lRosetta",
 				);
 				"OTHER_LDFLAGS[sdk=iphonesimulator*][arch=*]" = (
 					"$(inherited)",
@@ -1105,11 +1458,45 @@
 					__objc_data,
 					"-Xlinker",
 					0x1000,
-					"-loah",
+					"-lRosetta",
 				);
 				"OTHER_LDFLAGS[sdk=macosx*][arch=i386]" = (
 					"$(inherited)",
 					"-nodefaultlibs",
+				);
+				"OTHER_LDFLAGS[sdk=watchos*]" = (
+					"$(inherited)",
+					"-lc++abi",
+					"-Wl,-segalign,0x4000",
+					"-Xlinker",
+					"-sectalign",
+					"-Xlinker",
+					__DATA,
+					"-Xlinker",
+					__objc_data,
+					"-Xlinker",
+					0x1000,
+					"-Xlinker",
+					"-headerpad",
+					"-Xlinker",
+					0x100,
+				);
+				"OTHER_LDFLAGS[sdk=xros*]" = (
+					"$(inherited)",
+					"-lc++abi",
+					"-Wl,-segalign,0x4000",
+					"-Xlinker",
+					"-sectalign",
+					"-Xlinker",
+					__DATA,
+					"-Xlinker",
+					__objc_data,
+					"-Xlinker",
+					0x1000,
+					"-Xlinker",
+					"-headerpad",
+					"-Xlinker",
+					0x100,
 				);
 				OTHER_TAPI_FLAGS = "-Xparser -Wno-deprecated-declarations -Xparser -Wno-unavailable-declarations -Xparser -D_OBJC_PRIVATE_H_=1 -DOBJC_DECLARE_SYMBOLS=1 -D__APPLE_API_PRIVATE=1";
 				PRIVATE_HEADERS_FOLDER_PATH = "$(SYSTEM_PREFIX)/usr/local/include/objc";
@@ -1164,6 +1551,40 @@
 					"-Xlinker",
 					"-delay-lswiftCore",
 				);
+				"OTHER_LDFLAGS[sdk=appletvos*][arch=*]" = (
+					"$(inherited)",
+					"-lc++abi",
+					"-Wl,-segalign,0x4000",
+					"-Xlinker",
+					"-sectalign",
+					"-Xlinker",
+					__DATA,
+					"-Xlinker",
+					__objc_data,
+					"-Xlinker",
+					0x1000,
+					"-Xlinker",
+					"-headerpad",
+					"-Xlinker",
+					0x100,
+				);
+				"OTHER_LDFLAGS[sdk=bridgeos*]" = (
+					"$(inherited)",
+					"-lc++abi",
+					"-Wl,-segalign,0x4000",
+					"-Xlinker",
+					"-sectalign",
+					"-Xlinker",
+					__DATA,
+					"-Xlinker",
+					__objc_data,
+					"-Xlinker",
+					0x1000,
+					"-Xlinker",
+					"-headerpad",
+					"-Xlinker",
+					0x100,
+				);
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
 					"$(inherited)",
 					"-lc++abi",
@@ -1180,6 +1601,7 @@
 					"-headerpad",
 					"-Xlinker",
 					0x100,
+					"-weak-lRosetta",
 				);
 				"OTHER_LDFLAGS[sdk=iphonesimulator*][arch=*]" = (
 					"$(inherited)",
@@ -1197,11 +1619,45 @@
 					__objc_data,
 					"-Xlinker",
 					0x1000,
-					"-loah",
+					"-lRosetta",
 				);
 				"OTHER_LDFLAGS[sdk=macosx*][arch=i386]" = (
 					"$(inherited)",
 					"-nodefaultlibs",
+				);
+				"OTHER_LDFLAGS[sdk=watchos*][arch=*]" = (
+					"$(inherited)",
+					"-lc++abi",
+					"-Wl,-segalign,0x4000",
+					"-Xlinker",
+					"-sectalign",
+					"-Xlinker",
+					__DATA,
+					"-Xlinker",
+					__objc_data,
+					"-Xlinker",
+					0x1000,
+					"-Xlinker",
+					"-headerpad",
+					"-Xlinker",
+					0x100,
+				);
+				"OTHER_LDFLAGS[sdk=xros*]" = (
+					"$(inherited)",
+					"-lc++abi",
+					"-Wl,-segalign,0x4000",
+					"-Xlinker",
+					"-sectalign",
+					"-Xlinker",
+					__DATA,
+					"-Xlinker",
+					__objc_data,
+					"-Xlinker",
+					0x1000,
+					"-Xlinker",
+					"-headerpad",
+					"-Xlinker",
+					0x100,
 				);
 				OTHER_TAPI_FLAGS = "-Xparser -Wno-deprecated-declarations -Xparser -Wno-unavailable-declarations -Xparser -D_OBJC_PRIVATE_H_=1 -DOBJC_DECLARE_SYMBOLS=1 -D__APPLE_API_PRIVATE=1";
 				PRIVATE_HEADERS_FOLDER_PATH = "$(SYSTEM_PREFIX)/usr/local/include/objc";
@@ -1225,20 +1681,27 @@
 		1DEB914F08733D8E0010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_LINK_OBJC_RUNTIME = NO;
 				CLANG_OBJC_RUNTIME = NO;
 				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = "$(RC_ProjectSourceVersion:default=1.0)";
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = "$(_NOT_$(GCC_SYMBOLS_PRIVATE_EXTERN))";
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_ENABLE_CPP_EXCEPTIONS = NO;
 				GCC_ENABLE_CPP_RTTI = NO;
 				GCC_INLINES_ARE_PRIVATE_EXTERN = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"OS_OBJECT_USE_OBJC=0",
 					"OBJC_IS_DEBUG_BUILD=1",
+					"DEBUG=1",
 				);
 				GCC_STRICT_ALIASING = YES;
 				GCC_SYMBOLS_PRIVATE_EXTERN = YES;
@@ -1250,6 +1713,8 @@
 				GCC_WARN_SHADOW = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LLVM_LTO = YES;
+				MARKETING_VERSION = 1.0;
+				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CFLAGS = "";
 				"OTHER_CFLAGS[arch=x86_64]" = "-fobjc-legacy-dispatch";
 				OTHER_CPLUSPLUSFLAGS = (
@@ -1258,7 +1723,12 @@
 					"-fno-typed-cxx-new-delete",
 				);
 				SDKROOT = macosx.internal;
-				SUPPORTED_PLATFORMS = "macosx iphoneos appletvos watchos xros";
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator watchos watchsimulator appletvos appletvsimulator bridgeos xros xrsimulator exclavekit.macosx exclavekit.iphoneos exclavekit.watchos exclavekit.appletvos exclavekit.xros";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+				SYSTEM_FRAMEWORK_SEARCH_PATHS_USE_FSYSTEM = YES;
+				VERSIONING_SYSTEM = "apple-generic-hidden";
 				WARNING_CFLAGS = (
 					"-Wall",
 					"-Wextra",
@@ -1269,22 +1739,30 @@
 					"-Wno-cast-of-sel-type",
 					"-Wformat-nonliteral",
 				);
+				_NOT_ = YES;
+				_NOT_NO = YES;
+				_NOT_YES = NO;
 			};
 			name = Debug;
 		};
 		1DEB915008733D8E0010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_LINK_OBJC_RUNTIME = NO;
 				CLANG_OBJC_RUNTIME = NO;
 				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = "$(RC_ProjectSourceVersion:default=1.0)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_ENABLE_CPP_EXCEPTIONS = NO;
 				GCC_ENABLE_CPP_RTTI = NO;
 				GCC_INLINES_ARE_PRIVATE_EXTERN = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"OS_OBJECT_USE_OBJC=0",
 					"NDEBUG=1",
@@ -1299,6 +1777,7 @@
 				GCC_WARN_SHADOW = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LLVM_LTO = YES;
+				MARKETING_VERSION = 1.0;
 				OTHER_CFLAGS = "-momit-leaf-frame-pointer";
 				"OTHER_CFLAGS[arch=x86_64]" = (
 					"-momit-leaf-frame-pointer",
@@ -1310,7 +1789,11 @@
 					"-fno-typed-cxx-new-delete",
 				);
 				SDKROOT = macosx.internal;
-				SUPPORTED_PLATFORMS = "macosx iphoneos appletvos watchos xros";
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator watchos watchsimulator appletvos appletvsimulator bridgeos xros xrsimulator exclavekit.macosx exclavekit.iphoneos exclavekit.watchos exclavekit.appletvos exclavekit.xros";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+				SYSTEM_FRAMEWORK_SEARCH_PATHS_USE_FSYSTEM = YES;
+				VERSIONING_SYSTEM = "apple-generic-hidden";
 				WARNING_CFLAGS = (
 					"-Wall",
 					"-Wextra",
@@ -1321,6 +1804,9 @@
 					"-Wno-cast-of-sel-type",
 					"-Wformat-nonliteral",
 				);
+				_NOT_ = YES;
+				_NOT_NO = YES;
+				_NOT_YES = NO;
 			};
 			name = Release;
 		};
@@ -1410,6 +1896,118 @@
 		};
 		837F67AB1A771F63004D34FA /* Release */ = {
 			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		842581732CEEB869007C1920 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-ivfsoverlay",
+					"\"$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml\"",
+				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -vfsoverlay \"$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml\" -Xcc -ivfsoverlay -Xcc \"$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml\"";
+				PRODUCT_BUNDLE_IDENTIFIER = com.apple.ObjectiveCTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SWIFT_INCLUDE_PATHS__$(DEPLOYMENT_LOCATION:default=NO))";
+				SWIFT_INCLUDE_PATHS__YES = "$(DSTROOT)$(SYSTEM_PREFIX)/usr/lib/swift";
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "";
+			};
+			name = Debug;
+		};
+		842581742CEEB869007C1920 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-ivfsoverlay",
+					"\"$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml\"",
+				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -vfsoverlay \"$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml\" -Xcc -ivfsoverlay -Xcc \"$(CONFIGURATION_TEMP_DIR)/objc-overlay.yaml\"";
+				PRODUCT_BUNDLE_IDENTIFIER = com.apple.ObjectiveCTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SWIFT_INCLUDE_PATHS__$(DEPLOYMENT_LOCATION:default=NO))";
+				SWIFT_INCLUDE_PATHS__YES = "$(DSTROOT)$(SYSTEM_PREFIX)/usr/lib/swift";
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "";
+			};
+			name = Release;
+		};
+		8425818C2CEEBC4B007C1920 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = "$(CURRENT_PROJECT_VERSION)";
+				EXECUTABLE_PREFIX = lib;
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				"IS_ZIPPERED[sdk=macosx*]" = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "";
+			};
+			name = Debug;
+		};
+		8425818D2CEEBC4B007C1920 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = "$(CURRENT_PROJECT_VERSION)";
+				EXECUTABLE_PREFIX = lib;
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				"IS_ZIPPERED[sdk=macosx*]" = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "";
+			};
+			name = Release;
+		};
+		842AB7342CEF0DF600D7A577 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BASE_DIRECTORY = "$(BASE_DIRECTORY__$(DEPLOYMENT_LOCATION:default=NO))";
+				BASE_DIRECTORY__NO = "$(BUILT_PRODUCTS_DIR)";
+				BASE_DIRECTORY__YES = "$(DSTROOT)";
+				INSTALLHDRS_SCRIPT_PHASE = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		842AB7352CEF0DF600D7A577 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BASE_DIRECTORY = "$(BASE_DIRECTORY__$(DEPLOYMENT_LOCATION:default=NO))";
+				BASE_DIRECTORY__NO = "$(BUILT_PRODUCTS_DIR)";
+				BASE_DIRECTORY__YES = "$(DSTROOT)";
+				INSTALLHDRS_SCRIPT_PHASE = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		84B3DACD2CEE827B009A3DB2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 84B3DAD52CEE8402009A3DB2 /* ObjectiveC.xcconfig */;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		84B3DACE2CEE827B009A3DB2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 84B3DAD52CEE8402009A3DB2 /* ObjectiveC.xcconfig */;
 			buildSettings = {
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -1671,6 +2269,42 @@
 			buildConfigurations = (
 				837F67AA1A771F63004D34FA /* Debug */,
 				837F67AB1A771F63004D34FA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		842581722CEEB869007C1920 /* Build configuration list for PBXNativeTarget "ObjectiveCTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				842581732CEEB869007C1920 /* Debug */,
+				842581742CEEB869007C1920 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8425818B2CEEBC4B007C1920 /* Build configuration list for PBXNativeTarget "ObjectiveC-swiftoverlay-Test-Dylib" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8425818C2CEEBC4B007C1920 /* Debug */,
+				8425818D2CEEBC4B007C1920 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		842AB7332CEF0DF600D7A577 /* Build configuration list for PBXAggregateTarget "objc-vfs-overlay" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				842AB7342CEF0DF600D7A577 /* Debug */,
+				842AB7352CEF0DF600D7A577 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		84B3DACF2CEE827B009A3DB2 /* Build configuration list for PBXNativeTarget "ObjectiveC" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				84B3DACD2CEE827B009A3DB2 /* Debug */,
+				84B3DACE2CEE827B009A3DB2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

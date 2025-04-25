@@ -1,4 +1,4 @@
-// TEST_CONFIG
+// TEST_CONFIG MEM=mrc,arc LANGUAGE=c,c++,objc,objc++
 
 // DO NOT include anything else here
 #include <objc/objc.h>

@@ -68,7 +68,7 @@ inline bool
 objc_object::isClass() const
 {
     if (isTaggedPointer()) return false;
-    return ISA()->isMetaClass();
+    return class_isMetaClass(ISA());
 }
 
 
@@ -304,11 +304,11 @@ objc_object::initIsa(Class cls)
 inline void 
 objc_object::initClassIsa(Class cls)
 {
-    if (DisableNonpointerIsa  ||  cls->instancesRequireRawIsa()) {
-        initIsa(cls, false/*not nonpointer*/, false);
-    } else {
-        initIsa(cls, true/*nonpointer*/, false);
-    }
+    // A class's isa should only be set to a metaclass.
+    ASSERT(cls->isMetaClassMaybeUnrealized());
+
+    // Classes always use raw pointer isa.
+    initIsa(cls, false/*not nonpointer*/, false);
 }
 
 inline void
@@ -593,8 +593,9 @@ objc_object::rootDealloc()
 {
     if (isTaggedPointer()) return;  // fixme necessary?
 
+    // We only get here through a msgSend, so the class is realized.
 #if !ISA_HAS_INLINE_RC
-    object_dispose((id)this);
+    _object_dispose_nonnull_realized((id)this);
 #else
     if (fastpath(isa().nonpointer                     &&
                  !isa().weakly_referenced             &&
@@ -610,7 +611,7 @@ objc_object::rootDealloc()
         free(this);
     } 
     else {
-        object_dispose((id)this);
+        _object_dispose_nonnull_realized((id)this);
     }
 #endif // ISA_HAS_INLINE_RC
 }
@@ -1183,7 +1184,8 @@ inline void
 objc_object::rootDealloc()
 {
     if (isTaggedPointer()) return;
-    object_dispose((id)this);
+    // We only get here through a msgSend, so the class is realized.
+    _object_dispose_nonnull_realized((id)this);
 }
 
 
@@ -1639,6 +1641,10 @@ prepareOptimizedReturn(id obj, bool cameFromRootAutorelease, ReturnDisposition d
             return false;
 
         class_initialize(cls, obj);
+
+        // If initialize left anything in TLS, move that to the pool too.
+        ReturnAutoreleaseInfo afterInitializeInfo = getReturnAutoreleaseInfo();
+        moveTLSAutoreleaseToPool(afterInitializeInfo);
     }
 
     // If the object has custom RR overrides and this is an explicit return

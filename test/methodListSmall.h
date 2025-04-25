@@ -1,6 +1,7 @@
 #include "test.h"
 #include "class-structures.h"
 
+__attribute__((section("__DATA,__objc_const")))
 struct ObjCClass_ro FooMetaclass_ro = {
     .flags = 1,
     .instanceStart = 40,
@@ -156,6 +157,7 @@ _Foo_methodlistSmall:\n\
     .long _myMethod1 - .\n\
 ");
 
+__attribute__((section("__DATA,__objc_const")))
 struct ObjCClass_ro Foo_ro = {
     .instanceStart = 8,
     .instanceSize = 8,

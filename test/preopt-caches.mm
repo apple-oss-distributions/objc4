@@ -36,7 +36,28 @@ END
 #include <spawn.h>
 #include <sys/poll.h>
 
+#if !TARGET_OS_EXCLAVEKIT
+#include <execinfo.h>
+#endif
+
 #include "test.h"
+
+// Bring a local copy of _objc_inform_backtrace for the implementation of the
+// ASSERT macro.
+__attribute__((noinline)) void
+_objc_inform_backtrace(const char *linePrefix)
+{
+#if !TARGET_OS_EXCLAVEKIT
+    void *stack[128];
+    int count = backtrace(stack, sizeof(stack)/sizeof(stack[0]));
+    char **sym = backtrace_symbols(stack, count);
+    // Start at 1 to skip this function.
+    for (int i = 1; i < count; i++) {
+        fprintf(stderr, "%s%s", linePrefix, sym[i]);
+    }
+    free(sym);
+#endif
+}
 
 int validate_dylib_in_forked_process(const char * const toolPath, const char * const dylib)
 {
@@ -315,7 +336,8 @@ int main (int argc, const char * argv[])
     std::set<std::string> blacklistedLibraries {
         "/System/Library/Health/FeedItemPlugins/Summaries.healthplugin/Summaries",
         // Crashes the Swift runtime on realization: rdar://76149282 (Crash realising classes after dlopening /System/Library/Health/FeedItemPlugins/Summaries.healthplugin/Summaries)
-        "/System/Library/PrivateFrameworks/Memories.framework/Memories" // rdar://76150151 (dlopen /System/Library/PrivateFrameworks/Memories.framework/Memories hangs)
+        "/System/Library/PrivateFrameworks/Memories.framework/Memories", // rdar://76150151 (dlopen /System/Library/PrivateFrameworks/Memories.framework/Memories hangs)
+        "/System/Library/Frameworks/RoomPlan.framework/RoomPlan", // Weak-linked framework causes Swift runtime crash on some devices
     };
 
     if (argc == 1) {

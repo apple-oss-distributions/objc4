@@ -130,9 +130,8 @@
 #define FAST_HAS_DEFAULT_RR     (1UL<<2)
 // data pointer
 #if TARGET_OS_EXCLAVEKIT
-// The mask has to be computed at startup, so defer to the global variable.
-#define FAST_DATA_MASK          objc_debug_isa_class_mask
-#define DEBUG_DATA_MASK         objc_debug_isa_class_mask
+#define FAST_DATA_MASK          0x0f00000ffffffff8UL
+#define DEBUG_DATA_MASK         0x0f00000ffffffff8UL
 #elif TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
 #define FAST_DATA_MASK          0x0f00007ffffffff8UL
 #define DEBUG_DATA_MASK         0x0000007ffffffff8UL
@@ -141,11 +140,9 @@
 #define DEBUG_DATA_MASK         0x00007ffffffffff8UL
 #endif
 
-#if !TARGET_OS_EXCLAVEKIT
 static_assert((OBJC_VM_MAX_ADDRESS & FAST_DATA_MASK)
               == (OBJC_VM_MAX_ADDRESS & ~7UL),
               "FAST_DATA_MASK must not mask off pointer bits");
-#endif
 
 // just the flags
 #define FAST_FLAGS_MASK         0x0000000000000007UL
@@ -1632,6 +1629,8 @@ struct protocol_t : objc_object {
     property_list_t *_classProperties;
 
     const char *demangledName();
+    bool hasDemangledName() const;
+    void setDemangledName_locked(const char* name);
 
     const char *nameForLogging() {
         return demangledName();
@@ -2466,11 +2465,18 @@ struct class_data_bits_t {
     friend objc_class;
 
     // Values are the FAST_ flags above.
-    uintptr_t bits;
+    // Memory ordering: `bits` stores a pointer to a class_ro_t or class_rw_t.
+    // When storing a new pointer, we do a store-release to ensure that the
+    // pointed-to data is available to readers. The readers do a relaxed load
+    // and rely on the implicit data dependency ordering we get from the
+    // hardware, as LLVM emits an unnecessary barrier when using
+    // std::memory_order_consume. When only modifying flags packed into the
+    // spare bits, a relaxed store can be used.
+    explicit_atomic<uintptr_t> bits;
 private:
     bool getBit(uintptr_t bit) const
     {
-        return bits & bit;
+        return bits.load(std::memory_order_relaxed) & bit;
     }
 
     // Atomically set the bits in `set` and clear the bits in `clear`.
@@ -2478,22 +2484,22 @@ private:
     // this function will mark it as using the RW signing scheme.
     void setAndClearBits(uintptr_t set, uintptr_t clear)
     {
+        ASSERT(has_rw_pointer());
         ASSERT((set & clear) == 0);
-        uintptr_t newBits, oldBits = LoadExclusive(&bits);
+        uintptr_t newBits;
+        uintptr_t oldBits = bits.load(std::memory_order_relaxed);
         do {
             uintptr_t authBits
-                = (oldBits
-                   ? (uintptr_t)ptrauth_auth_data((class_rw_t *)oldBits,
-                                                  CLASS_DATA_BITS_RW_SIGNING_KEY,
-                                                  ptrauth_blend_discriminator(&bits,
-                                                                              CLASS_DATA_BITS_RW_DISCRIMINATOR))
-                   : FAST_IS_RW_POINTER);
+                = (uintptr_t)ptrauth_auth_data((class_rw_t *)oldBits,
+                                               CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                               ptrauth_blend_discriminator(&bits,
+                                                                           CLASS_DATA_BITS_RW_DISCRIMINATOR));
             newBits = (authBits | set) & ~clear;
             newBits = (uintptr_t)ptrauth_sign_unauthenticated((class_rw_t *)newBits,
                                                               CLASS_DATA_BITS_RW_SIGNING_KEY,
                                                               ptrauth_blend_discriminator(&bits,
                                                                                           CLASS_DATA_BITS_RW_DISCRIMINATOR));
-        } while (slowpath(!StoreReleaseExclusive(&bits, &oldBits, newBits)));
+        } while (slowpath(!bits.compare_exchange_weak(oldBits, newBits, std::memory_order_relaxed, std::memory_order_relaxed)));
     }
 
     void setBits(uintptr_t set) {
@@ -2507,45 +2513,51 @@ private:
 public:
 
     void copyRWFrom(const class_data_bits_t &other) {
-        bits = (uintptr_t)ptrauth_auth_and_resign((class_rw_t *)other.bits,
-                                                  CLASS_DATA_BITS_RW_SIGNING_KEY,
-                                                  ptrauth_blend_discriminator(&other.bits,
-                                                                              CLASS_DATA_BITS_RW_DISCRIMINATOR),
-                                                  CLASS_DATA_BITS_RW_SIGNING_KEY,
-                                                  ptrauth_blend_discriminator(&bits,
-                                                                              CLASS_DATA_BITS_RW_DISCRIMINATOR));
+        uintptr_t newValue = (uintptr_t)ptrauth_auth_and_resign((class_rw_t *)other.bits.load(std::memory_order_relaxed),
+                                                                CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                                                ptrauth_blend_discriminator(&other.bits,
+                                                                                            CLASS_DATA_BITS_RW_DISCRIMINATOR),
+                                                                CLASS_DATA_BITS_RW_SIGNING_KEY,
+                                                                ptrauth_blend_discriminator(&bits,
+                                                                                            CLASS_DATA_BITS_RW_DISCRIMINATOR));
+        bits.store(newValue, std::memory_order_release);
     }
 
     void copyROFrom(const class_data_bits_t &other, bool authenticate) {
         ASSERT((flags() & RO_REALIZED) == 0);
+        uintptr_t newBits = other.bits.load(std::memory_order_relaxed);
         if (authenticate) {
-            bits = (uintptr_t)ptrauth_auth_and_resign((class_ro_t *)other.bits,
-                                                      CLASS_DATA_BITS_RO_SIGNING_KEY,
-                                                      ptrauth_blend_discriminator(&other.bits,
-                                                                                  CLASS_DATA_BITS_RO_DISCRIMINATOR),
-                                                      CLASS_DATA_BITS_RO_SIGNING_KEY,
-                                                      ptrauth_blend_discriminator(&bits,
-                                                                                  CLASS_DATA_BITS_RO_DISCRIMINATOR));
-        } else {
-            bits = other.bits;
+            newBits = (uintptr_t)ptrauth_auth_and_resign((class_ro_t *)newBits,
+                                                         CLASS_DATA_BITS_RO_SIGNING_KEY,
+                                                         ptrauth_blend_discriminator(&other.bits,
+                                                                                     CLASS_DATA_BITS_RO_DISCRIMINATOR),
+                                                         CLASS_DATA_BITS_RO_SIGNING_KEY,
+                                                         ptrauth_blend_discriminator(&bits,
+                                                                                     CLASS_DATA_BITS_RO_DISCRIMINATOR));
         }
+        bits.store(newBits, std::memory_order_relaxed);
     }
 
     bool has_rw_pointer() const {
+        return has_rw_pointer(bits.load(std::memory_order_relaxed));
+    }
+
+    static bool has_rw_pointer(uintptr_t bits) {
 #if FAST_IS_RW_POINTER
         return (bool)(bits & FAST_IS_RW_POINTER);
 #else
-        class_rw_t *maybe_rw = (class_rw_t *)(bits & FAST_DATA_MASK);
-        return maybe_rw && (bool)(maybe_rw->flags & RW_REALIZED);
+        return bits != 0 && (flags(bits) & RW_REALIZED);
 #endif
     }
 
     class_rw_t* data() const {
+        ASSERT(has_rw_pointer());
+        uintptr_t localBits = bits.load(std::memory_order_relaxed);
 #if __BUILDING_OBJCDT__
-        return (class_rw_t *)((uintptr_t)ptrauth_strip((class_rw_t *)bits,
+        return (class_rw_t *)((uintptr_t)ptrauth_strip((class_rw_t *)localBits,
                                                            CLASS_DATA_BITS_RW_SIGNING_KEY) & FAST_DATA_MASK);
 #else
-        return (class_rw_t *)((uintptr_t)ptrauth_auth_data((class_rw_t *)bits,
+        return (class_rw_t *)((uintptr_t)ptrauth_auth_data((class_rw_t *)localBits,
                                                            CLASS_DATA_BITS_RW_SIGNING_KEY,
                                                            ptrauth_blend_discriminator(&bits,
                                                                                        CLASS_DATA_BITS_RW_DISCRIMINATOR)) & FAST_DATA_MASK);
@@ -2559,19 +2571,21 @@ public:
 
         uintptr_t authedBits;
 
+        uintptr_t localBits = bits.load(std::memory_order_relaxed);
+
         if (objc::disableEnforceClassRXPtrAuth) {
-            authedBits = (uintptr_t)ptrauth_strip((const void *)bits,
+            authedBits = (uintptr_t)ptrauth_strip((const void *)localBits,
                                                   CLASS_DATA_BITS_RW_SIGNING_KEY);
         } else {
-            if (!bits)
+            if (localBits == 0) {
                 authedBits = 0;
-            else if (has_rw_pointer()) {
-                authedBits = (uintptr_t)ptrauth_auth_data((class_rw_t *)bits,
+            } else if (has_rw_pointer(localBits)) {
+                authedBits = (uintptr_t)ptrauth_auth_data((class_rw_t *)localBits,
                                                           CLASS_DATA_BITS_RW_SIGNING_KEY,
                                                           ptrauth_blend_discriminator(&bits,
                                                                                       CLASS_DATA_BITS_RW_DISCRIMINATOR));
             } else {
-                authedBits = (uintptr_t)ptrauth_auth_data((class_ro_t *)bits,
+                authedBits = (uintptr_t)ptrauth_auth_data((class_ro_t *)localBits,
                                                           CLASS_DATA_BITS_RO_SIGNING_KEY,
                                                           ptrauth_blend_discriminator(&bits,
                                                                                       CLASS_DATA_BITS_RO_DISCRIMINATOR));
@@ -2589,25 +2603,27 @@ public:
                                            CLASS_DATA_BITS_RW_SIGNING_KEY,
                                            ptrauth_blend_discriminator(&bits,
                                                                        CLASS_DATA_BITS_RW_DISCRIMINATOR));
-        atomic_thread_fence(memory_order_release);
-        bits = (uintptr_t)signedData;
+        bits.store((uintptr_t)signedData, std::memory_order_release);
     }
 
     // Get the class's ro data, even in the presence of concurrent realization.
-    // fixme this isn't really safe without a compiler barrier at least
-    // and probably a memory barrier when realizeClass changes the data field
     template <Authentication authentication = Authentication::Authenticate>
     const class_ro_t *safe_ro() const {
-        if (has_rw_pointer()) {
+        // Load bits once, then work on that value. This prevents us from seeing
+        // !has_rw_pointer, then concurrently a class_rw_t pointer is stored,
+        // then we try to authenticate it using the RO signing scheme, or return
+        // a class_rw_t* as a class_ro_t* when ptrauth is not enabled.
+        uintptr_t bitsValue = bits.load(std::memory_order_relaxed);
+        if (has_rw_pointer(bitsValue)) {
             return data()->ro();
         }
 
         uintptr_t authedBits;
         if (authentication == Authentication::Strip || objc::disableEnforceClassRXPtrAuth) {
-            authedBits = (uintptr_t)ptrauth_strip((const void *)bits,
+            authedBits = (uintptr_t)ptrauth_strip((const void *)bitsValue,
                                                   CLASS_DATA_BITS_RO_SIGNING_KEY);
         } else {
-            authedBits = (uintptr_t)ptrauth_auth_data((const void *)bits,
+            authedBits = (uintptr_t)ptrauth_auth_data((const void *)bitsValue,
                                                       CLASS_DATA_BITS_RO_SIGNING_KEY,
                                                       ptrauth_blend_discriminator(&bits,
                                                                                   CLASS_DATA_BITS_RO_DISCRIMINATOR));
@@ -2617,7 +2633,7 @@ public:
     }
 
     // This intentionally DOES NOT check the signatures
-    uint32_t flags() const {
+    static uint32_t flags(uintptr_t bits) {
         static_assert(offsetof(class_rw_t, flags) == 0
                       && offsetof(class_ro_t, flags) == 0, "flags at start");
 
@@ -2636,6 +2652,9 @@ public:
         return *pflags;
     }
 
+    uint32_t flags() const {
+        return flags(bits.load(std::memory_order_relaxed));
+    }
 #if SUPPORT_INDEXED_ISA
     void setClassArrayIndex(unsigned Idx) {
         // 0 is unused as then we can rely on zero-initialisation from calloc.
@@ -2679,11 +2698,12 @@ public:
 
         ASSERT(!has_rw_pointer());
 
+        uintptr_t localBits = bits.load(std::memory_order_relaxed);
         if (objc::disableEnforceClassRXPtrAuth) {
-            authedBits = (uintptr_t)ptrauth_strip((const void *)bits,
+            authedBits = (uintptr_t)ptrauth_strip((const void *)localBits,
                                                   CLASS_DATA_BITS_RO_SIGNING_KEY);
         } else {
-            authedBits = (uintptr_t)ptrauth_auth_data((class_ro_t *)bits,
+            authedBits = (uintptr_t)ptrauth_auth_data((class_ro_t *)localBits,
                                                       CLASS_DATA_BITS_RO_SIGNING_KEY,
                                                       ptrauth_blend_discriminator(&bits,
                                                                                       CLASS_DATA_BITS_RO_DISCRIMINATOR));
@@ -2691,10 +2711,11 @@ public:
 
         uintptr_t newBits = ((authedBits & ~FAST_IS_SWIFT_LEGACY)
                              | FAST_IS_SWIFT_STABLE);
-        bits = (uintptr_t)ptrauth_sign_unauthenticated((class_ro_t *)newBits,
-                                                       CLASS_DATA_BITS_RO_SIGNING_KEY,
-                                                       ptrauth_blend_discriminator(&bits,
-                                                                                   CLASS_DATA_BITS_RO_DISCRIMINATOR));
+        uintptr_t signedBits = (uintptr_t)ptrauth_sign_unauthenticated((class_ro_t *)newBits,
+                                                                       CLASS_DATA_BITS_RO_SIGNING_KEY,
+                                                                       ptrauth_blend_discriminator(&bits,
+                                                                                                   CLASS_DATA_BITS_RO_DISCRIMINATOR));
+        bits.store(signedBits, std::memory_order_relaxed);
     }
 
     // fixme remove this once the Swift runtime uses the stable bits
@@ -2795,12 +2816,14 @@ struct objc_class : objc_object {
     }
 #else
     bool hasCustomRR() const {
-        return !(bits.data()->flags & RW_HAS_DEFAULT_RR);
+        return !(bits.flags() & RW_HAS_DEFAULT_RR);
     }
     void setHasDefaultRR() {
+        ASSERT(isRealized());
         bits.data()->setFlags(RW_HAS_DEFAULT_RR);
     }
     void setHasCustomRR() {
+        ASSERT(isRealized());
         bits.data()->clearFlags(RW_HAS_DEFAULT_RR);
     }
 #endif
@@ -3090,7 +3113,6 @@ struct objc_class : objc_object {
     void setInitialized();
 
     bool isLoadable() const {
-        ASSERT(isRealized());
         return true;  // any class registered for +load is definitely loadable
     }
 
@@ -3098,8 +3120,17 @@ struct objc_class : objc_object {
 
     // Locking: To prevent concurrent realization, hold runtimeLock.
     bool isRealized() const {
-        return !isStubClass() && (bits.flags() & RW_REALIZED);
+        // Check has_rw_pointer since it's faster than checking the RW_REALIZED
+        // flag when we have FAST_IS_RW_POINTER, and identical to checking the
+        // RW_REALIZED flag otherwise.
+        return !isStubClass() && (bits.has_rw_pointer());
     }
+
+    // Realize the class if needed. Does nothing if the class is already
+    // realized. Acquires runtimeLock to realize the class. The _nolock version
+    // requires the caller to hold runtimeLock.
+    void realizeIfNeeded();
+    void realizeIfNeeded_nolock();
 
     // Returns true if this is an unrealized future class.
     // Locking: To prevent concurrent realization, hold runtimeLock.

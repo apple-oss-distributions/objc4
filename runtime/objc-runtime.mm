@@ -467,6 +467,11 @@ void environ_init(void)
                 if (strcasecmp(value, "fatal") == 0
                     || strcasecmp(value, "halt") == 0)
                     *opt->var = Fatal;
+                else if (strcasecmp(value, "fault") == 0)
+                    *opt->var = Fault;
+                else if (strcasecmp(value, "stochastic-fault") == 0
+                         || strcasecmp(value, "stochasticFault") == 0)
+                    *opt->var = StochasticFault;
                 else if (strcasecmp(value, "yes") == 0
                          || strcasecmp(value, "warn") == 0
                          || strcasecmp(value, "true") == 0
@@ -534,6 +539,12 @@ void environ_init(void)
                     break;
                 case Fatal:
                     _objc_inform("%s is fatal", opt->env);
+                    break;
+                case Fault:
+                    _objc_inform("%s is faulting", opt->env);
+                    break;
+                case StochasticFault:
+                    _objc_inform("%s is stochastically faulting", opt->env);
                     break;
                 }
             }
@@ -736,6 +747,11 @@ void objc_removeAssociatedObjects(id object)
     }
 }
 
+BOOL _objc_supportsLazyRealization(void) {
+    // This is a lie until the Swift runtime changes to unconditionally realize
+    // in swift_getInitializedObjCClass. rdar://143416421
+    return NO;
+}
 
 
 #if SUPPORT_GC_COMPAT

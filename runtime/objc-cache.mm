@@ -81,11 +81,9 @@
 
 #include "objc-private.h"
 
-#if TARGET_OS_OSX
-#   if !TARGET_OS_EXCLAVEKIT
-#include <Cambria/Traps.h>
-#include <Cambria/Cambria.h>
-#   endif
+#if OBJC_USE_ROSETTA
+#include <Rosetta/Traps.h>
+#include <Rosetta/Rosetta.h>
 #endif
 
 #if __arm__  ||  __x86_64__  ||  __i386__
@@ -1184,9 +1182,9 @@ static int _collecting_in_critical(void)
             continue;
 
         // Find out where thread is executing
-#if TARGET_OS_OSX
-        if (oah_is_current_process_translated()) {
-            kern_return_t ret = objc_thread_get_rip(threads[count], (uint64_t*)&pc);
+#if OBJC_USE_ROSETTA
+        if (&rosetta_is_current_process_translated && rosetta_is_current_process_translated()) {
+            ret = objc_thread_get_rip(threads[count], (uint64_t*)&pc);
             if (ret != KERN_SUCCESS) {
                 pc = PC_SENTINEL;
             }

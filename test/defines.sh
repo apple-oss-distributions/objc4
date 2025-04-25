@@ -69,8 +69,7 @@ for STDCXX in '98' '03' '11' '14' '17' ; do
     run_test "$COMPILE_MM $CFLAGS -std=c++$STDCXX"
 done
 
-if [[ $ERROR == "" ]]; then
-    echo "No unexpected #defines found."
-else
+if [[ $ERROR == 1 ]]; then
     echo "Unknown #defines found in headers."
+    exit 1
 fi

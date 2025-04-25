@@ -1,4 +1,5 @@
 /*
+TEST_CONFIG MEM=mrc,arc LANGUAGE=objc,objc++
 TEST_BUILD
     $C{COMPILE} -fobjc-weak $DIR/ivarSlide1.m $DIR/ivarSlide.m -o ivarSlide.exe
 END

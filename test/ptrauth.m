@@ -3,10 +3,8 @@ TEST_CONFIG ARCH=arm64e
 TEST_BUILD
     $C{COMPILE} $DIR/ptrauth.m -Wno-deprecated-objc-isa-usage -Wno-deprecated-declarations -framework Foundation -o ptrauth.exe
 END
-TEST_CRASHES
 TEST_RUN_OUTPUT
 doSomething
-CRASHED: SIG.*
 END
 */
 

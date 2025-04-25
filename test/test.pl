@@ -164,6 +164,12 @@ my $REMOTEBASE = "/AppleInternal/objctest";
 # This replaces $DSTROOT$BUILDDIR/ for BATS execution.
 my $BATSBASE = "/AppleInternal/CoreOS/tests/objc4";
 
+# The default conditions for a test. A test that doesn't specify a value for a
+# given key gets the value specified here, if there is one.
+my %defaultConditions = (
+    MEM => ["arc"],
+);
+
 
 my $crashcatch = <<'END';
 // interpose-able code to catch crashes, print, and exit cleanly
@@ -238,16 +244,20 @@ my %extensions_for_language = (
     "any" => ["c", "m", "cc", "cp", "cpp", "cxx", "c++", "mm", "swift"], 
     );
 
-# map extension to languages
+# Map extension to languages. We only map to one language even though we support
+# more (e.g. building .m as both ObjC and ObjC++) since we don't want to build
+# lots of redundant tests. Tests which benefit from building as more than one
+# language can specify that directly with something like:
+# TEST_CONFIG LANGUAGE=objc,objc++.
 my %languages_for_extension = (
-    "c" => ["c", "objective-c", "c++", "objective-c++"], 
-    "m" => ["objective-c", "objective-c++"], 
+    "c" => ["c"],
+    "m" => ["objective-c"],
     "mm" => ["objective-c++"], 
-    "cc" => ["c++", "objective-c++"], 
-    "cp" => ["c++", "objective-c++"], 
-    "cpp" => ["c++", "objective-c++"], 
-    "cxx" => ["c++", "objective-c++"], 
-    "c++" => ["c++", "objective-c++"], 
+    "cc" => ["c++"],
+    "cp" => ["c++"],
+    "cpp" => ["c++"],
+    "cxx" => ["c++"],
+    "c++" => ["c++"],
     "swift" => ["swift"], 
     );
 
@@ -873,6 +883,8 @@ sub gather_simple {
         # implicit language restriction from file extension
         $conditions{LANGUAGE} = $languages_for_extension{$ext};
     }
+    # Merge the default conditions in.
+    %conditions = (%defaultConditions, %conditions);
     for my $condkey (keys %conditions) {
         my @condvalues = @{$conditions{$condkey}};
 
@@ -1089,11 +1101,22 @@ sub build_simple {
         colorprint  $red, "FAIL: $name (build failed)";
         $ok = 0;
     } elsif ($output ne "") {
-        colorprint  $yellow, "WARN: /// test '$name' \\\\\\";
-        colorprefix $yellow, $output;
-        colorprint  $yellow, "WARN: \\\\\\ test '$name' ///";
-        colorprint  $yellow, "WARN: $name (unexpected build output)";
-        $ok = 1;
+        # Fail right away if we're also running tests, since the pseudo-test
+        # that checks unexpected build output at the end only runs in run-only
+        # mode.
+        if ($RUN) {
+            colorprint  $red, "FAIL: /// test '$name' \\\\\\";
+            colorprefix $red, $output;
+            colorprint  $red, "FAIL: \\\\\\ test '$name' ///";
+            colorprint  $red, "FAIL: $name (unexpected build output)";
+            $ok = 0;
+        } else {
+            colorprint  $yellow, "WARN: /// test '$name' \\\\\\";
+            colorprefix $yellow, $output;
+            colorprint  $yellow, "WARN: \\\\\\ test '$name' ///";
+            colorprint  $yellow, "WARN: $name (unexpected build output)";
+            $ok = 1;
+        }
         $unexpectedBuildOutput = $output;
     } else {
         $ok = 1;
@@ -1356,6 +1379,10 @@ sub make_one_config {
         "watchsimulator" => "watchsimulator", "watchossimulator" => "watchsimulator",
         "appletvos" => "appletvos", "tvos" => "appletvos",
         "appletvsimulator" => "appletvsimulator", "tvsimulator" => "appletvsimulator",
+        "visionos" => "xros",
+        "xros" => "xros",
+        "visionsimulator" => "xrsimulator",
+        "xrsimulator" => "xrsimulator",
         "bridgeos" => "bridgeos",
         ### BEGIN APPLE INTERNAL
         "exclavekit" => "exclavekit",
@@ -1620,6 +1647,14 @@ sub make_one_config {
         $cflags .= " -mtvos-simulator-version-min=$C{DEPLOYMENT_TARGET}";
         $target = "$C{ARCH}-apple-tvos$C{DEPLOYMENT_TARGET}-simulator";
     }
+    elsif ($C{OS} eq "xros") {
+        $target = "$C{ARCH}-apple-xros$C{DEPLOYMENT_TARGET}";
+        $cflags .= " -target $target";
+    }
+    elsif ($C{OS} eq "xrsimulator") {
+        $target = "$C{ARCH}-apple-xros$C{DEPLOYMENT_TARGET}-simulator";
+        $cflags .= " -target $target";
+    }
     elsif ($C{OS} eq "bridgeos") {
         $cflags .= " -mbridgeos-version-min=$C{DEPLOYMENT_TARGET}";
         $target = "$C{ARCH}-apple-bridgeos$C{DEPLOYMENT_TARGET}";
@@ -1821,7 +1856,7 @@ sub rsync_ios {
         return if $? == 0;
         colorprint $yellow, "WARN: RETRY\n"  if $VERBOSE;
     }
-    die "Couldn't rsync tests to device. Check: device is connected; tcprelay is running; device trusts your Mac; device is unlocked; filesystem is mounted r/w\n";
+    die "Couldn't rsync tests to host '$HOST'. Check: device is connected; tcprelay is running; device trusts your Mac; device is unlocked; filesystem is mounted r/w\n";
 }
 
 sub build_and_run_one_config {
@@ -1830,9 +1865,9 @@ sub build_and_run_one_config {
 
     # Build and run
     my $testcount = 0;
-    my $failcount = 0;
     my $skipconfig = 0;
     my $allUnexpectedBuildOutput = "";
+    my %failedTests = ();
 
     my @gathertests;
     foreach my $test (@tests) {
@@ -1915,7 +1950,7 @@ sub build_and_run_one_config {
             if ($success) {
                 push @builttests, $test;
             } else {
-                $failcount++;
+                $failedTests{$test} = 1;
             }
 
             if ($unexpectedBuildOutput ne "") {
@@ -1941,7 +1976,7 @@ sub build_and_run_one_config {
                 $testcount++;
                 my ($ok, $unexpectedBuildOutput) = build_simple(\%C, $test);
                 if (!$ok) {
-                    $failcount++;
+                    $failedTests{$test} = 1;
                 } else {
                     push @builttests, $test;
                     if ($unexpectedBuildOutput ne "") {
@@ -1956,15 +1991,6 @@ sub build_and_run_one_config {
     }
     
     if ($allUnexpectedBuildOutput ne "") {
-        # Fail right away if we're also running tests, since the pseudo-test
-        # that checks this file only runs in run-only mode.
-        if ($RUN) {
-            colorprint  $red, "FAIL: /// unexpected build output \\\\\\";
-            colorprefix $red, $allUnexpectedBuildOutput;
-            colorprint  $red, "FAIL: \\\\\\ unexpected build output ///";
-            $failcount++;
-        }
-
         # Save the output to a file so that the unexpectedBuildOutput test can
         # see it and fail.
         open(my $fh, ">", "$DSTROOT$BUILDDIR/unexpected-build-output")
@@ -2027,7 +2053,7 @@ sub build_and_run_one_config {
 
                 if ($ALL_TESTS{$test}) {
                     if (!run_simple(\%C, $test)) {
-                        $failcount++;
+                        $failedTests{$test} = 1;
                     }
                 } else {
                     die "No test named '$test'\n";
@@ -2036,7 +2062,7 @@ sub build_and_run_one_config {
         }
     }
     
-    return ($testcount, $failcount, $skipconfig);
+    return ($testcount, \%failedTests, $skipconfig);
 }
 
 
@@ -2175,14 +2201,18 @@ my $testconfigs = @configs;
 my $failconfigs = 0;
 my $skipconfigs = 0;
 my $testcount = 0;
-my $failcount = 0;
+my %allFailedTests = ();
 for my $configref (@configs) {
     my $configname = $$configref{NAME};
     print "note: -----\n";
     print "note: \nnote: $configname\nnote: \n";
 
-    (my $t, my $f, my $skipconfig) = 
+    (my $t, my $failedTestsRef, my $skipconfig) =
         eval { build_and_run_one_config($configref, @tests); };
+    my %failedTests = ();
+    if ($failedTestsRef) {
+        %failedTests = %{$failedTestsRef};
+    }
     $skipconfigs += $skipconfig;
     if ($@) {
         chomp $@;
@@ -2190,13 +2220,18 @@ for my $configref (@configs) {
         colorprint $red, "FAIL: $@";
         $failconfigs++;
     } else {
-        my $color = ($f ? $red : "");
+        my $color = (%failedTests ? $red : "");
         print "note:\n";
         colorprint $color, "note: $configname\n";
-        colorprint $color, "note: $t tests, $f failures";
+        if (%failedTests) {
+            my $failedTestsString = join(", ", (sort keys %failedTests));
+            colorprint $color, "note: $t tests, failures: $failedTestsString";
+        } else {
+            colorprint $color, "note: $t tests, all passed";
+        }
         $testcount += $t;
-        $failcount += $f;
-        $failconfigs++ if ($f);
+        $failconfigs++ if (%failedTests);
+        %allFailedTests = (%allFailedTests, %failedTests);
     }
 }
 
@@ -2206,7 +2241,12 @@ print "note: -----\n";
 my $color = ($failconfigs ? $red : "");
 colorprint $color, "note: $testconfigs configurations, " . 
     "$failconfigs with failures, $skipconfigs skipped";
-colorprint $color, "note: $testcount tests, $failcount failures";
+if (%allFailedTests) {
+    my $failedTestsString = join(", ", (sort keys %allFailedTests));
+    colorprint $color, "note: $testcount tests, failures: $failedTestsString";
+} else {
+    colorprint $color, "note: $testcount tests, all passed";
+}
 
 $failed = ($failconfigs ? 1 : 0);
 

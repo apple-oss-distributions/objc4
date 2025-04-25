@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "A96CEB60-D6D0-40A5-9F09-DA83D83BA6D0",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:objc.xcodeproj",
+        "identifier" : "8425816A2CEEB869007C1920",
+        "name" : "ObjectiveCTests"
+      }
+    }
+  ],
+  "version" : 1
+}

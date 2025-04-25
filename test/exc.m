@@ -1,4 +1,5 @@
 /*
+TEST_CONFIG MEM=mrc,arc LANGUAGE=objc,objc++
 need exception-safe ARC for exception deallocation tests 
 TEST_CFLAGS -fobjc-arc-exceptions
 */

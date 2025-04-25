@@ -38,10 +38,11 @@
 
 #include <objc/objc.h>
 
-__BEGIN_DECLS
-
 #if __has_feature(ptrauth_calls)
 #include <ptrauth.h>
+
+__BEGIN_DECLS
+
 #define NXMapTable_ptrauth_prototype \
     __ptrauth(ptrauth_key_process_independent_data, 1, \
     ptrauth_string_discriminator("_NXMapTable::prototype"))
@@ -55,6 +56,8 @@ __BEGIN_DECLS
     __ptrauth(ptrauth_key_process_independent_code, 1, \
     ptrauth_string_discriminator("_NXMapTablePrototype::free"))
 #else
+__BEGIN_DECLS
+
 #define NXMapTable_ptrauth_prototype
 #define NXMapTable_ptrauth_hash
 #define NXMapTable_ptrauth_isEqual

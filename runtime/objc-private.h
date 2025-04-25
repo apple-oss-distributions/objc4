@@ -50,7 +50,12 @@
 #ifdef NDEBUG
 #define ASSERT(x) (void)sizeof(!(x))
 #else
-#define ASSERT(x) assert(x)
+#define ASSERT(x) \
+    do { \
+        if (!(x)) \
+            _objc_inform_backtrace("assertion failure: "); \
+        assert(x); \
+    } while(0)
 #endif
 
 // `this` is never NULL in C++ unless we encounter UB, but checking for what's impossible
@@ -272,9 +277,11 @@ typedef struct property_t *objc_property_t;
 
 // Settings from environment variables
 typedef enum {
-    Off = 0,
-    On = 1,
-    Fatal = 2
+    Off = 0,                // Disabled
+    On = 1,                 // Enabled
+    Fatal = 2,              // Terminate process if this triggers
+    Fault = 3,              // Generate a fault (simulated crash)
+    StochasticFault = 4     // Generate a fault with 10% probability
 } option_value_t;
 
 #define OPTION(var, def, env, help) extern option_value_t var;
@@ -286,10 +293,14 @@ typedef enum {
 /* errors */
 extern id _objc_callBadAllocHandler(Class cls) __attribute__((cold, noinline));
 extern void __objc_error(id, const char *, ...) __attribute__((cold, format (printf, 2, 3), noreturn));
+extern void _objc_fault(const char *fmt, ...) __attribute__((cold, format(printf, 1, 2)));
+extern void _objc_fault_and_log(const char *fmt, ...) __attribute__((cold, format(printf, 1, 2)));
+extern void _objc_stochastic_fault(const char *fmt, ...) __attribute__((cold, format(printf, 1, 2)));
 extern void _objc_inform(const char *fmt, ...) __attribute__((cold, format(printf, 1, 2)));
 extern void _objc_inform_on_crash(const char *fmt, ...) __attribute__((cold, format (printf, 1, 2)));
 extern void _objc_inform_now_and_on_crash(const char *fmt, ...) __attribute__((cold, format (printf, 1, 2)));
 extern void _objc_inform_deprecated(const char *oldname, const char *newname) __attribute__((cold, noinline));
+extern void _objc_inform_backtrace(const char *linePrefix);
 extern void inform_duplicate(const char *name, Class oldCls, Class cls);
 
 // Public headers
@@ -538,6 +549,14 @@ struct mapped_image_info {
         return dyldInfo.dyldObjCRefsOptimized && isPreoptimized();
     }
 
+    // Is tpro enabled on this image?  Really likely a per-process thing not per-image
+    // but this is a useful place to pass that information
+    bool tproEnabled() const {
+        // FIXME: check the actual bitfield once dyld adds it.
+        uint32_t rawFlags = *(uint32_t *)(&dyldInfo.sectionLocationMetadata + 1);
+        return (rawFlags & (1 << 1)) != 0;
+    }
+
     bool dyldCategoriesOptimized() {
         return hi->info()->dyldCategoriesOptimized();
     }
@@ -642,9 +661,27 @@ extern "C" void _objc_msgNil_fp2ret(void);
 // uses _objc_inform or _objc_fatal. The format string and arguments are only
 // evaluated when needed.
 #define OBJC_DEBUG_OPTION_REPORT_ERROR(option, ...) \
-    do { \
-        if (option) \
-            (option == Fatal ? _objc_fatal : _objc_inform)(__VA_ARGS__); \
+    do {                                            \
+        void (*report)(const char *fmt, ...);       \
+        switch (option) {                           \
+        case Off:                                   \
+            report = nil;                           \
+            break;                                  \
+        case Fault:                                 \
+            report = _objc_fault_and_log;           \
+            break;                                  \
+        case StochasticFault:                       \
+            report = _objc_stochastic_fault;        \
+            break;                                  \
+        case Fatal:                                 \
+            report = _objc_fatal;                   \
+            break;                                  \
+        default:                                    \
+            report = _objc_inform;                  \
+            break;                                  \
+        }                                           \
+        if (report)                                 \
+            report(__VA_ARGS__);                    \
     } while(0)
 
 /* magic */
@@ -688,7 +725,6 @@ extern void gdb_objc_class_changed(Class cls, unsigned long changes, const char 
     __attribute__((noinline));
 
 
-extern void masks_init(void);
 extern void accessors_init(void);
 extern void runtime_tls_init(void);
 extern void environ_init(void);
@@ -796,12 +832,15 @@ extern void _read_images(mapped_image_info infos[], uint32_t hCount,
 void loadAllCategoriesIfNeeded(void);
 extern void _unload_image(header_info *hi);
 
+const header_info *_headerForAddress(const void *addr);
 extern const header_info *_headerForClass(Class cls);
 
 extern Class _class_remap(Class cls);
 extern Ivar _class_getVariable(Class cls, const char *name);
 
 extern unsigned _class_createInstances(Class cls, size_t extraBytes, id *results, unsigned num_requested);
+
+extern id _object_dispose_nonnull_realized(id obj);
 
 extern const char *_category_getName(Category cat);
 extern const char *_category_getClassName(Category cat);
@@ -885,6 +924,9 @@ __attribute__((aligned(1))) typedef   int32_t unaligned_int32_t;
 __attribute__((aligned(1))) typedef  uint16_t unaligned_uint16_t;
 __attribute__((aligned(1))) typedef   int16_t unaligned_int16_t;
 
+
+// Random number generation
+uint32_t objc_uniformRandom(uint32_t n);
 
 // Global operator new and delete. We must not use any app overrides.
 // This ALSO REQUIRES each of these be in libobjc's unexported symbol list.

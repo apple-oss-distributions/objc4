@@ -41,7 +41,12 @@ EXTERN_C Class init(Class cls, void *arg) {
 }
 
 @interface SwiftRoot: TestRoot @end
-SWIFT_CLASS(SwiftRoot, TestRoot, init);
+// Hack: if the Swift runtime is loaded, its handler will also run on our test
+// classes. It will then crash on them because these aren't really Swift
+// classes. libobjc only calls the handler on Swift classes. But it calls them
+// pre-ABI-stable Swift classes too. The OS Swift runtime leaves those alone,
+// and we'll never have an old Swift runtime loaded.
+SWIFT_CLASS_PRE_ABI_STABLE(SwiftRoot, TestRoot, init);
 
 int main()
 {

@@ -56,7 +56,7 @@ __BEGIN_DECLS
 void* nop(void* self) { return self; }
 __END_DECLS
 
-#define SWIFT_CLASS(name, superclass, swiftInit) \
+#define SWIFT_CLASS_IMPL(name, superclass, swiftInit, dataFlags) \
 asm(                                               \
     ".globl _OBJC_CLASS_$_" #name             "\n" \
     ".section __DATA,__objc_data               \n" \
@@ -66,7 +66,7 @@ asm(                                               \
     PTR "_OBJC_CLASS_$_" #superclass SIGNED_SUPER "\n" \
     PTR "__objc_empty_cache                    \n" \
     PTR "0 \n"                                     \
-    PTR "(L_" #name "_ro + 2)" SIGNED_RO "\n"      \
+    PTR "(L_" #name "_ro + " #dataFlags ")" SIGNED_RO "\n"      \
     /* Swift class fields. */                      \
     ".long 0 \n"   /* flags */                     \
     ".long 0 \n"   /* instanceAddressOffset */     \
@@ -196,6 +196,12 @@ asm(                                               \
 );                                                 \
 extern char OBJC_CLASS_$_ ## name;                 \
 Class Raw ## name = (Class)&OBJC_CLASS_$_ ## name
+
+#define SWIFT_CLASS(name, superclass, swiftInit) \
+    SWIFT_CLASS_IMPL(name, superclass, swiftInit, 2)
+
+#define SWIFT_CLASS_PRE_ABI_STABLE(name, superclass, swiftInit) \
+    SWIFT_CLASS_IMPL(name, superclass, swiftInit, 1)
 
 #define SWIFT_STUB_CLASSREF(name)                                        \
 extern char OBJC_CLASS_$_ ## name;                                       \

@@ -1,4 +1,4 @@
-// TEST_CONFIG
+// TEST_CONFIG MEM=mrc,arc
 
 #include "test.h"
 #include <objc/NSObject.h>

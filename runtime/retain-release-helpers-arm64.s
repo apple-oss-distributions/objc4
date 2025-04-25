@@ -106,9 +106,9 @@ _objc_retain_\reg:
 
 	// Check for nil and tagged pointers.
 #if SUPPORT_TAGGED_POINTERS
-	b.le LnilOrTagged_retain // Check self <= 0 for tagged-or-nil.
+	b.le _nilOrTagged_retain // Check self <= 0 for tagged-or-nil.
 #else
-	b.eq LnilOrTagged_retain // Check self == 0 when we don't have tagged pointers.
+	b.eq _nilOrTagged_retain // Check self == 0 when we don't have tagged pointers.
 #endif
 	// Load raw isa value into p16. If we don't have CAS, load-exclusive.
 #if USE_CAS
@@ -125,9 +125,9 @@ Lretry_retain_\reg:
 
 	// If hasCustomRR, call swift_retain or msgSend retain. This code
 	// expects the raw isa value in p16 and `bits` in p17.
-	tbz p17, HAS_DEFAULT_RR_BIT, LcustomRR_retain
+	tbz p17, HAS_DEFAULT_RR_BIT, _customRR_retain
 
-	tbz p16, NONPOINTER_ISA_BIT, LrawISA_retain    // If raw isa pointer, call into C.
+	tbz p16, NONPOINTER_ISA_BIT, _rawISA_retain    // If raw isa pointer, call into C.
 
 	// We now have:
 	// * Raw isa field in p16.
@@ -139,7 +139,7 @@ Lretry_retain_\reg:
 	// at the top of the isa field, so we shift away the other bits and then
 	// compare with zero.
 	lsr p17, p16, #RC_HAS_SIDETABLE_BIT
-	cbz p17, Ldeallocating_retain
+	cbz p17, _deallocating_retain
 
 	// We're ready to actually perform the retain. Next steps:
 	// * Increment the inline refcount.
@@ -147,7 +147,7 @@ Lretry_retain_\reg:
 	// * CAS the isa field.
 	mov p17, RC_ONE
 	adds p17, p16, p17 // New isa field value is in p17.
-	b.cs Loverflow_retain
+	b.cs _overflow_retain
 #if USE_CAS
 	mov \tmpreg, p16
 	cas p16, p17, [\reg] // Try to store the updated value.
@@ -163,7 +163,7 @@ Lretry_retain_\reg:
 
 // The object is already in x0/w0, so we just need to clear our exclusive load
 // and call swift_retain or objc_msgSend.
-LcustomRR_retain:
+_customRR_retain:
 	CLREX
 
 	// Check the isSwiftStable bit, msgSend if this class isn't Swift.
@@ -189,20 +189,21 @@ LmsgSend_retain:
 
 // The object is already in x0/w0, so we just need to clear our exclusive load
 // and jump to objc_retain_full.
-LrawISA_retain:
+_rawISA_retain:
 	CLREX
 	b _objc_retain_full
 
 // The object is already in x0/w0, so we just need to clear our exclusive load
 // and jump to _objc_rootRetain.
-Loverflow_retain:
+_overflow_retain:
 	CLREX
 	b __objc_rootRetain
 
-Ldeallocating_retain:
+_deallocating_retain:
 	// Clear our exclusive load of the isa before returning.
 	CLREX
-LnilOrTagged_retain:
+.alt_entry _nilOrTagged_retain // _deallocating_retain falls through to this.
+_nilOrTagged_retain:
 	// For nil/tagged/deallocating objects, release is a no-op.
 	// The object is already in x0/w0, so we can just return.
 	ret

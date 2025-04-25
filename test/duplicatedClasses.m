@@ -4,9 +4,9 @@
 // TEST_CONFIG OS=!exclavekit
 // TEST_ENV OBJC_DEBUG_DUPLICATE_CLASSES=FATAL OBJC_DISABLE_PREOPTIMIZATION=YES
 // TEST_CRASHES
-/* 
+/*
 TEST_RUN_OUTPUT
-objc\[\d+\]: Class [^\s]+ is implemented in both .+ \(0x[0-9a-f]+\) and .+ \(0x[0-9a-f]+\)\. One of the two will be used\. Which one is undefined\.
+objc\[\d+\]: Class [^\s]+ is implemented in both .+ \(0x[0-9a-f]+\) and .+ \(0x[0-9a-f]+\)\. This may cause spurious casting failures and mysterious crashes\. One of the duplicates must be removed or renamed\.
 objc\[\d+\]: HALTED
 OR
 OK: duplicatedClasses.m

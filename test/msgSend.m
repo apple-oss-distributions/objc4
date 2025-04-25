@@ -2151,7 +2151,7 @@ void test_basic(id receiver)
         
         testprintf("llret noarg\n");
         llval = 0;
-        llval = ((typeof(llmsg0))objc_msgSend_noarg)(receiver, @selector(llret_noarg));
+        llval = ((typeof(llmsg0))(void *)objc_msgSend_noarg)(receiver, @selector(llret_noarg));
         testassert(state == 112);
         testassert(llval == LL_RESULT);
         /*
@@ -2165,20 +2165,20 @@ void test_basic(id receiver)
 #if !__i386__
         testprintf("fpret noarg\n");
         fpval = 0;
-        fpval = ((typeof(fpmsg0))objc_msgSend_noarg)(receiver, @selector(fpret_noarg));
+        fpval = ((typeof(fpmsg0))(void *)objc_msgSend_noarg)(receiver, @selector(fpret_noarg));
         testassert(state == 114);
         testassert(fpval == FP_RESULT);
 
         testprintf("vecret noarg\n");
         vecval = 0;
-        vecval = ((typeof(vecmsg0))objc_msgSend_noarg)(receiver, @selector(vecret_noarg));
+        vecval = ((typeof(vecmsg0))(void *)objc_msgSend_noarg)(receiver, @selector(vecret_noarg));
         testassert(state == 116);
         testassert(vector_equal(vecval, VEC_RESULT));
 #endif
 #if !__i386__ && !__x86_64__
         testprintf("lfpret noarg\n");
         lfpval = 0;
-        lfpval = ((typeof(lfpmsg0))objc_msgSend_noarg)(receiver, @selector(lfpret_noarg));
+        lfpval = ((typeof(lfpmsg0))(void *)objc_msgSend_noarg)(receiver, @selector(lfpret_noarg));
         testassert(state == 115);
         testassert(lfpval == LFP_RESULT);
 #endif
@@ -2428,13 +2428,13 @@ int main()
     // explicitly call noarg messenger, even if compiler doesn't emit it
     state = 0;
     idval = ID_RESULT;
-    idval = ((typeof(idmsg0))objc_msgSend_noarg)(nil, @selector(idret_noarg));
+    idval = ((typeof(idmsg0))(void *)objc_msgSend_noarg)(nil, @selector(idret_noarg));
     testassert(state == 0);
     testassert(idval == nil);
     
     state = 0;
     llval = LL_RESULT;
-    llval = ((typeof(llmsg0))objc_msgSend_noarg)(nil, @selector(llret_noarg));
+    llval = ((typeof(llmsg0))(void *)objc_msgSend_noarg)(nil, @selector(llret_noarg));
     testassert(state == 0);
     testassert(llval == 0LL);
 
@@ -2443,20 +2443,20 @@ int main()
 #if !__i386__
     state = 0;
     fpval = FP_RESULT;
-    fpval = ((typeof(fpmsg0))objc_msgSend_noarg)(nil, @selector(fpret_noarg));
+    fpval = ((typeof(fpmsg0))(void *)objc_msgSend_noarg)(nil, @selector(fpret_noarg));
     testassert(state == 0);
     testassert(fpval == 0.0);
 
     state = 0;
     vecval = VEC_RESULT;
-    vecval = ((typeof(vecmsg0))objc_msgSend_noarg)(nil, @selector(vecret_noarg));
+    vecval = ((typeof(vecmsg0))(void *)objc_msgSend_noarg)(nil, @selector(vecret_noarg));
     testassert(state == 0);
     testassert(vector_all(vecval == 0));
 #endif
 #if !__i386__ && !__x86_64__
     state = 0;
     lfpval = LFP_RESULT;
-    lfpval = ((typeof(lfpmsg0))objc_msgSend_noarg)(nil, @selector(lfpret_noarg));
+    lfpval = ((typeof(lfpmsg0))(void *)objc_msgSend_noarg)(nil, @selector(lfpret_noarg));
     testassert(state == 0);
     testassert(lfpval == 0.0);
 #endif
@@ -2481,7 +2481,7 @@ int main()
 
     state = 100;
     stretval = zero;
-    stretval = ((struct stret(*)(struct objc_super *, SEL, vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2, int,int,int,int,int,int,int,int,int,int,int,int,int, double,double,double,double,double,double,double,double,double,double,double,double,double,double,double))objc_msgSendSuper2_stret) (&sup_st, @selector(stret::::::::::::::::::::::::::::::::::::), VEC1,VEC2,VEC3,VEC4,VEC5,VEC6,VEC7,VEC8, 1,2,3,4,5,6,7,8,9,10,11,12,13, 1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0,15.0);
+    stretval = ((struct stret(*)(struct objc_super *, SEL, vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2,vector_ulong2, int,int,int,int,int,int,int,int,int,int,int,int,int, double,double,double,double,double,double,double,double,double,double,double,double,double,double,double))(void *)objc_msgSendSuper2_stret) (&sup_st, @selector(stret::::::::::::::::::::::::::::::::::::), VEC1,VEC2,VEC3,VEC4,VEC5,VEC6,VEC7,VEC8, 1,2,3,4,5,6,7,8,9,10,11,12,13, 1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0,15.0);
     testassert(state == 3);
     testassert(stret_equal(stretval, STRET_RESULT));
     testassert(sup_st.receiver == sub);

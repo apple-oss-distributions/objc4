@@ -476,7 +476,7 @@ typedef struct PendingInitialize {
     PendingInitialize(Class cls) : subclass(cls), next(nullptr) { }
 } PendingInitialize;
 
-typedef objc::DenseMap<Class, PendingInitialize *> PendingInitializeMap;
+typedef objc::DenseMap<DisguisedPtr<objc_class>, PendingInitialize *> PendingInitializeMap;
 static PendingInitializeMap *pendingInitializeMap;
 ExplicitInitLock<mutex_t> pendingInitializeMapLock;
 
@@ -509,7 +509,7 @@ static void _finishInitializing(Class cls, Class supercls)
     // mark any subclasses that were merely waiting for this class
     if (!pendingInitializeMap) return;
 
-    auto it = pendingInitializeMap->find(cls);
+    auto it = pendingInitializeMap->find((objc_class *)cls);
     if (it == pendingInitializeMap->end()) return;
 
     pending = it->second;
@@ -553,7 +553,7 @@ static void _finishInitializingAfter(Class cls, Class supercls)
     }
 
     PendingInitialize *pending = new PendingInitialize{cls};
-    auto result = pendingInitializeMap->try_emplace(supercls, pending);
+    auto result = pendingInitializeMap->try_emplace((objc_class *)supercls, pending);
     if (!result.second) {
         pending->next = result.first->second;
         result.first->second = pending;

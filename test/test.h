@@ -199,6 +199,13 @@ static inline void failnotequal(void *lhs, size_t lhsSize, void *rhs, size_t rhs
         fail("failed assertion %s (\"%s\") != %s (\"%s\") at %s:%u", #lhs, __lhs, #rhs, __rhs, __FILE__, __LINE__); \
 } while(0)
 
+#define testassertequalsel(lhs, rhs) do { \
+    __typeof__(lhs) __lhs = lhs; \
+    __typeof__(rhs) __rhs = rhs; \
+    if (__lhs != __rhs) \
+        fail("failed assertion %s (\"%s\") != %s (\"%s\") at %s:%u", #lhs, sel_getName(__lhs), #rhs, sel_getName(__rhs), __FILE__, __LINE__); \
+} while(0)
+
 #define testassertnil(value) do { \
     __typeof__(value) __value = value; \
     if (__value) \

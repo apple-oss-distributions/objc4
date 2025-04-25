@@ -1,4 +1,4 @@
-// TEST_CONFIG
+// TEST_CONFIG MEM=mrc,arc LANGUAGE=c,c++,objc,objc++
 
 // Verify that all headers can be included in any language.
 // See also test/include-warnings.c which checks for warnings in these headers.

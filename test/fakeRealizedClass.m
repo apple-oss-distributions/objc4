@@ -18,6 +18,11 @@ END
 
 #define RW_REALIZED (1U<<31)
 
+// This test only runs on macOS, so we won't bother with the conditionals around
+// this value. Just use the one value macOS always has.
+#define FAST_IS_RW_POINTER      0x8000000000000000UL
+
+__attribute__((section("__DATA,__objc_const")))
 struct ObjCClass_ro FakeSuperclassRO = {
     .flags = RW_REALIZED
 };
@@ -27,9 +32,10 @@ struct ObjCClass FakeSuperclass = {
     &OBJC_METACLASS_$_NSObject,
     NULL,
     0,
-    &FakeSuperclassRO
+    (struct ObjCClass_ro *)((uintptr_t)&FakeSuperclassRO + FAST_IS_RW_POINTER)
 };
 
+__attribute__((section("__DATA,__objc_const")))
 struct ObjCClass_ro FakeSubclassRO;
 
 struct ObjCClass FakeSubclass = {

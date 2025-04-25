@@ -10,15 +10,15 @@ static void *noop_fn(void *self, SEL _cmd __unused) {
     return self;
 }
 static void *retain_fn(void *self, SEL _cmd __unused) { 
-    void * (*fn)(void *) = (typeof(fn))_objc_rootRetain;
+    void * (*fn)(void *) = (typeof(fn))(void *)_objc_rootRetain;
     return fn(self); 
 }
 static void release_fn(void *self, SEL _cmd __unused) { 
-    void (*fn)(void *) = (typeof(fn))_objc_rootRelease;
+    void (*fn)(void *) = (typeof(fn))(void *)_objc_rootRelease;
     fn(self); 
 }
 static void *autorelease_fn(void *self, SEL _cmd __unused) { 
-    void * (*fn)(void *) = (typeof(fn))_objc_rootAutorelease;
+    void * (*fn)(void *) = (typeof(fn))(void *)_objc_rootAutorelease;
     return fn(self); 
 }
 

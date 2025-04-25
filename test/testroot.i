@@ -36,28 +36,28 @@ atomic_int TestRootPlusRetainCount;
 static void *
 retain_fn(void *self, SEL _cmd __unused) {
     atomic_fetch_add_explicit(&TestRootRetain, 1, memory_order_relaxed);
-    void * (*fn)(void *) = (typeof(fn))_objc_rootRetain;
+    void * (*fn)(void *) = (typeof(fn))(void *)_objc_rootRetain;
     return fn(self); 
 }
 
 static void 
 release_fn(void *self, SEL _cmd __unused) {
     atomic_fetch_add_explicit(&TestRootRelease, 1, memory_order_relaxed);
-    void (*fn)(void *) = (typeof(fn))_objc_rootRelease;
+    void (*fn)(void *) = (typeof(fn))(void *)_objc_rootRelease;
     fn(self); 
 }
 
 static void *
 autorelease_fn(void *self, SEL _cmd __unused) { 
     atomic_fetch_add_explicit(&TestRootAutorelease, 1, memory_order_relaxed);
-    void * (*fn)(void *) = (typeof(fn))_objc_rootAutorelease;
+    void * (*fn)(void *) = (typeof(fn))(void *)_objc_rootAutorelease;
     return fn(self); 
 }
 
 static unsigned long 
 retaincount_fn(void *self, SEL _cmd __unused) { 
     atomic_fetch_add_explicit(&TestRootRetainCount, 1, memory_order_relaxed);
-    unsigned long (*fn)(void *) = (typeof(fn))_objc_rootRetainCount;
+    unsigned long (*fn)(void *) = (typeof(fn))(void *)_objc_rootRetainCount;
     return fn(self); 
 }
 
@@ -139,13 +139,13 @@ plusretaincount_fn(void *self __unused, SEL _cmd __unused) {
 
 +(id) alloc {
     atomic_fetch_add_explicit(&TestRootAlloc, 1, memory_order_relaxed);
-    void * (*fn)(id __unsafe_unretained) = (typeof(fn))_objc_rootAlloc;
+    void * (*fn)(id __unsafe_unretained) = (typeof(fn))(void *)_objc_rootAlloc;
     return (__bridge_transfer id)(fn(self));
 }
 
 +(id) allocWithZone:(void *)zone {
     atomic_fetch_add_explicit(&TestRootAllocWithZone, 1, memory_order_relaxed);
-    void * (*fn)(id __unsafe_unretained, void *) = (typeof(fn))_objc_rootAllocWithZone;
+    void * (*fn)(id __unsafe_unretained, void *) = (typeof(fn))(void *)_objc_rootAllocWithZone;
     return (__bridge_transfer id)(fn(self, zone));
 }
 
@@ -173,7 +173,7 @@ plusretaincount_fn(void *self __unused, SEL _cmd __unused) {
 
 -(id) mutableCopyWithZone:(void *) __unused zone {
     atomic_fetch_add_explicit(&TestRootMutableCopyWithZone, 1, memory_order_relaxed);
-    void * (*fn)(id __unsafe_unretained) = (typeof(fn))_objc_rootAlloc;
+    void * (*fn)(id __unsafe_unretained) = (typeof(fn))(void *)_objc_rootAlloc;
     return (__bridge_transfer id)(fn(object_getClass(self)));
 }
 

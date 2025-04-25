@@ -41,15 +41,8 @@
 #if !TARGET_OS_EXCLAVEKIT
 #include <mach/mach.h>
 #include <sys/mman.h>
-#include <execinfo.h>
 
 #include <os/feature_private.h>
-
-extern "C" {
-#include <os/reason_private.h>
-#include <os/variant_private.h>
-#include <os/log_simple_private.h>
-}
 #endif
 
 @interface NSInvocation
@@ -718,14 +711,7 @@ private:
 #if !TARGET_OS_EXCLAVEKIT
         int newDepth = depth+1;
         if (newDepth == objc::PageCountWarning && numFaults < MAX_FAULTS) {
-            bool objcModeNoFaults = DisableFaults || getpid() == 1 || is_root_ramdisk() || !os_variant_has_internal_diagnostics("com.apple.obj-c");
-            if (!objcModeNoFaults) {
-                os_fault_with_payload(OS_REASON_LIBSYSTEM,
-                                      OS_REASON_LIBSYSTEM_CODE_FAULT,
-                                      NULL, 0, "Large Autorelease Pool", 0);
-            } else {
-                os_log_simple("Large Autorelease Pool");
-            }
+            _objc_fault("Large Autorelease Pool");
             numFaults++;
         }
 #endif
@@ -1406,15 +1392,7 @@ public:
             }
 #endif
 
-#if !TARGET_OS_EXCLAVEKIT
-            void *stack[128];
-            int count = backtrace(stack, sizeof(stack)/sizeof(stack[0]));
-            char **sym = backtrace_symbols(stack, count);
-            for (int i = 0; i < count; i++) {
-                _objc_inform("POOL HIGHWATER:     %s", sym[i]);
-            }
-            free(sym);
-#endif
+            _objc_inform_backtrace("POOL HIGHWATER:     ");
         }
     }
 

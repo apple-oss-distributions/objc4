@@ -114,7 +114,7 @@
 #   elif TARGET_OS_OSX
 #     define ISA_MASK_NOSIG 0x00007ffffffffff8ULL
 #   elif TARGET_OS_EXCLAVEKIT
-#     define ISA_MASK_NOSIG objc_debug_isa_class_mask
+#     define ISA_MASK_NOSIG 0x0000000ffffffff8ULL
 #   else
 #     define ISA_MASK_NOSIG 0x0000000ffffffff8ULL
 #   endif

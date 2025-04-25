@@ -239,6 +239,7 @@ ListOfListsEntry TestClassListOfPropertyLists[] = {
 // properties.
 // ==========================================================================
 
+__attribute__((section("__DATA,__objc_const")))
 struct ObjCClass_ro TestClassMeta_ro = {
     .flags = RO_META,
     .instanceStart = 40,
@@ -252,6 +253,7 @@ struct ObjCClass TestClassMeta = {
     .data = &TestClassMeta_ro,
 };
 
+__attribute__((section("__DATA,__objc_const")))
 struct ObjCClass_ro TestClass_ro = {
     .instanceStart = sizeof(void *),
     .instanceSize = sizeof(void *),
