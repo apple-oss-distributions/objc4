@@ -1,5 +1,5 @@
 /*
-TEST_CONFIG OS=!exclavekit
+TEST_CONFIG 
 TEST_BUILD
     $C{COMPILE} $DIR/duplicatedClasses0.m -fvisibility=hidden -DTestRoot=TestRoot2 -install_name $T{DYLIBDIR}/duplicatedClasses0.dylib -o duplicatedClasses0.dylib -dynamiclib
     $C{COMPILE} $DIR/duplicatedClasses2.m -o duplicatedClasses2.exe

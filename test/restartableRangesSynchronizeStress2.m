@@ -1,4 +1,4 @@
-// TEST_CONFIG MEM=arc LANGUAGE=objective-c OS=!exclavekit
+// TEST_CONFIG MEM=arc LANGUAGE=objective-c 
 // TEST_ENV OBJC_DEBUG_SCRIBBLE_CACHES=YES
 // TEST_NO_MALLOC_SCRIBBLE
 
@@ -42,9 +42,7 @@ int main() {
     
     for (int i = 0; i < 6; i++) {
         dispatch_async(dispatch_get_global_queue(0, 0), ^{
-            long j = 0;
             while (1) {
-                j++;
                 (void)[[MyClass1 alloc] init];
                 (void)[[MyClass2 alloc] init];
                 (void)[[MyClass3 alloc] init];

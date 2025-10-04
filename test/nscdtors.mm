@@ -1,4 +1,4 @@
-// TEST_CONFIG OS=!exclavekit
+// TEST_CONFIG 
 // test cdtors, with NSObject instead of TestRoot as the root class
 
 #define USE_FOUNDATION 1

@@ -35,9 +35,7 @@
 
 // Define SUPPORT_GC_COMPAT=1 to enable compatibility where GC once was.
 // OBJC_NO_GC and OBJC_NO_GC_API in objc-api.h mean something else.
-#if TARGET_OS_EXCLAVEKIT
-#   define SUPPORT_GC_COMPAT 0
-#elif !TARGET_OS_OSX
+#if   !TARGET_OS_OSX
 #   define SUPPORT_GC_COMPAT 0
 #else
 #   define SUPPORT_GC_COMPAT 1
@@ -57,11 +55,7 @@
 #endif
 
 // Define SUPPORT_PREOPT=1 to enable dyld shared cache optimizations
-#if !TARGET_OS_EXCLAVEKIT
 #   define SUPPORT_PREOPT 1
-#else
-#   define SUPPORT_PREOPT 0
-#endif
 
 // Define SUPPORT_TAGGED_POINTERS=1 to enable tagged pointer objects
 // Be sure to edit tagged pointer SPI in objc-internal.h as well.
@@ -144,9 +138,7 @@
 #endif
 
 // Define SUPPORT_MESSAGE_LOGGING to enable NSObjCMessageLoggingEnabled
-#if TARGET_OS_EXCLAVEKIT
-#   define SUPPORT_MESSAGE_LOGGING 0
-#elif !TARGET_OS_OSX
+#if   !TARGET_OS_OSX
 #   define SUPPORT_MESSAGE_LOGGING 0
 #else
 #   define SUPPORT_MESSAGE_LOGGING 1
@@ -161,9 +153,7 @@
 
 // Define SUPPORT_MUTABLE_SHARED_CACHE=1 on any platform that has a shared
 // cache with data such as refs and protocols in const segments
-#if TARGET_OS_EXCLAVEKIT
-#   define SUPPORT_MUTABLE_SHARED_CACHE 0
-#elif TARGET_OS_SIMULATOR
+#if   TARGET_OS_SIMULATOR
 #   define SUPPORT_MUTABLE_SHARED_CACHE 0
 #elif !__arm64e__
 #   define SUPPORT_MUTABLE_SHARED_CACHE 0
@@ -173,9 +163,7 @@
 
 // Define HAVE_TASK_RESTARTABLE_RANGES to enable usage of
 // task_restartable_ranges_synchronize()
-#if TARGET_OS_EXCLAVEKIT
-#   define HAVE_TASK_RESTARTABLE_RANGES 0
-#elif TARGET_OS_SIMULATOR || defined(__i386__) || defined(__arm__) || !TARGET_OS_MAC
+#if   TARGET_OS_SIMULATOR || defined(__i386__) || defined(__arm__) || !TARGET_OS_MAC
 #   define HAVE_TASK_RESTARTABLE_RANGES 0
 #else
 #   define HAVE_TASK_RESTARTABLE_RANGES 1
@@ -228,9 +216,7 @@
 #define CACHE_MASK_STORAGE_HIGH_16_BIG_ADDRS 4
 
 #if defined(__arm64__) && __LP64__
-#if TARGET_OS_EXCLAVEKIT
-#define CACHE_MASK_STORAGE CACHE_MASK_STORAGE_HIGH_16_BIG_ADDRS
-#elif TARGET_OS_OSX || TARGET_OS_SIMULATOR
+#if   TARGET_OS_OSX || TARGET_OS_SIMULATOR
 #define CACHE_MASK_STORAGE CACHE_MASK_STORAGE_HIGH_16_BIG_ADDRS
 #else
 #define CACHE_MASK_STORAGE CACHE_MASK_STORAGE_HIGH_16
@@ -307,14 +293,27 @@
 // Be sure to edit the equivalent define in objc-internal.h as well.
 // Be sure to not enable CONFIG_USE_PREOPT_CACHES if CACHE_MASK_STORAGE != CACHE_MASK_STORAGE_HIGH_16
 #ifndef CONFIG_USE_PREOPT_CACHES
-#if TARGET_OS_EXCLAVEKIT
+#if   TARGET_OS_OSX || TARGET_OS_MACCATALYST
 #define CONFIG_USE_PREOPT_CACHES 0
-#elif TARGET_OS_OSX || TARGET_OS_MACCATALYST || TARGET_OS_SIMULATOR
+#define CONFIG_USE_PREOPT_CACHES_BUILD_ONLY 1
+#elif TARGET_OS_SIMULATOR
 #define CONFIG_USE_PREOPT_CACHES 0
 #elif defined(__arm64__) && __LP64__
 #define CONFIG_USE_PREOPT_CACHES 1
 #else
 #define CONFIG_USE_PREOPT_CACHES 0
+#endif
+#endif
+
+#ifndef CONFIG_USE_PREOPT_CACHES_BUILD_ONLY
+#define CONFIG_USE_PREOPT_CACHES_BUILD_ONLY 0
+#endif
+
+// When preopt caches are built, use the better shift-and-xor selector hash to
+// compensate for more regular selector addresses.
+#if CONFIG_USE_PREOPT_CACHES || CONFIG_USE_PREOPT_CACHES_BUILD_ONLY
+#ifdef __arm64__ // msgSend only supports this on ARM64
+#define SEL_HASH_SHIFT_XOR 1
 #endif
 #endif
 
@@ -324,17 +323,13 @@
 // to a selref.
 #define CONFIG_SHARED_CACHE_RELATIVE_DIRECT_SELECTORS 1
 
-#if TARGET_OS_EXCLAVEKIT
-#define HAVE_CLOCK_GETTIME_NSEC_NP 0
-#elif TARGET_OS_MAC
+#if   TARGET_OS_MAC
 #define HAVE_CLOCK_GETTIME_NSEC_NP 1
 #else
 #define HAVE_CLOCK_GETTIME_NSEC_NP 0
 #endif
 
-#if TARGET_OS_EXCLAVEKIT
-#define HAVE_ASPRINTF   1
-#elif TARGET_OS_MAC
+#if   TARGET_OS_MAC
 #define HAVE_ASPRINTF   1
 #else
 #define HAVE_ASPRINTF   0
@@ -345,15 +340,8 @@
 #define OBJC_THREADING_DARWIN       1   // pthreads + os_unfair_lock + direct TSD
 #define OBJC_THREADING_PTHREADS     2   // pure pthreads
 #define OBJC_THREADING_C11THREADS   3   // C11 threads
-#if TARGET_OS_EXCLAVEKIT
-#define OBJC_THREADING_EXCLAVEKIT   4   // C11 threads + direct TSD
-#endif
 
-#if TARGET_OS_EXCLAVEKIT
-// TODO: change this to OBJC_THREADING_EXCLAVEKIT once we have the necessary
-//       extensions <rdar://90479081>
-#   define OBJC_THREADING_PACKAGE OBJC_THREADING_C11THREADS
-#elif TARGET_OS_MAC
+#if   TARGET_OS_MAC
 #   define OBJC_THREADING_PACKAGE OBJC_THREADING_DARWIN
 #elif __has_include(<threads.h>)
 #   define OBJC_THREADING_PACKAGE  OBJC_THREADING_C11THREADS
@@ -364,9 +352,7 @@
 #endif
 
 // Check whether the compiler supports thread_local
-#if TARGET_OS_EXCLAVEKIT
-#define SUPPORT_THREAD_LOCAL 0
-#elif __cplusplus >= 201103L
+#if   __cplusplus >= 201103L
 #define SUPPORT_THREAD_LOCAL 1
 #elif defined(__GCC__) || defined(__CLANG__)
 #define thread_local __thread
@@ -381,8 +367,7 @@
 // Whether to use Rosetta APIs. macOS and iOS use it, but not simulators or
 // other platforms. visionOS sets TARGET_OS_IOS in the internal SDK so we need
 // to explicitly exclude that
-#if (TARGET_OS_OSX || TARGET_OS_IOS) && \
-    !TARGET_OS_VISION && !TARGET_OS_SIMULATOR && !TARGET_OS_EXCLAVEKIT
+#if   (TARGET_OS_OSX || TARGET_OS_IOS) && !TARGET_OS_VISION && !TARGET_OS_SIMULATOR
 #define OBJC_USE_ROSETTA 1
 #else
 #define OBJC_USE_ROSETTA 0

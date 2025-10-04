@@ -363,24 +363,35 @@ LLookupStart\Function:
 	ldr	p10, [x16, #CACHE]				// p10 = mask|buckets
 	lsr	p11, p10, #48			// p11 = mask
 	and	p10, p10, #0xffffffffffff	// p10 = buckets
+#  if SEL_HASH_SHIFT_XOR
+	eor	p12, p1, p1, LSR #7
+	and	w12, w12, w11			// x12 = (_cmd ^ (_cmd >> 7)) & mask
+#  else
 	and	w12, w1, w11			// x12 = _cmd & mask
+#  endif
 #elif CACHE_MASK_STORAGE == CACHE_MASK_STORAGE_HIGH_16
 	ldr	p11, [x16, #CACHE]			// p11 = mask|buckets
-#if CONFIG_USE_PREOPT_CACHES
-#if __has_feature(ptrauth_calls)
+#  if CONFIG_USE_PREOPT_CACHES
+#    if __has_feature(ptrauth_calls)
 	tbnz	p11, #0, LLookupPreopt\Function
 	and	p10, p11, #0x0000ffffffffffff	// p10 = buckets
-#else
+#    else
 	and	p10, p11, #0x0000fffffffffffe	// p10 = buckets
 	tbnz	p11, #0, LLookupPreopt\Function
-#endif
+#    endif
+#  endif
+
+#  if SEL_HASH_SHIFT_XOR
 	eor	p12, p1, p1, LSR #7
 	and	p12, p12, p11, LSR #48		// x12 = (_cmd ^ (_cmd >> 7)) & mask
-#else
+#  else
 	and	p10, p11, #0x0000ffffffffffff	// p10 = buckets
 	and	p12, p1, p11, LSR #48		// x12 = _cmd & mask
-#endif // CONFIG_USE_PREOPT_CACHES
+#  endif // CONFIG_USE_PREOPT_CACHES
 #elif CACHE_MASK_STORAGE == CACHE_MASK_STORAGE_LOW_4
+#  if SEL_HASH_SHIFT_XOR
+#    error SEL_HASH_SHIFT_XOR not supported for LOW_4
+#  endif
 	ldr	p11, [x16, #CACHE]				// p11 = mask|buckets
 	and	p10, p11, #~0xf			// p10 = buckets
 	and	p11, p11, #0xf			// p11 = maskShift

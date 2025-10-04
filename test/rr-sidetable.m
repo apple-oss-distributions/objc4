@@ -1,4 +1,4 @@
-// TEST_CONFIG OS=!exclavekit MEM=mrc ARCH=x86_64
+// TEST_CONFIG  MEM=mrc ARCH=x86_64
 // TEST_CFLAGS -framework Foundation
 
 // Stress-test nonpointer isa's side table retain count transfers.

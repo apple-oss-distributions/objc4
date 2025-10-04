@@ -32,7 +32,6 @@
 #include "objc-private.h"
 #include "runtime.h"
 
-#if !TARGET_OS_EXCLAVEKIT
 
 #include <Block.h>
 #include <Block_private.h>
@@ -612,4 +611,3 @@ BOOL imp_removeBlock(IMP anImp) {
     return YES;
 }
 
-#endif // !TARGET_OS_EXCLAVEKIT

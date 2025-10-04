@@ -6,12 +6,10 @@
 #include <time.h>
 #include <stdint.h>
 
-#if !TARGET_OS_EXCLAVEKIT
 #if TARGET_OS_OSX
 #include <Cambria/Traps.h>
 #include <Cambria/Cambria.h>
 #endif
-#endif // !TARGET_OS_EXCLAVEKIT
 
 #ifndef TEST_NAME
 #define TEST_NAME __FILE__
@@ -208,12 +206,10 @@ int main()
     CHECK(fpret_nop);
     CHECK(vecret_nop);
 
-#if !TARGET_OS_EXCLAVEKIT
 #if TARGET_OS_OSX
     // lpfret is ~10x slower than other msgSends on Rosetta due to using the
     // x87 stack for returning the value, so don't test it there.
     if (!oah_is_current_process_translated())
-#endif
 #endif
         CHECK(lfpret_nop);
 

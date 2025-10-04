@@ -3,6 +3,8 @@
 <plist version="1.0">
 <dict>
 	<key>get-task-allow</key>
-        <true/>
+    <true/>
+	<key>com.apple.developer.hardened-process</key>
+	<true/>
 </dict>
 </plist>

@@ -314,7 +314,7 @@ objc_object::initClassIsa(Class cls)
 inline void
 objc_object::initProtocolIsa(Class cls)
 {
-    return initClassIsa(cls);
+    return initInstanceIsa(cls, false);
 }
 
 inline void 

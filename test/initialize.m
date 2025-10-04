@@ -312,9 +312,7 @@ int main()
 
     // exception from +initialize must be handled cleanly
     PUSH_POOL {
-#if !TARGET_OS_EXCLAVEKIT
         alarm(3);
-#endif
         testonthread( ^{
             @try {
                 state = 0;

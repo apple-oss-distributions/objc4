@@ -35,16 +35,11 @@
 
 #include <TargetConditionals.h>
 
-#if !TARGET_OS_EXCLAVEKIT
 #include <os/feature_private.h> // os_feature_enabled_simple()
 #include <os/variant_private.h> // os_variant_allows_internal_security_policies()
-#endif
 
 #include <strings.h>
 
-#if TARGET_OS_EXCLAVEKIT
-#include "objc-test-env.h"
-#endif
 
 #include "InitWrappers.h"
 #include "llvm-MathExtras.h"
@@ -61,7 +56,6 @@
 
 // NSObject was in Foundation/CF on macOS < 10.8.
 #if TARGET_OS_OSX
-#   if !TARGET_OS_EXCLAVEKIT
 const char __objc_nsobject_class_10_5 = 0;
 const char __objc_nsobject_class_10_6 = 0;
 const char __objc_nsobject_class_10_7 = 0;
@@ -73,7 +67,6 @@ const char __objc_nsobject_metaclass_10_7 = 0;
 const char __objc_nsobject_isa_10_5 = 0;
 const char __objc_nsobject_isa_10_6 = 0;
 const char __objc_nsobject_isa_10_7 = 0;
-#   endif // !TARGET_OS_EXCLAVEKIT
 #endif
 
 // Settings from environment variables
@@ -380,7 +373,6 @@ void SetPageCountWarning(const char* envvar) {
 **********************************************************************/
 void environ_init(void) 
 {
-#if !TARGET_OS_EXCLAVEKIT
     if (issetugid()) {
         // All environment variables are silently ignored when setuid or setgid
         // This includes OBJC_HELP and OBJC_PRINT_OPTIONS themselves.
@@ -409,7 +401,6 @@ void environ_init(void)
     if (!os_feature_enabled_simple(objc4, autoreleaseFaultsMacOS, false))
         DisableFaults = On;
 #endif
-#endif // !TARGET_OS_EXCLAVEKIT
 
     bool PrintHelp = false;
     bool PrintOptions = false;
@@ -418,12 +409,7 @@ void environ_init(void)
     // Scan environ[] directly instead of calling getenv() a lot.
     // This optimizes the case where none are set.
     char **envp = NULL;
-#if TARGET_OS_EXCLAVEKIT
-    if (_objc_test_get_environ)
-        envp = _objc_test_get_environ();
-#else
     envp = *_NSGetEnviron();
-#endif
     if (!envp)
         return;
 
@@ -456,11 +442,9 @@ void environ_init(void)
         
         for (size_t i = 0; i < sizeof(Settings)/sizeof(Settings[0]); i++) {
             const option_t *opt = &Settings[i];
-#if !TARGET_OS_EXCLAVEKIT
             if (opt->internal
                 && !os_variant_allows_internal_security_policies("com.apple.obj-c"))
                 continue;
-#endif // !TARGET_OS_EXCLAVEKIT
             if ((size_t)(value - *p) == 1+opt->envlen  &&  
                 0 == strncmp(*p, opt->env, opt->envlen))
             {
@@ -486,7 +470,6 @@ void environ_init(void)
         }
     }
 
-#if !TARGET_OS_EXCLAVEKIT
     // Special case: enable some autorelease pool debugging
     // when some malloc debugging is enabled 
     // and OBJC_DEBUG_POOL_ALLOCATION is not set to something other than NO.
@@ -506,7 +489,6 @@ void environ_init(void)
     if (!os_feature_enabled_simple(objc4, preoptimizedCaches, true)) {
         DisablePreoptCaches = On;
     }
-#endif // !TARGET_OS_EXCLAVEKIT
 
     // Print OBJC_HELP and OBJC_PRINT_OPTIONS output.
     if (PrintHelp  ||  PrintOptions) {
@@ -524,11 +506,9 @@ void environ_init(void)
 
         for (size_t i = 0; i < sizeof(Settings)/sizeof(Settings[0]); i++) {
             const option_t *opt = &Settings[i];
-#if !TARGET_OS_EXCLAVEKIT
             if (opt->internal
                 && !os_variant_allows_internal_security_policies("com.apple.obj-c"))
                 continue;
-#endif // !TARGET_OS_EXCLAVEKIT
             if (PrintHelp) _objc_inform("%s: %s", opt->env, opt->help);
             if (PrintOptions) {
                 switch (*opt->var) {

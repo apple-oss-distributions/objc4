@@ -66,7 +66,6 @@ public struct ObjCBool : ExpressibleByBooleanLiteral, Sendable {
     }
 }
 
-#if !targetEnvironment(exclaveKit)
 @available(macOS 10.0, iOS 1.0, tvOS 1.0, watchOS 1.0, *)
 extension ObjCBool : CustomReflectable {
     /// Returns a mirror that reflects `self`.
@@ -74,7 +73,6 @@ extension ObjCBool : CustomReflectable {
         return Mirror(reflecting: boolValue)
     }
 }
-#endif
 
 @available(macOS 10.0, iOS 1.0, tvOS 1.0, watchOS 1.0, *)
 extension ObjCBool : CustomStringConvertible {
@@ -146,7 +144,6 @@ extension String {
     }
 }
 
-#if !targetEnvironment(exclaveKit)
 @available(macOS 10.0, iOS 1.0, tvOS 1.0, watchOS 1.0, *)
 extension Selector : CustomReflectable {
     /// Returns a mirror that reflects `self`.
@@ -154,7 +151,6 @@ extension Selector : CustomReflectable {
         return Mirror(reflecting: String(_sel: self))
     }
 }
-#endif
 
 //===----------------------------------------------------------------------===//
 // NSZone

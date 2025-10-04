@@ -1,4 +1,4 @@
-// TEST_CONFIG MEM=mrc OS=!exclavekit
+// TEST_CONFIG MEM=mrc 
 
 #include "test.h"
 #include "testroot.i"

@@ -1,4 +1,4 @@
-// TEST_CONFIG OS=!exclavekit
+// TEST_CONFIG 
 
 #include "test.h"
 

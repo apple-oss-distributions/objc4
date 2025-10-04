@@ -162,7 +162,7 @@ static OBJC_INLINE void objc_startCollectorThread(void) { }
 
 /* Covers for GC memory operations are unavailable in ARC */
 
-#elif !TARGET_OS_EXCLAVEKIT
+#else
 
 OBJC_GC_DEPRECATED("use OSAtomicCompareAndSwapPtr instead")
 static OBJC_INLINE BOOL objc_atomicCompareAndSwapPtr(id predicate, id replacement, volatile id *objectLocation) 

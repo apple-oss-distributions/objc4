@@ -1,5 +1,5 @@
 /*
-TEST_CONFIG OS=!exclavekit
+TEST_CONFIG 
 
 TEST_BUILD
   $C{COMPILE} -DCLASSNAME=Class1 $DIR/load-image-notification-dylib.m -install_name $T{DYLIBDIR}/load-image-notification1.dylib -o load-image-notification1.dylib -dynamiclib

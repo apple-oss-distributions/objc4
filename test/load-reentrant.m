@@ -1,5 +1,5 @@
 /*
-TEST_CONFIG OS=!exclavekit
+TEST_CONFIG 
 TEST_BUILD
     $C{COMPILE} $DIR/load-reentrant.m -o load-reentrant.exe
     $C{COMPILE} $DIR/load-reentrant2.m -o libload-reentrant2.dylib -bundle -bundle_loader load-reentrant.exe

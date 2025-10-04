@@ -1,4 +1,4 @@
-// TEST_CONFIG OS=!exclavekit LANGUAGE=objc,objc++
+// TEST_CONFIG  LANGUAGE=objc,objc++
 // TEST_CFLAGS -framework Foundation
 
 #import <Foundation/Foundation.h>

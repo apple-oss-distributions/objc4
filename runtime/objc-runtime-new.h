@@ -129,10 +129,7 @@
 //   _tryRetain/_isDeallocating/retainWeakReference/allowsWeakReference
 #define FAST_HAS_DEFAULT_RR     (1UL<<2)
 // data pointer
-#if TARGET_OS_EXCLAVEKIT
-#define FAST_DATA_MASK          0x0f00000ffffffff8UL
-#define DEBUG_DATA_MASK         0x0f00000ffffffff8UL
-#elif TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#if   TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
 #define FAST_DATA_MASK          0x0f00007ffffffff8UL
 #define DEBUG_DATA_MASK         0x0000007ffffffff8UL
 #else
@@ -148,12 +145,7 @@ static_assert((OBJC_VM_MAX_ADDRESS & FAST_DATA_MASK)
 #define FAST_FLAGS_MASK         0x0000000000000007UL
 
 // this bit tells us *quickly* that it's a pointer to an rw, not an ro
-#if TARGET_OS_EXCLAVEKIT
-// Can't do this on ExclaveKit because there's no TBI
-#define FAST_IS_RW_POINTER 0
-#else
 #define FAST_IS_RW_POINTER      0x8000000000000000UL
-#endif
 
 #else
 
@@ -938,24 +930,12 @@ struct method_t {
         MethodListIMP imp;
     };
 
-    // ***HACK: This is a TEMPORARY HACK FOR EXCLAVEKIT. It MUST go away.
-    // rdar://96885136 (Disallow insecure un-signed big method lists for ExclaveKit)
-#if TARGET_OS_EXCLAVEKIT
-    struct bigStripped {
-        SEL name;
-        const char *types;
-        MethodListIMP imp;
-    };
-#endif
     // ***HACK ----------------------------------------------------------
 
     // Various things assume big and bigSigned are the same size, make sure we
     // don't accidentally break that.
     static_assert(sizeof(struct big) == sizeof(struct bigSigned), "big and bigSigned are expected to be the same size");
 
-#if TARGET_OS_EXCLAVEKIT
-    static_assert(sizeof(struct big) == sizeof(struct bigStripped), "big and bigStripped are expected to be the same size");
-#endif
 
     enum class Kind {
         // Note: method_invoke detects small methods by detecting 1 in the low
@@ -969,11 +949,6 @@ struct method_t {
         small = 1,
         bigSigned = 2,
 
-        // ***HACK: This is a TEMPORARY HACK FOR EXCLAVEKIT. It MUST go away.
-        // rdar://96885136 (Disallow insecure un-signed big method lists for ExclaveKit)
-#if TARGET_OS_EXCLAVEKIT
-        bigStripped = 3,
-#endif
         // ***HACK ----------------------------------------------------------
     };
 
@@ -981,14 +956,7 @@ private:
     static const uintptr_t kindMask = 0x3;
 
     Kind getKind() const {
-#if TARGET_OS_EXCLAVEKIT
-        if (Kind((uintptr_t)this & kindMask) == Kind::small)
-            return Kind::small;
-        else
-            return Kind::bigStripped;
-#else
         return Kind((uintptr_t)this & kindMask);
-#endif
     }
 
     void *getPointer() const {
@@ -996,10 +964,6 @@ private:
     }
 
     method_t *withKind(Kind kind) {
-#if TARGET_OS_EXCLAVEKIT
-        if (kind == Kind::bigStripped)
-            kind = Kind::big;
-#endif
         uintptr_t combined = (uintptr_t)this->getPointer() | (uintptr_t)kind;
         method_t *ret = (method_t *)combined;
         ASSERT(ret->getKind() == kind);
@@ -1061,12 +1025,6 @@ public:
         return *(struct bigSigned *)getPointer();
     }
 
-#if TARGET_OS_EXCLAVEKIT
-    bigStripped &bigStripped() const {
-        ASSERT(getKind() == Kind::bigStripped);
-        return *(struct bigStripped *)getPointer();
-    }
-#endif
 
     ALWAYS_INLINE SEL name() const {
         switch (getKind()) {
@@ -1081,10 +1039,6 @@ public:
                 return big().name;
             case Kind::bigSigned:
                 return bigSigned().name;
-#if TARGET_OS_EXCLAVEKIT
-            case Kind::bigStripped:
-                return ptrauth_strip(bigStripped().name, ptrauth_key_objc_sel_pointer);
-#endif
         }
     }
 
@@ -1096,10 +1050,6 @@ public:
                 return big().types;
             case Kind::bigSigned:
                 return bigSigned().types;
-#if TARGET_OS_EXCLAVEKIT
-            case Kind::bigStripped:
-                return ptrauth_strip(bigStripped().types, ptrauth_key_process_independent_data);
-#endif
         }
     }
 
@@ -1142,10 +1092,6 @@ public:
                 return big().imp;
             case Kind::bigSigned:
                 return bigSigned().imp;
-#if TARGET_OS_EXCLAVEKIT
-            case Kind::bigStripped:
-                return bigStripped().imp;
-#endif
         }
     }
 
@@ -1164,10 +1110,6 @@ public:
                 return (void *)big().imp;
             case Kind::bigSigned:
                 return (void *)bigSigned().imp;
-#if TARGET_OS_EXCLAVEKIT
-            case Kind::bigStripped:
-                return (void *)bigStripped().imp;
-#endif
         }
     }
 
@@ -1198,11 +1140,6 @@ public:
             case Kind::bigSigned:
                 bigSigned().name = name;
                 break;
-#if TARGET_OS_EXCLAVEKIT
-            case Kind::bigStripped:
-                bigStripped().name = name;
-                break;
-#endif
         }
     }
 
@@ -1217,11 +1154,6 @@ public:
             case Kind::bigSigned:
                 bigSigned().imp = imp;
                 break;
-#if TARGET_OS_EXCLAVEKIT
-            case Kind::bigStripped:
-                big().imp = imp;
-                break;
-#endif
         }
     }
 
@@ -1233,10 +1165,6 @@ public:
                 return(struct objc_method_description *)getPointer();
             case Kind::bigSigned:
                 return getCachedDescription();
-#if TARGET_OS_EXCLAVEKIT
-        	case Kind::bigStripped:
-                return getCachedDescription();
-#endif
         }
     }
 
@@ -1252,15 +1180,6 @@ public:
                          const struct method_t::bigSigned& rhs)
         { return lhs.name < rhs.name; }
 
-#if TARGET_OS_EXCLAVEKIT
-        bool operator() (const struct method_t::bigStripped& lhs,
-                         const struct method_t::bigStripped& rhs)
-        {
-            SEL lhs_name = ptrauth_strip(lhs.name, ptrauth_key_objc_sel_pointer);
-            SEL rhs_name = ptrauth_strip(rhs.name, ptrauth_key_objc_sel_pointer);
-            return lhs_name < rhs_name;
-        }
-#endif
     };
 
     method_t &operator=(const method_t &other) {
@@ -1278,13 +1197,6 @@ public:
                 bigSigned().name = other.name();
                 bigSigned().types = other.types();
                 break;
-#if TARGET_OS_EXCLAVEKIT
-        	case Kind::bigStripped:
-                bigStripped().imp = other.imp(false);
-                bigStripped().name = other.name();
-                bigStripped().types = other.types();
-                break;
-#endif
         }
         return *this;
     }
@@ -1327,10 +1239,7 @@ struct property_t {
 // method lists. Older runtimes will treat them as part of the entry
 // size!)
 struct method_list_t : entsize_list_tt<method_t, method_list_t, 0xffff0003, method_t::pointer_modifier> {
-#if TARGET_OS_EXCLAVEKIT
-    // No TBI on ExclaveKit, but we assume *all* big method lists are signed
-    static const uintptr_t bigSignedMethodListFlag = 0x0;
-#elif __has_feature(ptrauth_calls)
+#if   __has_feature(ptrauth_calls)
     // This flag is ORed into method list pointers to indicate that the list is
     // a big list with signed pointers. Use a bit in TBI so we don't have to
     // mask it out to use the pointer.
@@ -1379,11 +1288,7 @@ struct method_list_t : entsize_list_tt<method_t, method_list_t, 0xffff0003, meth
         if (flags() & smallMethodListFlag)
             return method_t::Kind::small;
         else {
-#if TARGET_OS_EXCLAVEKIT
-            return method_t::Kind::bigStripped;
-#else
             return method_t::Kind::big;
-#endif
         }
     }
 
@@ -1416,11 +1321,6 @@ struct method_list_t : entsize_list_tt<method_t, method_list_t, 0xffff0003, meth
             case method_t::Kind::bigSigned:
                 std::stable_sort(&begin()->bigSigned(), &end()->bigSigned(), sorter);
                 break;
-#if TARGET_OS_EXCLAVEKIT
-            case method_t::Kind::bigStripped:
-                std::stable_sort(&begin()->bigStripped(), &end()->bigStripped(), sorter);
-                break;
-#endif
         }
     }
 

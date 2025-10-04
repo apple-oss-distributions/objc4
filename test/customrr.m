@@ -692,7 +692,6 @@ int main(int argc __unused, char **argv)
     testassertequal(SubAutoreleases, 2);
 
     // These tests required dlopen()
-#if !TARGET_OS_EXCLAVEKIT
     void *dlh;
 
     testprintf("category replacement of unrelated method does not clobber (InheritingSubCat)\n");
@@ -772,7 +771,6 @@ int main(int argc __unused, char **argv)
     testassertequal(Releases, 2);
     objc_autorelease(oo2);
     testassertequal(Autoreleases, 2);
-#endif // !TARGET_OS_EXCLAVEKIT
 
     testprintf("allocateClassPair with clean super does not clobber\n");
     zero();

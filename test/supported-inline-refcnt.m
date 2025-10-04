@@ -1,4 +1,4 @@
-// TEST_CONFIG MEM=mrc OS=!exclavekit
+// TEST_CONFIG MEM=mrc 
 // TEST_CFLAGS -framework CoreFoundation -Weverything
 
 #pragma clang diagnostic push

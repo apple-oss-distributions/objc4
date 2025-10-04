@@ -474,7 +474,6 @@ map_images_nolock(unsigned mhCount, const struct _dyld_objc_notify_mapped_info i
 #endif
 
 #if TARGET_OS_OSX
-#   if !TARGET_OS_EXCLAVEKIT
         // Disable +initialize fork safety if the app is too old (< 10.13).
         // Disable +initialize fork safety if the app has a
         //   __DATA,__objc_fork_ok section.
@@ -503,7 +502,6 @@ map_images_nolock(unsigned mhCount, const struct _dyld_objc_notify_mapped_info i
             }
             break;  // assume only one MH_EXECUTE image
         }
-#   endif // !TARGET_OS_EXCLAVEKIT
 #endif // TARGET_OS_OSX
 
         // Check the main executable for ARM64e-ness. Note, we cannot
@@ -675,9 +673,6 @@ private:
     uintptr_t storage;
 public:
     UnsignedInitializer(uint32_t offset) {
-#if TARGET_OS_EXCLAVEKIT
-        extern const struct mach_header_64 _mh_dylib_header;
-#endif
         storage = (uintptr_t)&_mh_dylib_header + offset;
     }
 
@@ -920,9 +915,7 @@ void _objc_init(void)
     exception_init();
     cache_t::init();
 
-#if !TARGET_OS_EXCLAVEKIT
     _imp_implementationWithBlock_init();
-#endif
 
     _dyld_objc_callbacks_v4 callbacks = {
         4, // version

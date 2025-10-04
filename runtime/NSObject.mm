@@ -38,12 +38,10 @@
 #include "NSObject-internal.h"
 #include "NSObject-private.h"
 
-#if !TARGET_OS_EXCLAVEKIT
 #include <mach/mach.h>
 #include <sys/mman.h>
 
 #include <os/feature_private.h>
-#endif
 
 @interface NSInvocation
 - (SEL)selector;
@@ -274,12 +272,82 @@ objc_storeStrong(id *location, id obj)
     if (obj == prev) {
         return;
     }
+
+#if __INTPTR_WIDTH__ == 32
+#define BAD_OBJECT ((id)0xbad0)
+#else
+#define BAD_OBJECT ((id)0x400000000000bad0)
+#endif
+    *(volatile id *)location = BAD_OBJECT;
+
     objc_retain(obj);
     *location = obj;
     objc_release(prev);
 }
 
+// Scan all weak references tables and check them for integrity. If any weak
+// reference is found whose value doesn't point back to the object it's
+// associated with, this will log an error. Returns true if any problem was
+// found, false if the tables passed the check.
+static bool weakTableScan() {
+    bool foundProblem = false;
+    SideTables().forEach([&](SideTable &table) {
+        table.lock();
 
+        auto mask = table.weak_table.mask;
+        if (mask) {
+            for (uintptr_t i = 0; i <= mask; i++) {
+                auto &entry = table.weak_table.weak_entries[i];
+                auto *referrers = entry.out_of_line() ? entry.referrers : entry.inline_referrers;
+                uintptr_t count = entry.out_of_line() ? entry.mask + 1 : WEAK_INLINE_COUNT;
+                objc_object *referent = entry.referent;
+                if (!referent) continue;
+
+                for (uintptr_t j = 0; j < count; j++) {
+                    objc_object **referrer = referrers[j];
+                    if (!referrer) continue;
+
+                    objc_object *currentValue = *referrer;
+                    if (referent != currentValue) {
+                        _objc_inform_now_and_on_crash("Weak reference at %p contains %p, should contain %p", referrer, currentValue, referent);
+                        foundProblem = true;
+                    }
+                }
+            }
+        }
+
+        table.unlock();
+    });
+    return foundProblem;
+}
+
+static void *weakTableScanThread(void *) {
+    pthread_setname_np("ObjC weak reference scanner");
+
+    struct timespec sleepInterval = { 0, 1000000 };
+    char *intervalStr = getenv("OBJC_DEBUG_SCAN_WEAK_TABLES_INTERVAL_NANOSECONDS");
+    if (intervalStr) {
+        unsigned long long nanos = strtoull(intervalStr, NULL, 10);
+        sleepInterval.tv_nsec = nanos % 1000000000;
+        sleepInterval.tv_sec = nanos / 1000000000;
+    }
+
+    while (true) {
+        nanosleep(&sleepInterval, NULL);
+        bool failed = weakTableScan();
+        if (failed)
+            _objc_fatal("Weak table scan detected a problem");
+    }
+}
+
+static void startWeakTableScan() {
+    _objc_inform("Starting background scan of weak references.");
+    pthread_t thread;
+    int ret = pthread_create(&thread, nullptr, weakTableScanThread, nullptr);
+    if (ret != 0)
+        _objc_fatal("pthread_create failed with error %d (%s)", ret, strerror(ret));
+    pthread_detach(thread);
+}
 // Update a weak variable.
 // If HaveOld is true, the variable has an existing value 
 //   that needs to be cleaned up. This value might be nil.
@@ -512,7 +580,27 @@ objc_loadWeakRetained(id *location)
         table->unlock();
         goto retry;
     }
-    
+
+    // Check that the object we found is actually something that has weak
+    // references, to check for corruption. This doesn't detect cases where an
+    // unregistered weak reference points to an object that has other weak
+    // references, but it will catch cases where the target object was
+    // deallocated or the weak reference contains garbage.
+    weak_entry_t *entry = weak_entry_for_referent(&table->weak_table,
+                                                  (objc_object *)obj);
+    if (slowpath(entry == NULL)) {
+        // Unlock before we scan the weak tables, since the scan will lock each
+        // table as it scans.
+        table->unlock();
+        weakTableScan();
+        _objc_fault_and_log("Weak reference loaded from %p contains %p which is not "
+                            "in the weak references table", location, obj);
+
+        // Return the object we found. It's not really weakly referenced,
+        // so we don't need to use tryRetain.
+        return objc_retain(obj);
+    }
+
     result = obj;
 
     cls = obj->ISA();
@@ -708,13 +796,11 @@ private:
 
     void checkTooMuchAutorelease()
     {
-#if !TARGET_OS_EXCLAVEKIT
         int newDepth = depth+1;
         if (newDepth == objc::PageCountWarning && numFaults < MAX_FAULTS) {
             _objc_fault("Large Autorelease Pool");
             numFaults++;
         }
-#endif
     }
 
 	AutoreleasePoolPage(AutoreleasePoolPage *newParent) :
@@ -1181,12 +1267,8 @@ public:
     static void badPop(void *token)
     {
         static bool complained = false;
-#if TARGET_OS_EXCLAVEKIT
-        bool willTerminate = true;
-#else
         bool willTerminate = (DebugPoolAllocation == Fatal
                               || sdkIsAtLeast(10_12, 10_0, 10_0, 3_0, 2_0));
-#endif
 
         if (!complained) {
             complained = true;
@@ -2301,59 +2383,6 @@ id objc_unretainedObject(objc_objectptr_t pointer) { return (id)pointer; }
 // convert id to objc_objectptr_t, no ownership transfer.
 objc_objectptr_t objc_unretainedPointer(id object) { return object; }
 
-#if !TARGET_OS_EXCLAVEKIT
-static void *weakTableScan(void *) {
-    pthread_setname_np("ObjC weak reference scanner");
-
-    struct timespec sleepInterval = { 0, 1000000 };
-    char *intervalStr = getenv("OBJC_DEBUG_SCAN_WEAK_TABLES_INTERVAL_NANOSECONDS");
-    if (intervalStr) {
-        unsigned long long nanos = strtoull(intervalStr, NULL, 10);
-        sleepInterval.tv_nsec = nanos % 1000000000;
-        sleepInterval.tv_sec = nanos / 1000000000;
-    }
-
-    auto &tables = SideTables();
-    while (true) {
-        tables.forEach([&](SideTable &table) {
-            nanosleep(&sleepInterval, NULL);
-
-            table.lock();
-
-            auto mask = table.weak_table.mask;
-            if (mask) {
-                for (uintptr_t i = 0; i <= mask; i++) {
-                    auto &entry = table.weak_table.weak_entries[i];
-                    auto *referrers = entry.out_of_line() ? entry.referrers : entry.inline_referrers;
-                    uintptr_t count = entry.out_of_line() ? entry.mask + 1 : WEAK_INLINE_COUNT;
-                    objc_object *referent = entry.referent;
-                    if (!referent) continue;
-
-                    for (uintptr_t j = 0; j < count; j++) {
-                        objc_object **referrer = referrers[j];
-                        if (!referrer) continue;
-
-                        objc_object *currentValue = *referrer;
-                        if (referent != currentValue)
-                            _objc_fatal("Weak reference at %p contains %p, should contain %p", referrer, currentValue, referent);
-                    }
-                }
-            }
-            table.unlock();
-        });
-    }
-}
-
-static void startWeakTableScan() {
-    _objc_inform("Starting background scan of weak references.");
-    pthread_t thread;
-    int ret = pthread_create(&thread, nullptr, weakTableScan, nullptr);
-    if (ret != 0)
-        _objc_fatal("pthread_create failed with error %d (%s)", ret, strerror(ret));
-    pthread_detach(thread);
-}
-#endif
-
 void side_tables_init(void)
 {
     SideTablesMap.init();
@@ -2366,10 +2395,8 @@ void arr_init(void)
     ReturnAutoreleaseInfo::tlsReturnAddress.init();
     AutoreleasePoolPage::initTLS();
 
-#if !TARGET_OS_EXCLAVEKIT
     if (DebugScanWeakTables)
         startWeakTableScan();
-#endif
 }
 
 

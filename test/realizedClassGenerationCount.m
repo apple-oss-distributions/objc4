@@ -14,13 +14,11 @@ int main()
 
     Class c;
 
-#if !TARGET_OS_EXCLAVEKIT
     void *handle = dlopen("/System/Library/Frameworks/Foundation.framework/Foundation", RTLD_LAZY);
     testassert(handle);
     c = objc_getClass("NSFileManager");
     testassert(c);
     testassert(objc_debug_realized_class_generation_count > prev);
-#endif
 
     prev = objc_debug_realized_class_generation_count;
     c = objc_allocateClassPair([TestRoot class], "Dynamic", 0);

@@ -113,15 +113,25 @@ static SyncCache *fetch_cache(bool create)
     data = _objc_fetch_pthread_data(create);
     if (!data) return NULL;
 
+    constexpr unsigned initialCount = 4;
     if (!data->syncCache) {
         if (!create) {
             return NULL;
         } else {
-            int count = 4;
             data->syncCache = (SyncCache *)
-                calloc(1, sizeof(SyncCache) + count*sizeof(SyncCacheItem));
-            data->syncCache->allocated = count;
+                calloc(1, sizeof(SyncCache)
+                       + initialCount * sizeof(SyncCacheItem));
+            data->syncCache->allocated = initialCount;
         }
+    }
+
+    // The amount allocated only grows from initialCount. allocated can only be
+    // less than initialCount or less than used if it's been corrupted.
+    if (slowpath(data->syncCache->allocated < initialCount ||
+                 data->syncCache->allocated < data->syncCache->used)) {
+        _objc_fatal("syncCache corrupted, allocated=%u used=%u",
+                    data->syncCache->allocated,
+                    data->syncCache->used);
     }
 
     // Make sure there's at least one open slot in the list.

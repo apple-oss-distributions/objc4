@@ -36,9 +36,7 @@ END
 #include <spawn.h>
 #include <sys/poll.h>
 
-#if !TARGET_OS_EXCLAVEKIT
 #include <execinfo.h>
-#endif
 
 #include "test.h"
 
@@ -47,7 +45,6 @@ END
 __attribute__((noinline)) void
 _objc_inform_backtrace(const char *linePrefix)
 {
-#if !TARGET_OS_EXCLAVEKIT
     void *stack[128];
     int count = backtrace(stack, sizeof(stack)/sizeof(stack[0]));
     char **sym = backtrace_symbols(stack, count);
@@ -56,7 +53,6 @@ _objc_inform_backtrace(const char *linePrefix)
         fprintf(stderr, "%s%s", linePrefix, sym[i]);
     }
     free(sym);
-#endif
 }
 
 int validate_dylib_in_forked_process(const char * const toolPath, const char * const dylib)

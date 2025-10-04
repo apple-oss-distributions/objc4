@@ -148,8 +148,8 @@
 		842581642CEE927E007C1920 /* ObjectiveCRPathInstallName.c in Sources */ = {isa = PBXBuildFile; fileRef = 8425815C2CEE90D6007C1920 /* ObjectiveCRPathInstallName.c */; platformFilters = (ios, macos, tvos, watchos, ); };
 		842581662CEE928A007C1920 /* ObjectiveC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842581652CEE928A007C1920 /* ObjectiveC.swift */; };
 		8425816F2CEEB869007C1920 /* libswiftObjectiveC.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 84B3DAC72CEE827B009A3DB2 /* libswiftObjectiveC.dylib */; };
-		8425817C2CEEBB54007C1920 /* StdlibUnittest checkHashable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842581792CEEBB2E007C1920 /* StdlibUnittest checkHashable.swift */; };
-		8425817D2CEEBB54007C1920 /* StdlibUnittest checkEquatable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842581782CEEBB2E007C1920 /* StdlibUnittest checkEquatable.swift */; };
+		8425817C2CEEBB54007C1920 /* StdlibUnittest-checkHashable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842581792CEEBB2E007C1920 /* StdlibUnittest-checkHashable.swift */; };
+		8425817D2CEEBB54007C1920 /* StdlibUnittest-checkEquatable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842581782CEEBB2E007C1920 /* StdlibUnittest-checkEquatable.swift */; };
 		8425817E2CEEBB54007C1920 /* Creatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8425817A2CEEBB2E007C1920 /* Creatures.swift */; };
 		8425817F2CEEBB54007C1920 /* ObjectiveC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8425817B2CEEBB2E007C1920 /* ObjectiveC.swift */; };
 		842581972CEEBCB2007C1920 /* libObjectiveC-swiftoverlay-Test-Dylib.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 842581852CEEBC4B007C1920 /* libObjectiveC-swiftoverlay-Test-Dylib.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
@@ -362,8 +362,8 @@
 		8425815C2CEE90D6007C1920 /* ObjectiveCRPathInstallName.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ObjectiveCRPathInstallName.c; sourceTree = "<group>"; };
 		842581652CEE928A007C1920 /* ObjectiveC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveC.swift; sourceTree = "<group>"; };
 		8425816B2CEEB869007C1920 /* ObjectiveCTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ObjectiveCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		842581782CEEBB2E007C1920 /* StdlibUnittest checkEquatable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StdlibUnittest checkEquatable.swift"; sourceTree = "<group>"; };
-		842581792CEEBB2E007C1920 /* StdlibUnittest checkHashable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StdlibUnittest checkHashable.swift"; sourceTree = "<group>"; };
+		842581782CEEBB2E007C1920 /* StdlibUnittest-checkEquatable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StdlibUnittest-checkEquatable.swift"; sourceTree = "<group>"; };
+		842581792CEEBB2E007C1920 /* StdlibUnittest-checkHashable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StdlibUnittest-checkHashable.swift"; sourceTree = "<group>"; };
 		8425817A2CEEBB2E007C1920 /* Creatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Creatures.swift; sourceTree = "<group>"; };
 		8425817B2CEEBB2E007C1920 /* ObjectiveC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectiveC.swift; sourceTree = "<group>"; };
 		842581802CEEBBEE007C1920 /* ObjectiveC.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = ObjectiveC.xctestplan; sourceTree = "<group>"; };
@@ -680,8 +680,8 @@
 			children = (
 				8425817B2CEEBB2E007C1920 /* ObjectiveC.swift */,
 				8425817A2CEEBB2E007C1920 /* Creatures.swift */,
-				842581782CEEBB2E007C1920 /* StdlibUnittest checkEquatable.swift */,
-				842581792CEEBB2E007C1920 /* StdlibUnittest checkHashable.swift */,
+				842581782CEEBB2E007C1920 /* StdlibUnittest-checkEquatable.swift */,
+				842581792CEEBB2E007C1920 /* StdlibUnittest-checkHashable.swift */,
 			);
 			path = ObjectiveCTests;
 			sourceTree = "<group>";
@@ -1216,8 +1216,8 @@
 			files = (
 				8425817E2CEEBB54007C1920 /* Creatures.swift in Sources */,
 				8425817F2CEEBB54007C1920 /* ObjectiveC.swift in Sources */,
-				8425817D2CEEBB54007C1920 /* StdlibUnittest checkEquatable.swift in Sources */,
-				8425817C2CEEBB54007C1920 /* StdlibUnittest checkHashable.swift in Sources */,
+				8425817D2CEEBB54007C1920 /* StdlibUnittest-checkEquatable.swift in Sources */,
+				8425817C2CEEBB54007C1920 /* StdlibUnittest-checkHashable.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1723,7 +1723,7 @@
 					"-fno-typed-cxx-new-delete",
 				);
 				SDKROOT = macosx.internal;
-				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator watchos watchsimulator appletvos appletvsimulator bridgeos xros xrsimulator exclavekit.macosx exclavekit.iphoneos exclavekit.watchos exclavekit.appletvos exclavekit.xros";
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator watchos watchsimulator appletvos appletvsimulator bridgeos xros xrsimulator     ";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -1789,7 +1789,7 @@
 					"-fno-typed-cxx-new-delete",
 				);
 				SDKROOT = macosx.internal;
-				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator watchos watchsimulator appletvos appletvsimulator bridgeos xros xrsimulator exclavekit.macosx exclavekit.iphoneos exclavekit.watchos exclavekit.appletvos exclavekit.xros";
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator watchos watchsimulator appletvos appletvsimulator bridgeos xros xrsimulator     ";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 6.0;
 				SYSTEM_FRAMEWORK_SEARCH_PATHS_USE_FSYSTEM = YES;

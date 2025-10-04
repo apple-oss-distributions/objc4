@@ -129,8 +129,12 @@ enum WeakRegisterDeallocatingOptions {
     DontCheckDeallocating
 };
 
+/// Retrieve the entry for a given object from the corresponding table.
+weak_entry_t *
+weak_entry_for_referent(weak_table_t *weak_table, objc_object *referent);
+
 /// Adds an (object, weak pointer) pair to the weak table.
-id weak_register_no_lock(weak_table_t *weak_table, id referent, 
+id weak_register_no_lock(weak_table_t *weak_table, id referent,
                          id *referrer, WeakRegisterDeallocatingOptions deallocatingOptions);
 
 /// Removes an (object, weak pointer) pair from the weak table.

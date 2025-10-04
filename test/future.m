@@ -72,7 +72,6 @@ int main()
     // objc_getFutureClass a second time
     testassert(oldSub1 == objc_getFutureClass("Sub1"));
 
-#if !TARGET_OS_EXCLAVEKIT
     // Load class Sub1
     dlopen("future2.dylib", 0);
 
@@ -85,7 +84,6 @@ int main()
 
     testassert(1 == [oldSub1 method]);
     testassert(1 == [newSub1 method]);
-#endif // !TARGET_OS_EXCLAVEKIT
 
     succeed(__FILE__);
 }

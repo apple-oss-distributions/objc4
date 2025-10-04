@@ -1,7 +1,7 @@
 // Note that test ARCLayoutsWithoutWeak uses the same files 
 // with different build options.
 /*
-TEST_CONFIG MEM=arc OS=!exclavekit
+TEST_CONFIG MEM=arc 
 TEST_BUILD
     mkdir -p $T{OBJDIR}
     $C{COMPILE_NOLINK_NOMEM} -c $DIR/MRCBase.m -o $T{OBJDIR}/MRCBase.o

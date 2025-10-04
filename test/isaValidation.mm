@@ -105,7 +105,7 @@ void parent(char *argv0)
         while (true) {
             // This could be more efficient, but the output isn't big enough to
             // matter.
-            size_t readSize = 42;
+            constexpr size_t readSize = 42;
             char buffer[readSize];
 
             ssize_t readResult = read(pipeRead, buffer, readSize);

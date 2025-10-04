@@ -785,10 +785,8 @@ extern void arr_init(void);
 extern id objc_autoreleaseReturnValue(id obj);
 
 // block trampolines
-#if !TARGET_OS_EXCLAVEKIT
 extern void _imp_implementationWithBlock_init(void);
 extern IMP _imp_implementationWithBlockNoCopy(id block);
-#endif
 
 // layout.h
 typedef struct {

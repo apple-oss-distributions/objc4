@@ -24,13 +24,8 @@
 #   define SIGNED_RO
 #endif
 
-#if TARGET_OS_EXCLAVEKIT
-#   define SIGNED_OBJC_SEL "@AUTH(da, 0x57c2, addr) "
-#   define SIGNED_METHOD_TYPES "@AUTH(da,0xdec6,addr) "
-#else
 #   define SIGNED_OBJC_SEL
 #   define SIGNED_METHOD_TYPES
-#endif
 
 
 #define str(x) #x

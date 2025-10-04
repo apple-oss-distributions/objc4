@@ -867,13 +867,6 @@ sub gather_simple {
         return 0;
     }
 
-    ### BEGIN APPLE INTERNAL
-    # crashing tests can't work on ExclaveKit
-    if ($crashes && $C{OS} eq "exclavekit") {
-        print "SKIP: $name    (can't intercept crashes on ExclaveKit)\n";
-        return 0;
-    }
-    ### END APPLE INTERNAL
 
     # check test conditions
 
@@ -947,11 +940,6 @@ sub gather_simple {
 
     my $dylibdir = $execdir;
 
-    ### BEGIN APPLE INTERNAL
-    if ("$C{OS}" eq "exclavekit") {
-        $dylibdir = "/System/ExclaveKit/usr/local/lib";
-    }
-    ### END APPLE INTERNAL
 
     # save some results for build and run phases
     $$CREF{"TEST_$name"} = {
@@ -1033,11 +1021,6 @@ sub build_simple {
     my $file = "$DIR/$name.$ext";
 
     if ($T{TEST_CRASHES}) {
-        ### BEGIN APPLE INTERNAL
-        if ($C{OS} eq "exclavekit") {
-            return (1, "");
-        }
-        ### END APPLE INTERNAL
 
         `echo '$crashcatch' > $dstdir/crashcatch.c`;
         my $output = make("$C{COMPILE_C} -dynamiclib -o libcrashcatch.dylib -x c crashcatch.c", $dstdir);
@@ -1129,24 +1112,24 @@ sub build_simple {
                 # fixme use SYMROOT?
                 make("xcrun dsymutil $file", $dstdir);
             }
-            if ($C{OS} eq "macosx"  ||  $C{OS} =~ /simulator/) {
-                # setting any entitlements disables dyld environment variables
-            } else {
-                # get-task-allow entitlement is required
-                # to enable dyld environment variables
-                if (!$T{ENTITLEMENTS}) {
-                    $T{ENTITLEMENTS} = "get_task_allow_entitlement.plist";
+
+            if (!$T{ENTITLEMENTS}) {
+                if ($C{OS} eq "macosx"  ||  $C{OS} =~ /simulator/) {
+                    $T{ENTITLEMENTS} = "default-entitlements-macos.plist";
+                } else {
+                    $T{ENTITLEMENTS} = "default-entitlements-ios.plist";
                 }
-                my $entitlements_args =
-                    $file =~ /\.exe\z/
-                    ? "--entitlements $DIR/$T{ENTITLEMENTS}"
-                    : "";
-                my $output = make("xcrun codesign -s - $entitlements_args $file", $dstdir);
-                if ($?) {
-                    colorprint  $red, "FAIL: codesign $file";
-                    colorprefix $red, $output;
-                    return (0, "");
-                }
+            }
+
+            my $entitlements_args =
+                $file =~ /\.exe\z/
+                ? "--entitlements $DIR/$T{ENTITLEMENTS}"
+                : "";
+            my $output = make("xcrun codesign -s - $entitlements_args $file", $dstdir);
+            if ($?) {
+                colorprint  $red, "FAIL: codesign $file";
+                colorprefix $red, $output;
+                return (0, "");
             }
         }
     }
@@ -1203,7 +1186,15 @@ sub run_simple {
             $env .= " DYLD_INSERT_LIBRARIES=$remotedir/libcrashcatch.dylib";
         }
 
-        my $cmd = "ssh -o LogLevel=quiet $PORT $HOST 'cd $remotedir && env $env ./$name.exe'";
+        my $cmd = "cd $remotedir";
+        if ($C{OS} eq "macosx") {
+            # Bless the executable for full privileges on macOS. Other OSes
+            # don't have root_util and don't need bless.
+            $cmd .= " && /usr/local/bin/root_util bless $name.exe";
+        }
+        $cmd .= " && env $env ./$name.exe";
+
+        $cmd = "ssh -o LogLevel=quiet $PORT $HOST '$cmd'";
         $output = make("$cmd");
     }
     elsif ($C{OS} =~ /simulator/) {
@@ -1237,11 +1228,6 @@ sub run_simple {
         $env .= " LIBOBJC=$C{TESTLIB}";
 
         my $runscript = $RUNSCRIPT;
-        ### BEGIN APPLE INTERNAL
-        if (!$runscript && $C{OS} =~ /exclave/) {
-            $runscript = "$DIR/../scripts/exclave-run";
-        }
-        ### END APPLE INTERNAL
 
         $output = make("$runscript $env ./$name.exe");
     }
@@ -1384,9 +1370,6 @@ sub make_one_config {
         "visionsimulator" => "xrsimulator",
         "xrsimulator" => "xrsimulator",
         "bridgeos" => "bridgeos",
-        ### BEGIN APPLE INTERNAL
-        "exclavekit" => "exclavekit",
-        ### END APPLE INTERNAL
         );
 
     # attempt to fallback to SDK target info if the platform is not recognized
@@ -1432,11 +1415,6 @@ sub make_one_config {
     } elsif ($C{OS} eq "macosx") {
         $C{TOOLCHAIN} = "osx";
     }
-    ### BEGIN APPLE INTERNAL
-    elsif ($C{OS} eq "exclavekit") {
-        $C{TOOLCHAIN} = "macosx";
-    }
-    ### END APPLE INTERNAL
     elsif ($didUseOSFallback) {
         #shaky, but works as long as things follow ${name}os / ${name}simulator
         ($C{TOOLCHAIN} = $C{OS}) =~ s/simulator/os/;
@@ -1488,11 +1466,6 @@ sub make_one_config {
         $C{SDK_PATH} = "/unknown/sdk";
     }
 
-    ### BEGIN APPLE INTERNAL
-    if ($C{OS} eq "exclavekit") {
-        $C{SDK_PATH} = "$C{SDK_PATH}/System/ExclaveKit";
-    }
-    ### END APPLE INTERNAL
 
     # Set run target.
     $C{RUN_TARGET} = $run_arg;
@@ -1659,12 +1632,6 @@ sub make_one_config {
         $cflags .= " -mbridgeos-version-min=$C{DEPLOYMENT_TARGET}";
         $target = "$C{ARCH}-apple-bridgeos$C{DEPLOYMENT_TARGET}";
     }
-    ### BEGIN APPLE INTERNAL
-    elsif ($C{OS} eq "exclavekit") {
-        $cflags .= " -mmacosx-version-min=$C{DEPLOYMENT_TARGET} -fapple-link-rtlib -fobjc-relative-method-lists";
-        $target = "$C{ARCH}-apple-macosx$C{DEPLOYMENT_TARGET}";
-    }
-    ### END APPLE INTERNAL
     elsif ($didUseOSFallback) {
         $target = "$C{ARCH}-apple-$C{OS}$C{DEPLOYMENT_TARGET}";
         $cflags .= " -target $target";

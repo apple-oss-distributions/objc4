@@ -12,13 +12,11 @@ END
 
 #include "../runtime/objc-config.h"
 
-#if !TARGET_OS_EXCLAVEKIT
 #include <mach-o/loader.h>
 #include <libkern/OSCacheControl.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <fcntl.h>
-#endif
 
 #include <objc/objc.h>
 #include <objc/runtime.h>
@@ -822,10 +820,7 @@ STRET_IMP(d9)
 
 // DWARF checking machinery
 
-#if TARGET_OS_EXCLAVEKIT
-// fixme unimplemented - ucontext not passed to signal handlers
-#define NO_DWARF_REASON "(exclaveKit)"
-#elif TARGET_OS_WATCH
+#if   TARGET_OS_WATCH
 // fixme unimplemented - ucontext not passed to signal handlers
 #define NO_DWARF_REASON "(watchOS)"
 
@@ -848,10 +843,8 @@ STRET_IMP(d9)
 @implementation SubDW @end
 
 #include <dlfcn.h>
-#if !TARGET_OS_EXCLAVEKIT
 #include <signal.h>
 #include <sys/mman.h>
-#endif
 #include <libunwind.h>
 
 bool caught = false;

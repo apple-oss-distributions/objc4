@@ -125,14 +125,8 @@ static int state = 0;
 #define SIGNED_METHOD_LIST
 #endif
 
-#if TARGET_OS_EXCLAVEKIT
-// On ExclaveKit, all method lists are signed
-#define SIGNED_OBJC_SEL "@AUTH(da,0x57c2,addr)"
-#define SIGNED_METHOD_TYPES "@AUTH(da,0xdec6,addr)"
-#else
 #define SIGNED_OBJC_SEL
 #define SIGNED_METHOD_TYPES
-#endif
 
 asm(
 "    .section __DATA,__objc_classname,cstring_literals                  \n"

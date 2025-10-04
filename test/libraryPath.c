@@ -1,4 +1,4 @@
-// TEST_CONFIG OS=!exclavekit
+// TEST_CONFIG 
 // TEST_CFLAGS -lobjc
 
 #include "test.h"

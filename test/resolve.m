@@ -9,9 +9,7 @@
 #include <objc/objc.h>
 #include <objc/objc-runtime.h>
 
-#if !TARGET_OS_EXCLAVEKIT
 #include <unistd.h>
-#endif
 
 #if __has_feature(objc_arc)
 

@@ -234,6 +234,7 @@ int main() {
                               fprintf(stderr, "  %s\n", class_getName(cls));
                                ++dogCount;
                           });
+    testassertequal(dogCount, 1);
 
     // Enumerate classes that support the "Claws" protocol; note that "Cat"
     // won't be included because it's in a separate dylib (i.e. not this image)
@@ -282,9 +283,6 @@ int main() {
                           });
     testassertequal(stopCount, 4);
 
-#if TARGET_OS_EXCLAVEKIT
-    fprintf(stderr, "Not looking in dylib (no dlopen)\n");
-#else
     // Enumerate the classes in the dylib
     void *dylib = dlopen("enumClasses0.dylib", RTLD_NOLOAD);
     __block unsigned dylibCount = 0;
@@ -297,7 +295,6 @@ int main() {
                           });
     testassertequal(dylibCount, 3);
     dlclose(dylib);
-#endif // TARGET_OS_EXCLAVEKIT
 
     // Create a dynamic class
     Class heffalump = objc_allocateClassPair([Elephant class], "Heffalump", 0);

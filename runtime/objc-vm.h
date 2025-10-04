@@ -49,11 +49,7 @@
 #  define PAGE_MIN_SIZE   16384
 #  define PAGE_MAX_SIZE   16384
 #  define PAGE_MAX_SHIFT  14
-#if TARGET_OS_EXCLAVEKIT
-#  define OBJC_VM_MAX_ADDRESS  0x0000000ffffffff8ULL
-#else
 #  define OBJC_VM_MAX_ADDRESS  0x00007ffffffffff8ULL
-#endif
 #else
 #  error Unknown platform - please define PAGE_SIZE et al.
 #endif

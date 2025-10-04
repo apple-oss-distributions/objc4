@@ -32,9 +32,7 @@ static void handler(id unused __unused, void *ctx __unused)
 +(BOOL) resolveClassMethod:(SEL)__unused name
 {
     testassertequal(state, 1); state++;
-#if TARGET_OS_EXCLAVEKIT
-    state++;  // handler would have done this
-#elif TARGET_OS_OSX
+#if   TARGET_OS_OSX
     objc_addExceptionHandler(&handler, 0);
     testassertequal(state, 2); 
 #else
@@ -54,11 +52,7 @@ int main()
 
     PUSH_POOL {
 
-#if TARGET_OS_EXCLAVEKIT
-        const int count = 256;
-#else
         const int count = is_guardmalloc() ? 1000 : 100000;
-#endif
         state = 0;
         for (int i = 0; i < count; i++) {
             @try {

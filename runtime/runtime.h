@@ -429,9 +429,7 @@ class_setSuperclass(Class _Nonnull cls, Class _Nonnull newSuper)
     __IOS_DEPRECATED(2.0, 2.0, "not recommended")
     __TVOS_DEPRECATED(9.0, 9.0, "not recommended")
     __WATCHOS_DEPRECATED(1.0, 1.0, "not recommended")
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_DEPRECATED(2.0, 2.0, "not recommended")
-#endif
 ;
 
 /** 
@@ -1530,7 +1528,6 @@ OBJC_EXPORT void
 objc_setForwardHandler(void * _Nonnull fwd, void * _Nonnull fwd_stret) 
     OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
 
-#if !TARGET_OS_EXCLAVEKIT
 
 /** 
  * Creates a pointer to a function that will call the block
@@ -1574,7 +1571,6 @@ OBJC_EXPORT BOOL
 imp_removeBlock(IMP _Nonnull anImp)
     OBJC_AVAILABLE(10.7, 4.3, 9.0, 1.0, 2.0);
 
-#endif /* !TARGET_OS_EXCLAVEKIT */
 
 /** 
  * This loads the object referenced by a weak pointer and returns it, after
@@ -1878,14 +1874,11 @@ _objc_flush_caches(Class _Nullable cls)
     __IOS_DEPRECATED(2.0, 2.0, "not recommended")
     __TVOS_DEPRECATED(9.0, 9.0, "not recommended")
     __WATCHOS_DEPRECATED(1.0, 1.0, "not recommended")
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_DEPRECATED(2.0, 2.0, "not recommended")
-#endif
 ;
 
 /* Obsolete functions */
 
-#if !TARGET_OS_EXCLAVEKIT
 
 OBJC_EXPORT IMP _Nullable
 class_lookupMethod(Class _Nullable cls, SEL _Nonnull sel) 
@@ -1893,9 +1886,7 @@ class_lookupMethod(Class _Nullable cls, SEL _Nonnull sel)
     __IOS_DEPRECATED(2.0, 2.0, "use class_getMethodImplementation instead")
     __TVOS_DEPRECATED(9.0, 9.0, "use class_getMethodImplementation instead")
     __WATCHOS_DEPRECATED(1.0, 1.0, "use class_getMethodImplementation instead")
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_DEPRECATED(2.0, 2.0, "use class_getMethodImplementation instead")
-#endif
 ;
 OBJC_EXPORT BOOL
 class_respondsToMethod(Class _Nullable cls, SEL _Nonnull sel)
@@ -1903,9 +1894,7 @@ class_respondsToMethod(Class _Nullable cls, SEL _Nonnull sel)
     __IOS_DEPRECATED(2.0, 2.0, "use class_respondsToSelector instead")
     __TVOS_DEPRECATED(9.0, 9.0, "use class_respondsToSelector instead")
     __WATCHOS_DEPRECATED(1.0, 1.0, "use class_respondsToSelector instead")
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_DEPRECATED(2.0, 2.0, "use class_respondsToSelector instead")
-#endif
 ;
 
 OBJC_EXPORT id _Nullable
@@ -1917,6 +1906,5 @@ class_createInstanceFromZone(Class _Nullable, size_t idxIvars,
                              void * _Nullable zone __unused)
     OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(10.0, 10.5, "use class_createInstance instead");
 
-#endif // !TARGET_OS_EXCLAVEKIT
 
 #endif

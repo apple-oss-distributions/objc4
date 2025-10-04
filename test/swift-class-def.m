@@ -32,14 +32,8 @@
 #   define SIGNED_RO
 #endif
 
-#if TARGET_OS_EXCLAVEKIT
-// On ExclaveKit, all method lists are signed
-#   define SIGNED_OBJC_SEL "@AUTH(da,0x57c2,addr)"
-#   define SIGNED_METHOD_TYPES "@AUTH(da,0xdec6,addr)"
-#else
 #   define SIGNED_OBJC_SEL
 #   define SIGNED_METHOD_TYPES
-#endif
 
 #define str(x) #x
 #define str2(x) str(x)
@@ -235,9 +229,9 @@ inline bool isRealized(Class cls)
 // ever changes there.
 #if __LP64__
 # if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-#  define FAST_DATA_MASK          0x0000007ffffffff8UL
+#  define FAST_DATA_MASK          0x0f00007ffffffff8UL
 # else
-#  define FAST_DATA_MASK          0x00007ffffffffff8UL
+#  define FAST_DATA_MASK          0x0f007ffffffffff8UL
 # endif
 #else
 # define FAST_DATA_MASK        0xfffffffcUL

@@ -228,5 +228,16 @@ int main()
     TestReleaseLater();
     TestReleaseLaterRemoveAssociations();
 
+    // rdar://151234085 Make sure associated objects on dynamically allocated
+    // classes and metaclasses are cleared when they're destroyed.
+    Class dynamicClass = objc_allocateClassPair([NSObject class], "DynamicSubclassForAssociatedObjects", 0);
+    objc_registerClassPair(dynamicClass);
+    Class dynamicMetaclass = object_getClass(dynamicClass);
+    objc_setAssociatedObject(dynamicClass, &key, [NSObject class], OBJC_ASSOCIATION_RETAIN);
+    objc_setAssociatedObject(dynamicMetaclass, &key, [NSObject class], OBJC_ASSOCIATION_RETAIN);
+    objc_disposeClassPair(dynamicClass);
+    testassertnil(objc_getAssociatedObject(dynamicClass, &key));
+    testassertnil(objc_getAssociatedObject(dynamicMetaclass, &key));
+
     succeed(__FILE__);
 }

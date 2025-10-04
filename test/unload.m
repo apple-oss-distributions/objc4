@@ -1,7 +1,7 @@
 // xpc leaks memory in dlopen(). Disable it.
 // TEST_ENV XPC_SERVICES_UNAVAILABLE=1
 /*
-TEST_CONFIG OS=!exclavekit
+TEST_CONFIG 
 TEST_BUILD
     $C{COMPILE}   $DIR/unload5.m -o libunload5.dylib -dynamiclib -install_name /usr/lib/libz.1.dylib
     $C{COMPILE}   $DIR/unload4.m -o unload4.dylib -dynamiclib

@@ -29,7 +29,6 @@ using std::memory_order_relaxed;
 #endif
 #include <malloc/malloc.h>
 
-#if !TARGET_OS_EXCLAVEKIT
 #include <sys/errno.h>
 #include <sys/param.h>
 
@@ -39,9 +38,6 @@ using std::memory_order_relaxed;
 #include <mach/mach.h>
 #include <mach/vm_param.h>
 #include <mach/mach_time.h>
-#else
-#include <threads.h>
-#endif
 
 #include <objc/objc.h>
 #include <objc/runtime.h>
@@ -63,60 +59,6 @@ using std::memory_order_relaxed;
 #endif
 
 
-#if TARGET_OS_EXCLAVEKIT
-// ExclaveKit compatibility
-#define MAXPATHLEN  1024
-
-static inline const char *test_getenv(const char *name)
-{
-    (void)name;
-    return NULL;
-}
-#define getenv(x) test_getenv(x)
-
-static inline char *basename(char *path)
-{
-    size_t len = strlen(path);
-    char *ptr = path + len - 1;
-    while (ptr > path && *ptr == '/')
-        *ptr-- = 0;
-    ptr = strrchr(path, '/');
-    if (!ptr)
-        return path;
-    return ptr + 1;
-}
-
-static inline char *basename_r(const char *path, char *bname)
-{
-    size_t len = strlen(path);
-    memcpy(bname, path, len + 1);
-    return basename(bname);
-}
-
-static inline char *dirname(char *path)
-{
-    size_t len = strlen(path);
-    char *ptr = path + len - 1;
-    while (ptr > path && *ptr == '/')
-        *ptr-- = 0;
-    ptr = strrchr(path, '/');
-    if (!ptr)
-        path[0] = 0;
-    else
-        *ptr = 0;
-    return path;
-}
-
-static inline char *dirname_r(const char *path, char *dname)
-{
-    size_t len = strlen(path);
-    memcpy(dname, path, len);
-    return dirname(dname);
-}
-
-// rdar://92046168 - _Noreturn annotations are missing
-_Noreturn void exit(int);
-#endif
 
 // Test output
 static inline void succeed(const char *name)  __attribute__((noreturn));
@@ -213,14 +155,10 @@ static inline void failnotequal(void *lhs, size_t lhsSize, void *rhs, size_t rhs
 } while(0)
 
 /* time-sensitive assertion, disabled under valgrind */
-#if TARGET_OS_EXCLAVEKIT
-#define timecheck_valgrind
-#else
 #define timecheck_valgrind \
     if (getenv("VALGRIND") && 0 != strcmp(getenv("VALGRIND"), "NO")) {  \
         /* valgrind; do nothing */                                      \
     } else
-#endif
 #define timecheck(name, time, fast, slow)                                       \
     timecheck_valgrind                                                          \
     testprintf("timecheck: %s %llu in %llu, %llu\n", name, time, fast, slow);   \
@@ -239,20 +177,12 @@ static inline void failnotequal(void *lhs, size_t lhsSize, void *rhs, size_t rhs
 // Return true if testprintf() output is enabled.
 static inline bool testverbose(void)
 {
-#if TARGET_OS_EXCLAVEKIT
-#   ifdef VERBOSE
-    return VERBOSE >= 2;
-#   else
-    return false;
-#   endif
-#else
     static int verbose = -1;
     if (verbose < 0) verbose = atoi(getenv("VERBOSE") ?: "0");
 
     // VERBOSE=1 prints test harness info only
     // VERBOSE=2 prints test info
     return verbose >= 2;
-#endif
 }
 
 // Print debugging info when VERBOSE=2 is set,
@@ -331,11 +261,7 @@ static inline void testcollect()
 // ARC to retain them in non-Foundation tests
 typedef void(^testblock_t)(void);
 static __unsafe_unretained testblock_t testcodehack;
-#if !TARGET_OS_EXCLAVEKIT
 typedef void *thread_return_t;
-#else
-typedef int thread_return_t;
-#endif
 static inline thread_return_t _testthread(void *arg __unused)
 {
     testcodehack();
@@ -343,17 +269,10 @@ static inline thread_return_t _testthread(void *arg __unused)
 }
 static inline void testonthread(__unsafe_unretained testblock_t code) 
 {
-#if !TARGET_OS_EXCLAVEKIT
     pthread_t th;
     testcodehack = code;  // force GC not-thread-local, avoid ARC void* casts
     pthread_create(&th, NULL, _testthread, NULL);
     pthread_join(th, NULL);
-#else
-    thrd_t th;
-    testcodehack = code;
-    thrd_create(&th, _testthread, NULL);
-    thrd_join(th, NULL);
-#endif
 }
 
 /* Make sure libobjc does not call global operator new. 
@@ -384,7 +303,6 @@ inline void operator delete[](void*, const std::nothrow_t&) noexcept(true) { fai
    is more than n bytes above that at leak_mark().
 */
 
-#if !TARGET_OS_EXCLAVEKIT
 static inline void leak_recorder(task_t task __unused, void *ctx, unsigned type __unused, vm_range_t *ranges, unsigned count)
 {
     size_t *inuse = (size_t *)ctx;
@@ -471,18 +389,6 @@ static inline void leak_mark(void)
         }                                                               \
     } while (0)
 
-#else // TARGET_OS_EXCLAVEKIT
-
-typedef int task_t;
-typedef struct vm_range vm_range_t;
-
-static inline void leak_recorder(task_t task __unused, void *ctx __unused, unsigned type __unused, vm_range_t *ranges __unused, unsigned count __unused) {}
-static inline size_t leak_inuse(void) { return 0; }
-static size_t _leak_start;
-static inline void leak_mark(void) {}
-#define leak_check(n)
-
-#endif // TARGET_OS_EXCLAVEKIT
 
 // true when running under Guard Malloc
 static inline bool is_guardmalloc(void)

@@ -230,7 +230,7 @@ asm("\n .section __TEXT,__const"
 #endif
     );
 
-#if CONFIG_USE_PREOPT_CACHES
+#if CONFIG_USE_PREOPT_CACHES || CONFIG_USE_PREOPT_CACHES_BUILD_ONLY
 __attribute__((used, section("__DATA_CONST,__objc_scoffs")))
 const int objc_opt_preopt_caches_version = 4;
 __attribute__((used, section("__DATA_CONST,__objc_scoffs")))
@@ -307,7 +307,7 @@ ldp(uintptr_t& onep, uintptr_t& twop, const void *srcp)
 static inline mask_t cache_hash(SEL sel, mask_t mask) 
 {
     uintptr_t value = (uintptr_t)sel;
-#if CONFIG_USE_PREOPT_CACHES
+#if SEL_HASH_SHIFT_XOR
     value ^= value >> 7;
 #endif
     return (mask_t)(value & mask);
@@ -1030,7 +1030,6 @@ void cache_t::destroy()
 * cache collection.
 **********************************************************************/
 
-#if !TARGET_OS_EXCLAVEKIT
 
 // A sentinel (magic value) to report bad thread_get_state status.
 // Must not be a valid PC.
@@ -1072,7 +1071,6 @@ static uintptr_t _get_pc_for_thread(thread_t thread)
 }
 #endif
 
-#endif // !TARGET_OS_EXCLAVEKIT
 
 /***********************************************************************
 * _collecting_in_critical.
@@ -1134,9 +1132,6 @@ void cache_t::init()
 
 static int _collecting_in_critical(void)
 {
-#if TARGET_OS_EXCLAVEKIT
-    return FALSE;
-#else
 
 #if HAVE_TASK_RESTARTABLE_RANGES
     // Only use restartable ranges if we registered them earlier.
@@ -1227,7 +1222,6 @@ static int _collecting_in_critical(void)
     // Return our finding
     return result;
 
-#endif // !TARGET_OS_EXCLAVEKIT
 }
 
 

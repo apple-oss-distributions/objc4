@@ -28,7 +28,7 @@
 #ifndef _OBJC_PROTOCOL_H_
 #define _OBJC_PROTOCOL_H_
 
-#if !__OBJC__
+#if __has_feature(modules) || !__OBJC__
 
 // typedef Protocol is here:
 #include <objc/runtime.h>

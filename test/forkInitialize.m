@@ -85,11 +85,9 @@ void doFork()
         // This falls in the isInitializing() case in _class_initialize.
         [BoringSub self];
 
-#if !TARGET_OS_EXCLAVEKIT
 #if TARGET_OS_MAC && SINGLETHREADED
         // This one will only succeed in the single-threaded case.
         [InterestingSub self];
-#endif
 #endif
 
 #if !SINGLETHREADED

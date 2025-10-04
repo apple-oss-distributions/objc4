@@ -15,7 +15,7 @@ objc\[\d+\]: HALTED
 END
 */
 
-
+#include <malloc_private.h>
 #include "test.h"
 
 // Test objc_msgSend's detection of infinite loops during cache scan.
@@ -68,6 +68,14 @@ struct class_t {
 @interface Subclass : TestRoot @end
 @implementation Subclass @end
 
+
+void *
+_calloc_canonical(size_t size)
+{
+    return calloc(1, size);
+}
+
+
 int main()
 {
     Class cls = [TestRoot class];
@@ -95,7 +103,7 @@ int main()
     
 #   define COUNT 4
 #   define COUNTSHIFT 14
-    struct bucket_t *buckets = (struct bucket_t *)calloc(sizeof(struct bucket_t), COUNT+1);
+    struct bucket_t *buckets = (struct bucket_t *)_calloc_canonical(sizeof(struct bucket_t) * (COUNT+1));
     for (int i = 0; i < COUNT; i++) {
         buckets[i].sel = ~0;
         buckets[i].imp = ~0;

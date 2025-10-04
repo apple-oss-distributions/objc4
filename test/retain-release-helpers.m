@@ -439,7 +439,6 @@ void testRetainReleaseInDealloc(void) {
 }
 
 void testSwift() {
-#if !TARGET_OS_EXCLAVEKIT // Probably can't dlopen libswiftCore in exclaves.
     void *swiftcore = dlopen("/usr/lib/swift/libswiftCore.dylib", RTLD_LAZY);
     testassert(swiftcore);
 
@@ -508,7 +507,6 @@ void testSwift() {
         #undef CALL_RETAIN_IF_MATCH
         #undef CALL_RELEASE_IF_MATCH
     }
-#endif
 }
 
 void testNilAndTagged()

@@ -2,7 +2,7 @@
 
 // TEST_ENV OBJC_DEBUG_POOL_ALLOCATION=YES OBJC_DEBUG_POOL_DEPTH=-1
 // TEST_CFLAGS -framework Foundation
-// TEST_CONFIG MEM=mrc OS=!exclavekit
+// TEST_CONFIG MEM=mrc 
 
 #include "test.h"
 

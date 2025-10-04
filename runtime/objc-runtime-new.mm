@@ -38,13 +38,11 @@
 #include <Block.h>
 #include <objc/message.h>
 
-#if !TARGET_OS_EXCLAVEKIT
 #include <mach/shared_region.h>
 
 extern "C" {
 #include <os/bsd.h>
 }
-#endif // !TARGET_OS_EXCLAVEKIT
 
 #include <malloc_private.h>
 
@@ -880,11 +878,6 @@ static void enumerateSelectorsInMethodList(const method_list_t *list,
     case method_t::Kind::bigSigned:
         for (auto& meth: *list) if (!fn(meth.bigSigned().name)) break;
         break;
-#if TARGET_OS_EXCLAVEKIT
-    case method_t::Kind::bigStripped:
-        for (auto& meth: *list) if (!fn(meth.bigStripped().name)) break;
-        break;
-#endif
     }
 }
 
@@ -4122,7 +4115,6 @@ void _read_images(mapped_image_info infosParam[], uint32_t hCount, int totalClas
 # endif
 
 # if TARGET_OS_OSX
-#   if !TARGET_OS_EXCLAVEKIT
         // Disable non-pointer isa if the app is too old
         // (linked before OS X 10.11)
         // Note: we must check for macOS, because Catalyst and Almond apps
@@ -4134,7 +4126,6 @@ void _read_images(mapped_image_info infosParam[], uint32_t hCount, int totalClas
                              "the app is too old.");
             }
         }
-#   endif
 
         // Disable non-pointer isa if the app has a __DATA,__objc_rawisa section
         // New apps that load old extensions may need this.
@@ -5589,11 +5580,7 @@ signProtocolMethodList(method_list_t *list)
     size_t count = list->count;
     for (size_t n = 0; n < count; ++n) {
         struct method_t::big old = list->get(n).big();
-#if TARGET_OS_EXCLAVEKIT
-        auto &meth = list->get(n).bigStripped();
-#else
         auto &meth = list->get(n).bigSigned();
-#endif
         meth.name = old.name;
         meth.types = old.types;
         meth.imp = nil;
@@ -5628,13 +5615,6 @@ void objc_registerProtocol(Protocol *proto_gen)
         return;
     }
 
-#if TARGET_OS_EXCLAVEKIT
-    // Sign all of the method lists
-    signProtocolMethodList(proto->instanceMethods);
-    signProtocolMethodList(proto->classMethods);
-    signProtocolMethodList(proto->optionalInstanceMethods);
-    signProtocolMethodList(proto->optionalClassMethods);
-#endif
 
     // NOT initProtocolIsa(). The protocol object may already
     // have been retained and we must preserve that count.
@@ -7094,10 +7074,6 @@ findMethodInSortedMethodList(SEL key, const method_list_t *list)
             return findMethodInSortedMethodList(key, list, [=](method_t &m) { return compare(key, m.big().name); });
         case method_t::Kind::bigSigned:
             return findMethodInSortedMethodList(key, list, [=](method_t &m) { return compare(key, m.bigSigned().name); });
-#if TARGET_OS_EXCLAVEKIT
-        case method_t::Kind::bigStripped:
-            return findMethodInSortedMethodList(key, list, [=](method_t &m) { return compare(key, m.bigStripped().name); });
-#endif
     }
 }
 
@@ -7127,10 +7103,6 @@ findMethodInUnsortedMethodList(SEL key, const method_list_t *list)
             return findMethodInUnsortedMethodList(key, list, [](method_t &m) { return m.big().name; });
         case method_t::Kind::bigSigned:
             return findMethodInUnsortedMethodList(key, list, [](method_t &m) { return m.bigSigned().name; });
-#if TARGET_OS_EXCLAVEKIT
-        case method_t::Kind::bigStripped:
-            return findMethodInUnsortedMethodList(key, list, [](method_t &m) { return m.bigStripped().name; });
-#endif
     }
 }
 
@@ -7725,7 +7697,7 @@ IMP lookUpImpOrForward(id inst, SEL sel, Class cls, int behavior)
 
         goto done;
 #else
-#error Don't know how to handle messages to disabled classes on this target.
+#error "Don't know how to handle messages to disabled classes on this target."
 #endif
     }
 
@@ -8357,11 +8329,7 @@ addMethod(Class cls, SEL name, IMP imp, const char *types, bool replace)
         // fixme optimize
         method_list_t *newlist = method_list_t::allocateMethodList(1, fixed_up_method_list);
 
-#if TARGET_OS_EXCLAVEKIT
-        auto &first = newlist->begin()->bigStripped();
-#else
         auto &first = newlist->begin()->bigSigned();
-#endif
         first.name = name;
         first.types = strdupIfMutable(types);
         first.imp = imp;
@@ -8417,11 +8385,7 @@ addMethods(Class cls, const SEL *names, const IMP *imps, const char **types,
                 _method_setImplementation(cls, m, imps[i]);
             }
         } else {
-#if TARGET_OS_EXCLAVEKIT
-            auto &newmethod = newlist->end()->bigStripped();
-#else
             auto &newmethod = newlist->end()->bigSigned();
-#endif
             newmethod.name = names[i];
             newmethod.types = strdupIfMutable(types[i]);
             newmethod.imp = imps[i];
@@ -9229,6 +9193,10 @@ static void free_class(Class cls)
 
 void objc_disposeClassPair(Class cls)
 {
+    // Clear any associated objects on the class and metaclass.
+    _object_remove_associations(cls, /*deallocating*/true);
+    _object_remove_associations(cls->ISA(), /*deallocating*/true);
+
     mutex_locker_t lock(runtimeLock);
 
     checkIsKnownClass(cls);
@@ -9686,9 +9654,7 @@ static void
 initializeTaggedPointerObfuscator(void)
 {
     if (!DisableTaggedPointerObfuscation
-#if !TARGET_OS_EXCLAVEKIT
         && dyld_program_sdk_at_least(dyld_fall_2018_os_versions)
-#endif
         ) {
         // Pull random data into the variable, then shift away all non-payload bits.
         arc4random_buf(&objc_debug_taggedpointer_obfuscator,
@@ -9781,25 +9747,7 @@ _objc_getClassForTag(objc_tag_index_t tag)
 uint32_t
 objc_uniformRandom(uint32_t n)
 {
-#if !TARGET_OS_EXCLAVEKIT
     return arc4random_uniform(n);
-#else
-    // This is Lemire's nearly divisionless algorithm
-    // See https://lemire.me/blog/2019/06/06/nearly-divisionless-random-integer-generation-on-various-systems/
-    uint32_t x;
-    arc4random_buf(&x, sizeof(x));
-    uint64_t m = ((uint64_t)x) * n;
-    uint32_t l = (uint32_t)m;
-    if (l < n) {
-        uint32_t t = -n % n;
-        while (l < t) {
-            arc4random_buf(&x, sizeof(x));
-            m = ((uint64_t)x) * n;
-            l = (uint32_t)m;
-        }
-    }
-    return m >> 32;
-#endif
 }
 
 

@@ -96,6 +96,9 @@ T *Zone<T, false>::alloc_slow()
 template<class T>
 T *Zone<T, false>::alloc()
 {
+    // We shouldn't be using the custom allocator at all on 64-bit targets.
+    static_assert(sizeof(void *) == 4);
+
     void *e = _freelist.pop();
     if (e) {
         memset(e, 0, sizeof(void *));
@@ -107,6 +110,9 @@ T *Zone<T, false>::alloc()
 template<class T>
 void Zone<T, false>::free(T *ptr)
 {
+    // We shouldn't be using the custom allocator at all on 64-bit targets.
+    static_assert(sizeof(void *) == 4);
+
     if (ptr) {
         Element *e = reinterpret_cast<Element *>(ptr);
         memset(e->buf, 0, sizeof(e->buf));

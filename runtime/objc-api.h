@@ -55,7 +55,6 @@
 #   endif
 #endif
 
-#ifndef __APPLE_BLEACH_SDK__
 # if __has_feature(attribute_availability_bridgeos)
 #   ifndef __BRIDGEOS_AVAILABLE
 #       define __BRIDGEOS_AVAILABLE(_vers) __OS_AVAILABILITY(bridgeos,introduced=_vers)
@@ -77,7 +76,6 @@
 #       define __BRIDGEOS_UNAVAILABLE
 #   endif
 # endif
-#endif
 
 /*
  * OBJC_API_VERSION 0 or undef: Tiger and earlier API only
@@ -102,10 +100,6 @@
  */
 #if defined(__OBJC_GC__)
 #   error Objective-C garbage collection is not supported.
-#elif TARGET_OS_EXCLAVEKIT
-    /* GC is unsupported. GC API symbols are not exported. */
-#   define OBJC_NO_GC 1
-#   define OBJC_NO_GC_API 1
 #elif TARGET_OS_OSX
     /* GC is unsupported. GC API symbols are exported. */
 #   define OBJC_NO_GC 1
@@ -144,57 +138,31 @@
 
 
 /* OBJC_AVAILABLE: shorthand for all-OS availability */
-#ifndef __APPLE_BLEACH_SDK__
 #   if !defined(OBJC_AVAILABLE)
 #       define OBJC_AVAILABLE(x, i, t, w, b)                            \
             __OSX_AVAILABLE(x)  __IOS_AVAILABLE(i)  __TVOS_AVAILABLE(t) \
             __WATCHOS_AVAILABLE(w)  __BRIDGEOS_AVAILABLE(b)
 #   endif
-#else
-#   if !defined(OBJC_AVAILABLE)
-#       define OBJC_AVAILABLE(x, i, t, w, b)                            \
-            __OSX_AVAILABLE(x)  __IOS_AVAILABLE(i)  __TVOS_AVAILABLE(t) \
-            __WATCHOS_AVAILABLE(w)
-#   endif
-#endif
 
 
 /* OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE: Deprecated on OS X,
  * unavailable everywhere else. */
-#ifndef __APPLE_BLEACH_SDK__
 #   if !defined(OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE)
 #       define OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(_start, _dep, _msg) \
             __OSX_DEPRECATED(_start, _dep, _msg)                          \
             __IOS_UNAVAILABLE __TVOS_UNAVAILABLE                          \
             __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE
 #   endif
-#else
-#   if !defined(OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE)
-#       define OBJC_OSX_DEPRECATED_OTHERS_UNAVAILABLE(_start, _dep, _msg) \
-            __OSX_DEPRECATED(_start, _dep, _msg)                          \
-            __IOS_UNAVAILABLE __TVOS_UNAVAILABLE                          \
-            __WATCHOS_UNAVAILABLE
-#   endif
-#endif
 
 
 /* OBJC_OSX_AVAILABLE_OTHERS_UNAVAILABLE: Available on OS X,
  * unavailable everywhere else. */
-#ifndef __APPLE_BLEACH_SDK__
 #   if !defined(OBJC_OSX_AVAILABLE_OTHERS_UNAVAILABLE)
 #       define OBJC_OSX_AVAILABLE_OTHERS_UNAVAILABLE(vers) \
             __OSX_AVAILABLE(vers)                          \
             __IOS_UNAVAILABLE __TVOS_UNAVAILABLE           \
             __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE
 #    endif
-#else
-#   if !defined(OBJC_OSX_AVAILABLE_OTHERS_UNAVAILABLE)
-#       define OBJC_OSX_AVAILABLE_OTHERS_UNAVAILABLE(vers) \
-            __OSX_AVAILABLE(vers)                          \
-            __IOS_UNAVAILABLE __TVOS_UNAVAILABLE           \
-            __WATCHOS_UNAVAILABLE
-#    endif
-#endif
 
 
 /* OBJC_ISA_AVAILABILITY: `isa` will be deprecated or unavailable 

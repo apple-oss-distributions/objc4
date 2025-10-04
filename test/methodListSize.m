@@ -1,4 +1,4 @@
-// TEST_CONFIG OS=!exclavekit
+// TEST_CONFIG 
 // rdar://8052003 rdar://8077031
 
 #include "test.h"

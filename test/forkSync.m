@@ -1,4 +1,4 @@
-// TEST_CONFIG OS=!exclavekit MEM=mrc
+// TEST_CONFIG  MEM=mrc
 
 // Ensure that our atfork handlers don't crash in the child if one of the internal locks used in @synchronized is held when we fork.
 

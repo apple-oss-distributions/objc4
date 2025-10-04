@@ -211,9 +211,7 @@ objc_appRequiresGC(int fd)
     __OSX_AVAILABLE(10.11) 
     __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
     __WATCHOS_UNAVAILABLE
-#ifndef __APPLE_BLEACH_SDK__
     __BRIDGEOS_UNAVAILABLE
-#endif
 ;
 #endif // !OBJC_NO_GC_API
 
@@ -1326,9 +1324,10 @@ OBJC_EXPORT const uintptr_t _objc_has_weak_formation_callout;
 // Be sure to edit the equivalent define in objc-config.h as well.
 // Be sure to not enable CONFIG_USE_PREOPT_CACHES if CACHE_MASK_STORAGE != CACHE_MASK_STORAGE_HIGH_16
 #ifndef CONFIG_USE_PREOPT_CACHES
-#if TARGET_OS_EXCLAVEKIT
+#if   TARGET_OS_OSX || TARGET_OS_MACCATALYST
 #define CONFIG_USE_PREOPT_CACHES 0
-#elif TARGET_OS_OSX || TARGET_OS_MACCATALYST || TARGET_OS_SIMULATOR
+#define CONFIG_USE_PREOPT_CACHES_BUILD_ONLY 1
+#elif TARGET_OS_SIMULATOR
 #define CONFIG_USE_PREOPT_CACHES 0
 #elif defined(__arm64__) && __LP64__
 #define CONFIG_USE_PREOPT_CACHES 1
@@ -1337,6 +1336,9 @@ OBJC_EXPORT const uintptr_t _objc_has_weak_formation_callout;
 #endif
 #endif
 
+#ifndef CONFIG_USE_PREOPT_CACHES_BUILD_ONLY
+#define CONFIG_USE_PREOPT_CACHES_BUILD_ONLY 0
+#endif
 
 // Helper function for objc4 tests only! Do not call this yourself
 // for any reason ever.
@@ -1493,6 +1495,10 @@ OBJC_EXPORT bool objc_cache_isConstantOptimizedCache(const struct cache_t * _Non
 OBJC_EXPORT unsigned objc_cache_preoptCapacity(const struct cache_t * _Nonnull cache);
 OBJC_EXPORT Class _Nonnull objc_cache_preoptFallbackClass(const struct cache_t * _Nonnull cache);
 OBJC_EXPORT const struct preopt_cache_t * _Nonnull objc_cache_preoptCache(const struct cache_t * _Nonnull cache);
+
+#endif
+
+#if CONFIG_USE_PREOPT_CACHES || CONFIG_USE_PREOPT_CACHES_BUILD_ONLY
 
 /* dyld_shared_cache_builder and obj-C agree on these definitions. Do not use if you are not the dyld shared cache builder */
 enum {

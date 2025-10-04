@@ -30,9 +30,7 @@
 #include <objc/objc-exception.h>
 #include <objc/NSObject.h>
 
-#if !TARGET_OS_EXCLAVEKIT
 #include <execinfo.h>
-#endif
 
 // unwind library types and functions
 // Mostly adapted from Itanium C++ ABI: Exception Handling
@@ -369,7 +367,6 @@ void objc_exception_throw(id obj)
                      exc, (void*)obj, object_getClassName(obj));
     }
 
-#if !TARGET_OS_EXCLAVEKIT
     if (PrintExceptionThrow) {
         if (!PrintExceptions)
             _objc_inform("EXCEPTIONS: throwing %p (object %p, a %s)", 
@@ -378,7 +375,6 @@ void objc_exception_throw(id obj)
         int frameCount = backtrace(callstack, 500);
         backtrace_symbols_fd(callstack, frameCount, fileno(stderr));
     }
-#endif
 
     OBJC_RUNTIME_OBJC_EXCEPTION_THROW(obj);  // dtrace probe to log throw activity
 
@@ -533,10 +529,8 @@ static void call_alt_handlers(struct _Unwind_Context *ctx)
 
 #include <libunwind.h>
 
-#if !TARGET_OS_EXCLAVEKIT
 #include <execinfo.h>
 #include <dispatch/dispatch.h>
-#endif
 
 // Dwarf eh data encodings
 #define DW_EH_PE_omit      0xff  // no data follows
@@ -1005,7 +999,6 @@ uintptr_t objc_addExceptionHandler(objc_exception_handler fn, void *context)
 
     uintptr_t token = i+1;
 
-#if !TARGET_OS_EXCLAVEKIT
     if (DebugAltHandlers) {
         // Record backtrace in case this handler is misused later.
         mutex_locker_t lock(AltHandlerDebugLock);
@@ -1028,7 +1021,6 @@ uintptr_t objc_addExceptionHandler(objc_exception_handler fn, void *context)
             backtrace(data->debug->backtrace, BACKTRACE_COUNT);
         data->debug->token = token;
     }
-#endif // !TARGET_OS_EXCLAVEKIT
 
     if (PrintAltHandlers) {
         _objc_inform("ALT HANDLERS: installing alt handler #%lu %p(%p) on "
@@ -1122,7 +1114,6 @@ void alt_handler_error(uintptr_t token)
          "Set environment variable OBJC_DEBUG_ALT_HANDLERS=YES "
          "or break in objc_alt_handler_error() to debug.");
 
-#if !TARGET_OS_EXCLAVEKIT
     if (DebugAltHandlers) {
         AltHandlerDebugLock.lock();
         
@@ -1166,7 +1157,6 @@ void alt_handler_error(uintptr_t token)
     done:   
         AltHandlerDebugLock.unlock();
     }
-#endif // !TARGET_OS_EXCLAVEKIT
 
     objc_alt_handler_error();
     

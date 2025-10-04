@@ -33,7 +33,6 @@ int main()
     testassert(1 == [Sub classMethod]);
     testassert(1 == [sub instanceMethod]);
 
-#if !TARGET_OS_EXCLAVEKIT
     // Dynamically load a category
     dlopen("cacheflush2.dylib", 0);
 
@@ -53,7 +52,6 @@ int main()
 
     testassert(3 == [Sub classMethod]);
     testassert(3 == [sub instanceMethod]);
-#endif // !TARGET_OS_EXCLAVEKIT
 
     // fixme test subclasses
 

@@ -1,7 +1,7 @@
 // fixme rdar://24624435 duplicate class warning fails with the shared cache
 // OBJC_DISABLE_PREOPTIMIZATION=YES works around that problem.
 
-// TEST_CONFIG OS=!exclavekit
+// TEST_CONFIG 
 // TEST_ENV OBJC_DEBUG_DUPLICATE_CLASSES=FATAL OBJC_DISABLE_PREOPTIMIZATION=YES
 // TEST_CRASHES
 /*
