@@ -50,6 +50,7 @@ extern "C" {
 #include <os/thread_self_restrict.h>
 #endif // SUPPORT_MUTABLE_SHARED_CACHE
 
+
 #define newprotocol(p) ((protocol_t *)p)
 
 static void disableTaggedPointers();
@@ -9750,13 +9751,18 @@ objc_uniformRandom(uint32_t n)
     return arc4random_uniform(n);
 }
 
-
+/***********************************************************************
+* _calloc_canonical
+* Allocate zeroed memory with a canonical (0) tag.
+**********************************************************************/
 void *
 _calloc_canonical(size_t size)
 {
-    return calloc(1, size);
+    malloc_zone_malloc_options_t options = MALLOC_ZONE_MALLOC_OPTION_CLEAR;
+    size = objc::RoundUpToAlignment(size, MALLOC_ZONE_MALLOC_DEFAULT_ALIGN);
+    return malloc_zone_malloc_with_options(NULL,
+        MALLOC_ZONE_MALLOC_DEFAULT_ALIGN, size, options);
 }
-
 
 #if SUPPORT_FIXUP
 

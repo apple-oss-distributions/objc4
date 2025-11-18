@@ -1124,7 +1124,16 @@ void cache_t::init()
 
     kr = task_restartable_ranges_register(mach_task_self(),
                                           objc_restartableRanges, count);
-    if (kr == KERN_SUCCESS) return;
+    if (kr == KERN_SUCCESS) {
+        // Restartable ranges are set up and we'll use them. Make an initial
+        // call to synchronize here to flush out any issues with that call e.g.
+        // being blocked by overly-aggressive sandboxes.
+        kr = task_restartable_ranges_synchronize(mach_task_self());
+        if (kr == KERN_SUCCESS)
+            return;
+        _objc_fatal("task_restartable_ranges_synchronize failed (result 0x%x: %s)",
+                    kr, mach_error_string(kr));
+    }
     _objc_fatal("task_restartable_ranges_register failed (result 0x%x: %s)",
                 kr, mach_error_string(kr));
 #endif // HAVE_TASK_RESTARTABLE_RANGES

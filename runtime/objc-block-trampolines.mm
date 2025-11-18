@@ -233,7 +233,7 @@ struct TrampolineBlockPageGroup
 
     uintptr_t nextAvailable; // index of next available slot, endIndex() if no more available
 
-    const void * TrampolinePtrauth const text;  // text VM region; stored only for the benefit of the leaks tool
+    const void *const text;  // text VM region; stored only for the benefit of the leaks tool
 
     TrampolineBlockPageGroup()
         : nextPageGroup(nil)

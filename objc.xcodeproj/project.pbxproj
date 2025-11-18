@@ -1377,6 +1377,7 @@
 				"INCLUDED_SOURCE_FILE_NAMES[sdk=macosx*][arch=i386]" = "dummy-library-mac-i386.c";
 				INSTALL_PATH = "$(SYSTEM_PREFIX)/usr/lib";
 				IS_ZIPPERED = YES;
+				LD_DYLIB_INSTALL_NAME = "$(DYLIB_INSTALL_NAME_BASE:standardizepath)/libobjc.A.dylib";
 				LLVM_LTO = NO;
 				OTHER_CFLAGS = (
 					"-fdollars-in-identifiers",
@@ -1389,6 +1390,8 @@
 					"-init_offsets",
 					"-Xlinker",
 					"-delay-lswiftCore",
+					"-Xlinker",
+					"-upward-lswiftCore",
 				);
 				"OTHER_LDFLAGS[sdk=appletvos*]" = (
 					"$(inherited)",
@@ -1539,6 +1542,7 @@
 				"INCLUDED_SOURCE_FILE_NAMES[sdk=macosx*][arch=i386]" = "dummy-library-mac-i386.c";
 				INSTALL_PATH = "$(SYSTEM_PREFIX)/usr/lib";
 				IS_ZIPPERED = YES;
+				LD_DYLIB_INSTALL_NAME = "$(DYLIB_INSTALL_NAME_BASE:standardizepath)/libobjc.A.dylib";
 				OTHER_CFLAGS = (
 					"-fdollars-in-identifiers",
 					"-fno-objc-convert-messages-to-runtime-calls",
@@ -1550,6 +1554,8 @@
 					"-init_offsets",
 					"-Xlinker",
 					"-delay-lswiftCore",
+					"-Xlinker",
+					"-upward-lswiftCore",
 				);
 				"OTHER_LDFLAGS[sdk=appletvos*][arch=*]" = (
 					"$(inherited)",

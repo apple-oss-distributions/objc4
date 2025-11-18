@@ -18,6 +18,7 @@ END
 #include <malloc_private.h>
 #include "test.h"
 
+
 // Test objc_msgSend's detection of infinite loops during cache scan.
 
 #if __arm__
@@ -68,13 +69,13 @@ struct class_t {
 @interface Subclass : TestRoot @end
 @implementation Subclass @end
 
-
 void *
 _calloc_canonical(size_t size)
 {
-    return calloc(1, size);
+    malloc_zone_malloc_options_t options = MALLOC_ZONE_MALLOC_OPTION_CLEAR;
+    return malloc_zone_malloc_with_options(NULL,
+        MALLOC_ZONE_MALLOC_DEFAULT_ALIGN, size, options);
 }
-
 
 int main()
 {
