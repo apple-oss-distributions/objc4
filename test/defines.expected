@@ -178,3 +178,4 @@
 #define __autoreleasing
 #define nil
 #define ptrauth_objc_hook_msgSendCacheMiss
+#define ptrauth_objc_hook_methodSetImplementation

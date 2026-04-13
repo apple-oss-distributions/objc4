@@ -281,6 +281,8 @@ OBJC_EXPORT void *const _Nonnull objc_debug_future_named_class_map
 OBJC_EXPORT struct objc_headeropt_rw_t * _Nullable objc_debug_headerInfoRWs
     OBJC_AVAILABLE(14.0, 17.0, 17.0, 10.0, 9.0);
 
+OBJC_EXPORT uint64_t objc_debug_methodSetImplementationCallCount OBJC_AVAILABLE(26.4, 26.4, 26.4, 26.4, 10.4);
+
 __END_DECLS
 
 // APPLE_API_PRIVATE

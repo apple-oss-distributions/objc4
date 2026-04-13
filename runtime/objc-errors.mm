@@ -93,6 +93,12 @@ static void _objc_crashlog(const char *message)
     }
 }
 
+void _objc_crashlogStatic(const char *message) {
+    ASSERT(message);
+    ASSERT(_dyld_is_memory_immutable(message, strlen(message) + 1));
+    CRSetCrashLogMessage2(message);
+}
+
 // Returns true if logs should be sent to stderr as well as syslog.
 // Copied from CFUtilities.c
 static bool also_do_stderr(void) 

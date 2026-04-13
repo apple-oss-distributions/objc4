@@ -471,6 +471,65 @@ OBJC_EXPORT void _objc_setHook_msgSendCacheMiss(
     ptrauth_objc_hook_msgSendCacheMiss _objc_hook_msgSendCacheMiss _Nullable * _Nonnull oldOutValue)
     OBJC_AVAILABLE(15.0, 18.0, 18.0, 11.0, 9.0);
 
+/**
+ * Function type for a hook that's called when a method implementation is set.
+ *
+ * @param cls The class that was modified. This is passed when known, but may
+ *  not be known (e.g. `method_setImplementation`). When not known, `Nil` is
+ *  passed.
+ * @param m The `Method` being modified. This is passed when using the non-bulk
+ *  calls, but is `NULL` when called from the Bulk calls. At least one of `cls`
+ *  and `m` will be set.
+ * @param count The number of methods modified. (This will be 1 with most
+ *  methods, but may be greater than 1 when the Bulk calls are used.
+ * @param sels The selectors of the methods modified.
+ * @param imps The IMPs being set. The indexes are correlated with `sels`, i.e.
+ *  the selector at index 2 corresponds to the IMP at index 2.
+ *
+ * All pointers are owned by the caller. Do not free or modify them. They are
+ * valid until the hook returns.
+ *
+ * @see _objc_setHook_methodSetImplementation
+ */
+typedef void (*_objc_hook_methodSetImplementation)(_Nullable Class cls,
+                                                   _Nonnull Method m,
+                                                   uint32_t count,
+                                                   _Nonnull const SEL * _Nonnull sels,
+                                                   _Nonnull const IMP * _Nullable imps,
+                                                   int source);
+
+enum {
+    _objc_hook_methodSetImplementationSourceMethodSetImplementation = 1,
+    _objc_hook_methodSetImplementationSourceMethodExchangeImplementations = 2,
+    _objc_hook_methodSetImplementationSourceClassReplaceMethod = 3,
+    _objc_hook_methodSetImplementationSourceClassReplaceMethodsBulk = 4
+};
+
+#if __has_feature(ptrauth_calls)
+#define ptrauth_objc_hook_methodSetImplementation __ptrauth(ptrauth_key_process_dependent_code, 0, ptrauth_string_discriminator("_objc_hook_methodSetImplementation"))
+#else
+#define ptrauth_objc_hook_methodSetImplementation
+#endif
+
+/**
+ * Install a hook that's called when a method implementation is set.
+ *
+ * @param newValue The hook function to install.
+ * @param outOldValue The address of a function pointer variable. On return,
+ *  the old hook function is stored in the variable. If there was no hook
+ *  previously set, NULL is stored in the variable.
+ *
+ * @note The store to `*outOldValue` is thread-safe: the variable will be
+ *  updated before anything calls your new hook to read it,
+ *  even if your new hook is called from another thread before this
+ *  setter completes.
+ * @note Your hook must call the previous hook if there is one.
+ */
+OBJC_EXPORT void _objc_setHook_methodSetImplementation(
+    _objc_hook_methodSetImplementation _Nonnull newValue,
+    ptrauth_objc_hook_methodSetImplementation _objc_hook_methodSetImplementation _Nullable * _Nonnull oldOutValue)
+    OBJC_AVAILABLE(26.4, 26.4, 26.4, 26.4, 10.4);
+
 // Tagged pointer objects.
 
 #if __LP64__

@@ -161,6 +161,7 @@
 		C22F5208230EF38B001BFE14 /* objc-ptrauth.h in Headers */ = {isa = PBXBuildFile; fileRef = C22F5207230EF38B001BFE14 /* objc-ptrauth.h */; };
 		C264847D2679203E00B3A6F7 /* retain-release-helpers-arm64.s in Sources */ = {isa = PBXBuildFile; fileRef = C264847C2679203D00B3A6F7 /* retain-release-helpers-arm64.s */; };
 		C269791A2645D7AE009C19E3 /* NSObject-private.h in Headers */ = {isa = PBXBuildFile; fileRef = C26979192645D7AE009C19E3 /* NSObject-private.h */; };
+		C272C1F02ED29EC200DF1B17 /* libCrashReporterClient.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C272C1EF2ED29EC200DF1B17 /* libCrashReporterClient.a */; platformFilters = (bridgeos, ios, macos, tvos, watchos, xros, ); };
 		C2A1788527319C580013EC85 /* objc-magicsel.m in Sources */ = {isa = PBXBuildFile; fileRef = C2A1788427319C580013EC85 /* objc-magicsel.m */; };
 		C2DEE23C2ADDA759008C3D77 /* DenseMapExtras.h in Headers */ = {isa = PBXBuildFile; fileRef = C2DEE23B2ADDA759008C3D77 /* DenseMapExtras.h */; };
 		C2E6D3FC2225DCF00059DFAA /* InitWrappers.h in Headers */ = {isa = PBXBuildFile; fileRef = C2E6D3FB2225DCF00059DFAA /* InitWrappers.h */; };
@@ -383,6 +384,7 @@
 		C22F5207230EF38B001BFE14 /* objc-ptrauth.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-ptrauth.h"; path = "runtime/objc-ptrauth.h"; sourceTree = "<group>"; };
 		C264847C2679203D00B3A6F7 /* retain-release-helpers-arm64.s */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.asm; name = "retain-release-helpers-arm64.s"; path = "runtime/retain-release-helpers-arm64.s"; sourceTree = "<group>"; };
 		C26979192645D7AE009C19E3 /* NSObject-private.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "NSObject-private.h"; path = "runtime/NSObject-private.h"; sourceTree = "<group>"; };
+		C272C1EF2ED29EC200DF1B17 /* libCrashReporterClient.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libCrashReporterClient.a; path = Platforms/AppleTVOS.platform/Developer/SDKs/AppleTVOS27.0.Internal.sdk/usr/local/lib/libCrashReporterClient.a; sourceTree = DEVELOPER_DIR; };
 		C2A1788427319C580013EC85 /* objc-magicsel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = "objc-magicsel.m"; path = "runtime/objc-magicsel.m"; sourceTree = "<group>"; };
 		C2DEE23B2ADDA759008C3D77 /* DenseMapExtras.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = DenseMapExtras.h; path = runtime/DenseMapExtras.h; sourceTree = "<group>"; };
 		C2E6D3FB2225DCF00059DFAA /* InitWrappers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = InitWrappers.h; path = runtime/InitWrappers.h; sourceTree = "<group>"; };
@@ -448,6 +450,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C272C1F02ED29EC200DF1B17 /* libCrashReporterClient.a in Frameworks */,
 				D36DEACC285B304A009B5CC4 /* libobjc-env.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -742,6 +745,7 @@
 		F9BCC72A205C6A1600DD9AFC /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				C272C1EF2ED29EC200DF1B17 /* libCrashReporterClient.a */,
 				6EF877E42325FAC400963DBB /* Foundation.framework */,
 				6EF877E12325D93200963DBB /* Symbolication.framework */,
 				6EF877DF2325D92E00963DBB /* CoreSymbolication.framework */,
@@ -1451,7 +1455,6 @@
 				);
 				"OTHER_LDFLAGS[sdk=macosx*]" = (
 					"$(inherited)",
-					"-lCrashReporterClient",
 					"-lc++abi",
 					"-Xlinker",
 					"-sectalign",
@@ -1615,7 +1618,6 @@
 				);
 				"OTHER_LDFLAGS[sdk=macosx*]" = (
 					"$(inherited)",
-					"-lCrashReporterClient",
 					"-lc++abi",
 					"-Xlinker",
 					"-sectalign",

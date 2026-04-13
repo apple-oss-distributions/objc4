@@ -4722,6 +4722,36 @@ method_getTypeEncoding(Method mSigned)
     return m->types();
 }
 
+static ChainedHookFunction<
+    _objc_hook_methodSetImplementation,
+    _objc_hook_methodSetImplementation ptrauth_objc_hook_methodSetImplementation *>
+methodSetImplementationHook{nullptr};
+
+OBJC_EXPORT void _objc_setHook_methodSetImplementation(
+    _objc_hook_methodSetImplementation _Nonnull newValue,
+    ptrauth_objc_hook_methodSetImplementation _objc_hook_methodSetImplementation _Nullable * _Nonnull oldOutValue)
+{
+    methodSetImplementationHook.set(newValue, oldOutValue);
+}
+
+uint64_t objc_debug_methodSetImplementationCallCount;
+
+/***********************************************************************
+* _notify_methodSetImplementation
+* Note that a method's implementation was set. Calls the methodSetImplementation
+* hook, if set.
+**********************************************************************/
+ALWAYS_INLINE
+static void
+_notify_methodSetImplementation(Class cls, Method m, uint32_t count, const SEL *sels, const IMP *imps, int source)
+{
+    lockdebug::assert_unlocked(&runtimeLock.get());
+
+    objc_debug_methodSetImplementationCallCount += count;
+
+    if (methodSetImplementationHook.isSet())
+        methodSetImplementationHook.get()(cls, m, count, sels, imps, source);
+}
 
 /***********************************************************************
 * method_setImplementation
@@ -4757,12 +4787,20 @@ _method_setImplementation(Class cls, method_t *m, IMP imp)
 IMP
 method_setImplementation(Method mSigned, IMP imp)
 {
+    if (!mSigned) return nil;
+
     method_t *m = _method_auth(mSigned);
 
     // Don't know the class - will be slow if RR/AWZ are affected
     // fixme build list of classes whose Methods are known externally?
-    mutex_locker_t lock(runtimeLock);
-    return _method_setImplementation(Nil, m, imp);
+    IMP result;
+    {
+        mutex_locker_t lock(runtimeLock);
+        result = _method_setImplementation(Nil, m, imp);
+    }
+    SEL sel = m->name();
+    _notify_methodSetImplementation(Nil, mSigned, 1, &sel, &imp, _objc_hook_methodSetImplementationSourceMethodSetImplementation);
+    return result;
 }
 
 extern void _method_setImplementationRawUnsafe(Method mSigned, IMP imp)
@@ -4781,27 +4819,36 @@ void method_exchangeImplementations(Method m1Signed, Method m2Signed)
     method_t *m1 = _method_auth(m1Signed);
     method_t *m2 = _method_auth(m2Signed);
 
-    mutex_locker_t lock(runtimeLock);
+    IMP imp1;
+    IMP imp2;
+    SEL sel1;
+    SEL sel2;
+    {
+        mutex_locker_t lock(runtimeLock);
 
-    IMP imp1 = m1->imp(false);
-    IMP imp2 = m2->imp(false);
-    SEL sel1 = m1->name();
-    SEL sel2 = m2->name();
+        imp1 = m1->imp(false);
+        imp2 = m2->imp(false);
+        sel1 = m1->name();
+        sel2 = m2->name();
 
-    m1->setImp(imp2);
-    m2->setImp(imp1);
+        m1->setImp(imp2);
+        m2->setImp(imp1);
 
 
-    // RR/AWZ updates are slow because class is unknown
-    // Cache updates are slow because class is unknown
-    // fixme build list of classes whose Methods are known externally?
+        // RR/AWZ updates are slow because class is unknown
+        // Cache updates are slow because class is unknown
+        // fixme build list of classes whose Methods are known externally?
 
-    flushCaches(nil, __func__, [sel1, sel2, imp1, imp2](Class c){
-        return c->cache.shouldFlush(sel1, imp1) || c->cache.shouldFlush(sel2, imp2);
-    });
+        flushCaches(nil, __func__, [sel1, sel2, imp1, imp2](Class c){
+            return c->cache.shouldFlush(sel1, imp1) || c->cache.shouldFlush(sel2, imp2);
+        });
 
-    adjustCustomFlagsForMethodChange(nil, m1);
-    adjustCustomFlagsForMethodChange(nil, m2);
+        adjustCustomFlagsForMethodChange(nil, m1);
+        adjustCustomFlagsForMethodChange(nil, m2);
+    }
+
+    _notify_methodSetImplementation(Nil, m1Signed, 1, &sel1, &imp2, _objc_hook_methodSetImplementationSourceMethodExchangeImplementations);
+    _notify_methodSetImplementation(Nil, m2Signed, 1, &sel2, &imp1, _objc_hook_methodSetImplementationSourceMethodExchangeImplementations);
 }
 
 
@@ -5946,7 +5993,8 @@ _objc_beginClassEnumeration(const void * _Nullable image,
         size_t dynamicCount = 0;
 
         for (objc_class *cls : set) {
-            if ((cls->data()->flags & (RW_CONSTRUCTED|RW_META))
+            // cls may be unrealized. Using `bits.flags()` works either way.
+            if ((cls->bits.flags() & (RW_CONSTRUCTED|RW_META))
                 == RW_CONSTRUCTED) {
                 dynamicList[dynamicCount++] = (Class)cls;
             }
@@ -7754,7 +7802,19 @@ IMP lookUpImpOrForward(id inst, SEL sel, Class cls, int behavior)
  done:
     if (fastpath((behavior & LOOKUP_NOCACHE) == 0)) {
 #if CONFIG_USE_PREOPT_CACHES
+        // If we have a class with a preoptimized cache, then we want to cache
+        // this result on the first non-preoptimized superclass if it's valid
+        // to do so. msgSend will search caches up to the first non-preoptimized
+        // superclass. Locate that first non-preoptimized superclass and cache
+        // the method there.
         while (cls->cache.isConstantOptimizedCache(/* strict */true)) {
+            // If we encounter the class where we found the method, and we're
+            // still in the loop, then bail out. The IMP we found is not
+            // necessarily valid for classes above this, so we must not cache it
+            // there. It's already in the preoptimized caches so there's no need
+            // to re-cache it anyway.
+            if (cls == curClass)
+                goto done_unlock;
             cls = cls->cache.preoptFallbackClass();
         }
 #endif
@@ -8425,8 +8485,14 @@ class_replaceMethod(Class cls, SEL name, IMP imp, const char *types)
 {
     if (!cls) return nil;
 
-    mutex_locker_t lock(runtimeLock);
-    return addMethod(cls, name, imp, types ?: "", YES);
+    IMP result;
+    {
+        mutex_locker_t lock(runtimeLock);
+        result = addMethod(cls, name, imp, types ?: "", YES);
+    }
+    if (result)
+        _notify_methodSetImplementation(cls, nullptr, 1, &name, &imp, _objc_hook_methodSetImplementationSourceClassReplaceMethod);
+    return result;
 }
 
 
@@ -8448,10 +8514,14 @@ void
 class_replaceMethodsBulk(Class cls, const SEL *names, const IMP *imps,
                          const char **types, uint32_t count)
 {
-    if (!cls) return;
+    if (!cls || count == 0) return;
 
-    mutex_locker_t lock(runtimeLock);
-    addMethods(cls, names, imps, types, count, YES, nil);
+    {
+        mutex_locker_t lock(runtimeLock);
+        addMethods(cls, names, imps, types, count, YES, nil);
+    }
+
+    _notify_methodSetImplementation(cls, nil, count, names, imps, _objc_hook_methodSetImplementationSourceClassReplaceMethodsBulk);
 }
 
 

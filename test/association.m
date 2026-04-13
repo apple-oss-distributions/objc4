@@ -114,7 +114,7 @@ void TestReleaseLater(void) {
     };
     char keys1[otherObjsCount];
     char keys2[otherObjsCount];
-    char laterKey;
+    char laterKey = 0;
 
     __block int normalDeallocs = 0;
     __block int laterDeallocs = 0;
@@ -148,8 +148,8 @@ void TestReleaseLater(void) {
 
 void TestReleaseLaterRemoveAssociations(void) {
 
-    char normalKey;
-    char laterKey;
+    char normalKey = 0;
+    char laterKey = 0;
 
     __block int normalDeallocs = 0;
     __block int laterDeallocs = 0;

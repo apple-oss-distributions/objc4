@@ -844,13 +844,13 @@ TEST(objc_duplicateClass) {
 }
 
 TEST(objc_getAssociatedObject) {
-    char keyTarget;
+    char keyTarget = 0;
     id value = objc_getAssociatedObject(obj, &keyTarget);
     testassertequal(value, NULL);
 }
 
 TEST(objc_getAssociatedObject2) {
-    char keyTarget;
+    char keyTarget = 0;
     objc_setAssociatedObject(obj, &keyTarget, obj, OBJC_ASSOCIATION_RETAIN);
     id value = objc_getAssociatedObject(obj, &keyTarget);
     testassertequal(value, obj);
@@ -1143,34 +1143,34 @@ TEST(objc_retain_autorelease) {
 }
 
 TEST(objc_setAssociatedObject_class) {
-    char keyTarget;
+    char keyTarget = 0;
     objc_setAssociatedObject(cls, &keyTarget, nil, OBJC_ASSOCIATION_RETAIN);
 }
 
 TEST(objc_setAssociatedObject_class_meta) {
-    char keyTarget;
+    char keyTarget = 0;
     objc_setAssociatedObject(metacls, &keyTarget, nil, OBJC_ASSOCIATION_RETAIN);
 }
 
 TEST(objc_setAssociatedObject) {
-    char keyTarget;
+    char keyTarget = 0;
     objc_setAssociatedObject(obj, &keyTarget, nil, OBJC_ASSOCIATION_RETAIN);
 }
 
 TEST(objc_setAssociatedObject2_class) {
-    char keyTarget;
+    char keyTarget = 0;
     objc_setAssociatedObject([NSObject class], &keyTarget, cls, OBJC_ASSOCIATION_RETAIN);
     objc_setAssociatedObject([NSObject class], &keyTarget, nil, OBJC_ASSOCIATION_RETAIN);
 }
 
 TEST(objc_setAssociatedObject2_class_meta) {
-    char keyTarget;
+    char keyTarget = 0;
     objc_setAssociatedObject([NSObject class], &keyTarget, metacls, OBJC_ASSOCIATION_RETAIN);
     objc_setAssociatedObject([NSObject class], &keyTarget, nil, OBJC_ASSOCIATION_RETAIN);
 }
 
 TEST(objc_setAssociatedObject2) {
-    char keyTarget;
+    char keyTarget = 0;
     objc_setAssociatedObject([NSObject class], &keyTarget, obj, OBJC_ASSOCIATION_RETAIN);
     objc_setAssociatedObject([NSObject class], &keyTarget, nil, OBJC_ASSOCIATION_RETAIN);
 }

@@ -296,15 +296,7 @@ T AtomicDecrement(volatile T *value)
         std::memory_order_seq_cst);
 }
 
-#if !TARGET_OS_IPHONE
-#       include <CrashReporterClient.h>
-#else
-    // CrashReporterClient not yet available on iOS
-    __BEGIN_DECLS
-    extern const char *CRSetCrashLogMessage(const char *msg);
-    extern const char *CRGetCrashLogMessage(void);
-    __END_DECLS
-#endif
+#    include <CrashReporterClient.h>
 
 #   if __cplusplus
 #       include <vector>
@@ -334,7 +326,13 @@ T AtomicDecrement(volatile T *value)
 #include <objc/objc.h>
 #include <objc/objc-api.h>
 
-extern void _objc_fatal(const char *fmt, ...) 
+// Set a static string crash log message. This puts the string into the second
+// crash log message pointer, which does not interfere with dynamic messages set
+// by calls like _objc_fatal. If a value was previously set, it is overwritten.
+// Message must be a constant string.
+extern void _objc_crashlogStatic(const char *message);
+
+extern void _objc_fatal(const char *fmt, ...)
     __attribute__((noreturn, cold, format (printf, 1, 2)));
 extern void _objc_fatal_with_reason(uint64_t reason, uint64_t flags, 
                                     const char *fmt, ...) 

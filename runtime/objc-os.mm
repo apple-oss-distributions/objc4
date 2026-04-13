@@ -1053,22 +1053,6 @@ int secure_open(const char *filename, int flags, uid_t euid)
 }
 #endif // SUPPORT_MESSAGE_LOGGING
 
-#if TARGET_OS_IPHONE
-
-const char *__crashreporter_info__ = NULL;
-
-const char *CRSetCrashLogMessage(const char *msg)
-{
-    __crashreporter_info__ = msg;
-    return msg;
-}
-const char *CRGetCrashLogMessage(void)
-{
-    return __crashreporter_info__;
-}
-
-#endif
-
 // TARGET_OS_MAC
 #else
 
